@@ -529,7 +529,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		assert.NotEmpty(t, response["id"])
 	})
 
-	t.Run("accepts webauth (SEP-10/45) claims", func(t *testing.T) {
+	t.Run("accepts webauth (SEP-10) claims", func(t *testing.T) {
 		testCases := []struct {
 			name         string
 			claims       *sepauth.WebAuthClaims

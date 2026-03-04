@@ -22,7 +22,7 @@ func (c *SEP24JWTClaims) TransactionID() string {
 	return c.ID
 }
 
-// ParseAccountAndMemo splits a SEP-10/45 subject into Stellar account and memo.
+// ParseAccountAndMemo splits a SEP-10 subject into Stellar account and memo.
 // accounts with memo use the format "account:memo".
 func ParseAccountAndMemo(subject string) (account, memo string) {
 	if before, after, found := strings.Cut(subject, ":"); found && before != "" {
@@ -31,7 +31,7 @@ func ParseAccountAndMemo(subject string) (account, memo string) {
 	return subject, ""
 }
 
-// FormatSubject constructs a SEP-10/45 subject from account and optional memo.
+// FormatSubject constructs a SEP-10 subject from account and optional memo.
 func FormatSubject(stellarAccount, stellarMemo string) string {
 	if stellarMemo != "" {
 		return stellarAccount + ":" + stellarMemo

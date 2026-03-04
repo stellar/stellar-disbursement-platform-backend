@@ -232,7 +232,7 @@ func (h SEP24Handler) GetInfo(w http.ResponseWriter, r *http.Request) {
 func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get SEP-10/45 claims from middleware
+	// Get SEP-10 claims from middleware
 	webAuthClaims := sepauth.GetWebAuthClaims(ctx)
 	if webAuthClaims == nil {
 		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)

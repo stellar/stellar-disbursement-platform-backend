@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- Fixed memo not being parsed from the SEP-10/45 token subject when generating SEP-24 tokens, causing it to be
+- Fixed memo not being parsed from the SEP-10 token subject when generating SEP-24 tokens, causing it to be
   silently dropped. [#1077](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1077)
   
 ### Security
