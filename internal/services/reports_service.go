@@ -8,7 +8,6 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
-	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon/operations"
 
@@ -18,10 +17,10 @@ import (
 )
 
 const (
-	// MaxStatementTransactionsPages caps pagination over Horizon transactions to avoid unbounded loops.
-	MaxStatementTransactionsPages = 50
-	// StatementTransactionsPageLimit is the page size when fetching transactions from Horizon.
-	StatementTransactionsPageLimit = 200
+	// MaxStatementPaymentsPages caps pagination over Horizon payments to avoid unbounded loops.
+	MaxStatementPaymentsPages = 50
+	// StatementPaymentsPageLimit is the page size when fetching payments from Horizon.
+	StatementPaymentsPageLimit = 200
 )
 
 var (
@@ -142,7 +141,7 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 			return nil, fmt.Errorf("getting balance: %w", err)
 		}
 
-		transactions, totalCredits, totalDebits, err := s.fetchTransactionsInRange(ctx, account.Address, asset, fromStart, toEnd)
+		transactions, totalCredits, totalDebits, err := s.fetchPaymentsInRange(ctx, account.Address, asset, fromStart, toEnd)
 		if err != nil {
 			return nil, err
 		}
@@ -216,7 +215,7 @@ type transactionAccumulator struct {
 	collectTransactions bool
 }
 
-func (s *ReportsService) fetchTransactionsInRange(
+func (s *ReportsService) fetchPaymentsInRange(
 	ctx context.Context,
 	accountAddress string,
 	asset *data.Asset,
@@ -224,19 +223,19 @@ func (s *ReportsService) fetchTransactionsInRange(
 ) ([]StatementTransaction, decimal.Decimal, decimal.Decimal, error) {
 	accumulator := transactionAccumulator{collectTransactions: true}
 
-	req := horizonclient.TransactionRequest{
+	req := horizonclient.OperationRequest{
 		ForAccount: accountAddress,
 		Order:      horizonclient.OrderAsc,
-		Limit:      StatementTransactionsPageLimit,
+		Limit:      StatementPaymentsPageLimit,
 	}
 
-	for pageCount := 0; pageCount < MaxStatementTransactionsPages; pageCount++ {
-		page, err := s.HorizonClient.Transactions(req)
+	for pageCount := 0; pageCount < MaxStatementPaymentsPages; pageCount++ {
+		page, err := s.HorizonClient.Payments(req)
 		if err != nil {
-			return nil, decimal.Zero, decimal.Zero, fmt.Errorf("fetching transactions: %w", err)
+			return nil, decimal.Zero, decimal.Zero, fmt.Errorf("fetching payments: %w", err)
 		}
 
-		shouldStop, err := s.processTransactionPage(ctx, page, accountAddress, asset, fromStart, toEnd, &accumulator)
+		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, asset, fromStart, toEnd, &accumulator)
 		if err != nil {
 			return nil, decimal.Zero, decimal.Zero, err
 		}
@@ -244,11 +243,11 @@ func (s *ReportsService) fetchTransactionsInRange(
 			break
 		}
 
-		if !s.shouldContinuePagination(page) {
+		if !s.shouldContinuePaymentsPagination(page) {
 			break
 		}
 
-		req.Cursor, err = s.getNextPageCursor(page)
+		req.Cursor, err = s.getNextPaymentsPageCursor(page)
 		if err != nil {
 			return nil, decimal.Zero, decimal.Zero, err
 		}
@@ -269,19 +268,19 @@ func (s *ReportsService) fetchTotalsInRange(
 ) (totalCredits, totalDebits decimal.Decimal, err error) {
 	accumulator := transactionAccumulator{collectTransactions: false}
 
-	req := horizonclient.TransactionRequest{
+	req := horizonclient.OperationRequest{
 		ForAccount: accountAddress,
 		Order:      horizonclient.OrderAsc,
-		Limit:      StatementTransactionsPageLimit,
+		Limit:      StatementPaymentsPageLimit,
 	}
 
-	for pageCount := 0; pageCount < MaxStatementTransactionsPages; pageCount++ {
-		page, err := s.HorizonClient.Transactions(req)
+	for pageCount := 0; pageCount < MaxStatementPaymentsPages; pageCount++ {
+		page, err := s.HorizonClient.Payments(req)
 		if err != nil {
-			return decimal.Zero, decimal.Zero, fmt.Errorf("fetching transactions: %w", err)
+			return decimal.Zero, decimal.Zero, fmt.Errorf("fetching payments: %w", err)
 		}
 
-		shouldStop, err := s.processTransactionPage(ctx, page, accountAddress, asset, fromStart, toEnd, &accumulator)
+		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, asset, fromStart, toEnd, &accumulator)
 		if err != nil {
 			return decimal.Zero, decimal.Zero, err
 		}
@@ -289,11 +288,11 @@ func (s *ReportsService) fetchTotalsInRange(
 			break
 		}
 
-		if !s.shouldContinuePagination(page) {
+		if !s.shouldContinuePaymentsPagination(page) {
 			break
 		}
 
-		req.Cursor, err = s.getNextPageCursor(page)
+		req.Cursor, err = s.getNextPaymentsPageCursor(page)
 		if err != nil {
 			return decimal.Zero, decimal.Zero, err
 		}
@@ -305,17 +304,17 @@ func (s *ReportsService) fetchTotalsInRange(
 	return accumulator.totalCredits, accumulator.totalDebits, nil
 }
 
-func (s *ReportsService) processTransactionPage(
+func (s *ReportsService) processPaymentPage(
 	ctx context.Context,
-	page horizon.TransactionsPage,
+	page operations.OperationsPage,
 	accountAddress string,
 	asset *data.Asset,
 	fromStart, toEnd time.Time,
 	accumulator *transactionAccumulator,
 ) (shouldStop bool, err error) {
 	for i := range page.Embedded.Records {
-		tx := page.Embedded.Records[i]
-		createdAt := tx.LedgerCloseTime
+		op := page.Embedded.Records[i]
+		createdAt := op.GetBase().LedgerCloseTime
 
 		if createdAt.Before(fromStart) {
 			continue
@@ -324,13 +323,16 @@ func (s *ReportsService) processTransactionPage(
 			return true, nil
 		}
 
-		lines, credits, debits, err := s.processTransaction(ctx, &tx, accountAddress, asset)
+		line, credits, debits, err := s.processPaymentOperation(ctx, op, accountAddress, asset)
 		if err != nil {
 			return false, err
 		}
+		if line == nil {
+			continue
+		}
 
 		if accumulator.collectTransactions {
-			accumulator.transactions = append(accumulator.transactions, lines...)
+			accumulator.transactions = append(accumulator.transactions, *line)
 		}
 		accumulator.totalCredits = accumulator.totalCredits.Add(credits)
 		accumulator.totalDebits = accumulator.totalDebits.Add(debits)
@@ -338,107 +340,99 @@ func (s *ReportsService) processTransactionPage(
 	return false, nil
 }
 
-func (s *ReportsService) shouldContinuePagination(page horizon.TransactionsPage) bool {
-	return len(page.Embedded.Records) >= StatementTransactionsPageLimit
+func (s *ReportsService) shouldContinuePaymentsPagination(page operations.OperationsPage) bool {
+	return len(page.Embedded.Records) >= StatementPaymentsPageLimit
 }
 
-func (s *ReportsService) getNextPageCursor(page horizon.TransactionsPage) (string, error) {
-	nextPage, err := s.HorizonClient.NextTransactionsPage(page)
+func (s *ReportsService) getNextPaymentsPageCursor(page operations.OperationsPage) (string, error) {
+	nextPage, err := s.HorizonClient.NextPaymentsPage(page)
 	if err != nil {
-		return "", fmt.Errorf("next transactions page: %w", err)
+		return "", fmt.Errorf("next payments page: %w", err)
 	}
 	if len(nextPage.Embedded.Records) == 0 {
 		return "", nil
 	}
-	return nextPage.Embedded.Records[0].PT, nil
+	return nextPage.Embedded.Records[0].PagingToken(), nil
 }
 
-func (s *ReportsService) processTransaction(
+// processPaymentOperation processes a single payment operation and returns a StatementTransaction line
+// (or nil if the operation doesn't match the asset), plus credits and debits for the operation.
+func (s *ReportsService) processPaymentOperation(
 	ctx context.Context,
-	tx *horizon.Transaction,
+	op operations.Operation,
 	accountAddress string,
 	asset *data.Asset,
-) ([]StatementTransaction, decimal.Decimal, decimal.Decimal, error) {
-	opsPage, err := s.HorizonClient.Operations(horizonclient.OperationRequest{ForTransaction: tx.Hash})
+) (*StatementTransaction, decimal.Decimal, decimal.Decimal, error) {
+	from, to, amountStr, paymentAsset, opID, ok := extractPaymentOperation(op)
+	if !ok {
+		return nil, decimal.Zero, decimal.Zero, nil
+	}
+	if !assetMatchesHorizonAsset(asset, paymentAsset) {
+		return nil, decimal.Zero, decimal.Zero, nil
+	}
+
+	amount, err := decimal.NewFromString(amountStr)
 	if err != nil {
-		return nil, decimal.Zero, decimal.Zero, fmt.Errorf("fetching operations for tx %s: %w", tx.Hash, err)
+		return nil, decimal.Zero, decimal.Zero, fmt.Errorf("invalid amount %q: %w", amountStr, err)
+	}
+	if amount.LessThanOrEqual(decimal.Zero) {
+		return nil, decimal.Zero, decimal.Zero, nil
 	}
 
-	var lines []StatementTransaction
-	var credits, debits decimal.Decimal
-	createdAtStr := tx.LedgerCloseTime.UTC().Format(time.RFC3339)
+	txHash := op.GetTransactionHash()
+	createdAtStr := op.GetBase().LedgerCloseTime.UTC().Format(time.RFC3339)
 
-	for i := range opsPage.Embedded.Records {
-		op := opsPage.Embedded.Records[i]
-		from, to, amountStr, paymentAsset, opID, ok := extractPaymentOperation(op)
-		if !ok {
-			continue
-		}
-		if !assetMatchesHorizonAsset(asset, paymentAsset) {
-			continue
-		}
+	var dbPayment *data.Payment
+	dbPayment, err = s.Models.Payment.GetByStellarTransactionIDAndOperationID(ctx, s.Models.DBConnectionPool, txHash, opID)
+	if err != nil && errors.Is(err, data.ErrRecordNotFound) {
+		dbPayment, err = s.Models.Payment.GetByStellarTransactionID(ctx, s.Models.DBConnectionPool, txHash)
+	}
+	if err != nil {
+		dbPayment = nil
+	}
 
-		amount, err := decimal.NewFromString(amountStr)
-		if err != nil {
-			continue
+	updatedAtStr := createdAtStr
+	counterpartyName := ""
+	externalPaymentID := ""
+	if dbPayment != nil {
+		if t, ok := dbPayment.StatusHistory.GetSuccessTimestamp(); ok {
+			updatedAtStr = t.UTC().Format(time.RFC3339)
 		}
-		if amount.LessThanOrEqual(decimal.Zero) {
-			continue
+		if dbPayment.ReceiverWallet != nil && dbPayment.ReceiverWallet.Receiver.ExternalID != "" {
+			counterpartyName = dbPayment.ReceiverWallet.Receiver.ExternalID
 		}
-
-		var dbPayment *data.Payment
-		dbPayment, err = s.Models.Payment.GetByStellarTransactionIDAndOperationID(ctx, s.Models.DBConnectionPool, tx.Hash, opID)
-		if err != nil && errors.Is(err, data.ErrRecordNotFound) {
-			dbPayment, err = s.Models.Payment.GetByStellarTransactionID(ctx, s.Models.DBConnectionPool, tx.Hash)
-		}
-		if err != nil {
-			dbPayment = nil
-		}
-
-		updatedAtStr := createdAtStr
-		counterpartyName := ""
-		externalPaymentID := ""
-		if dbPayment != nil {
-			if t, ok := dbPayment.StatusHistory.GetSuccessTimestamp(); ok {
-				updatedAtStr = t.UTC().Format(time.RFC3339)
-			}
-			if dbPayment.ReceiverWallet != nil && dbPayment.ReceiverWallet.Receiver.ExternalID != "" {
-				counterpartyName = dbPayment.ReceiverWallet.Receiver.ExternalID
-			}
-			externalPaymentID = dbPayment.ExternalPaymentID
-		}
+		externalPaymentID = dbPayment.ExternalPaymentID
+	}
+	if counterpartyName == "" {
+		counterpartyName = s.resolveCounterparty(ctx, from)
 		if counterpartyName == "" {
-			counterpartyName = s.resolveCounterparty(ctx, from)
-			if counterpartyName == "" {
-				counterpartyName = s.resolveCounterparty(ctx, to)
-			}
+			counterpartyName = s.resolveCounterparty(ctx, to)
 		}
-
-		var txType string
-		var counterparty string
-		if from == accountAddress {
-			txType = "debit"
-			counterparty = to
-			debits = debits.Add(amount)
-		} else {
-			txType = "credit"
-			counterparty = from
-			credits = credits.Add(amount)
-		}
-
-		lines = append(lines, StatementTransaction{
-			ID:                  tx.Hash,
-			CreatedAt:           createdAtStr,
-			UpdatedAt:           updatedAtStr,
-			Type:                txType,
-			Amount:              amountStr,
-			CounterpartyAddress: counterparty,
-			CounterpartyName:    counterpartyName,
-			ExternalPaymentID:   externalPaymentID,
-		})
 	}
 
-	return lines, credits, debits, nil
+	var txType string
+	var counterparty string
+	var credits, debits decimal.Decimal
+	if from == accountAddress {
+		txType = "debit"
+		counterparty = to
+		debits = debits.Add(amount)
+	} else {
+		txType = "credit"
+		counterparty = from
+		credits = credits.Add(amount)
+	}
+
+	return &StatementTransaction{
+		ID:                  txHash,
+		CreatedAt:           createdAtStr,
+		UpdatedAt:           updatedAtStr,
+		Type:                txType,
+		Amount:              amountStr,
+		CounterpartyAddress: counterparty,
+		CounterpartyName:    counterpartyName,
+		ExternalPaymentID:   externalPaymentID,
+	}, credits, debits, nil
 }
 
 // extractPaymentOperation returns (from, to, amount, destination asset, operation ID, true) for
