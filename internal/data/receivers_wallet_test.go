@@ -1283,6 +1283,48 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	})
 }
 
+func Test_ReceiverWalletModel_GetByStellarAddress(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+
+	t.Run("returns ErrRecordNotFound when stellarAddress is empty", func(t *testing.T) {
+		actual, err := receiverWalletModel.GetByStellarAddress(ctx, "")
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
+		require.Nil(t, actual)
+	})
+
+	t.Run("returns error when no receiver wallet exists for stellar address", func(t *testing.T) {
+		actual, err := receiverWalletModel.GetByStellarAddress(ctx, "GCRSI42IC7WSW6N46LWPAHQWFI6MLGPBN3BYQ2WMNJ43GNRTIEYCAD6O")
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
+		require.Nil(t, actual)
+	})
+
+	t.Run("returns receiver wallet successfully when one exists with stellar address", func(t *testing.T) {
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		require.NotEmpty(t, receiverWallet.StellarAddress, "fixture with non-Draft/Ready status should set stellar address")
+
+		actual, err := receiverWalletModel.GetByStellarAddress(ctx, receiverWallet.StellarAddress)
+		require.NoError(t, err)
+		require.NotNil(t, actual)
+		assert.Equal(t, receiverWallet.ID, actual.ID)
+		assert.Equal(t, receiverWallet.StellarAddress, actual.StellarAddress)
+		assert.Equal(t, receiver.ID, actual.Receiver.ID)
+		assert.Equal(t, wallet.ID, actual.Wallet.ID)
+	})
+}
+
 func Test_RetryInvitationSMS(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
