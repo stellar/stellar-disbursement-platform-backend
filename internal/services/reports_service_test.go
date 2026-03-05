@@ -9,7 +9,6 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/keypair"
-	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon/operations"
 	"github.com/stretchr/testify/assert"
@@ -90,11 +89,11 @@ func TestReportsServiceGetStatement(t *testing.T) {
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).
 			Return(decimal.RequireFromString("100.0000000"), nil).Once()
 
-		// Mock Transactions - empty page (called twice: once for transactions, once for totals)
-		var emptyPage horizon.TransactionsPage
-		emptyPage.Embedded.Records = []horizon.Transaction{}
-		horizonClient.On("Transactions", mock.AnythingOfType("horizonclient.TransactionRequest")).
-			Return(emptyPage, nil).Twice()
+		// Mock Payments - empty page (called twice: once for transactions, once for totals)
+		var emptyPaymentsPage operations.OperationsPage
+		emptyPaymentsPage.Embedded.Records = []operations.Operation{}
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).
+			Return(emptyPaymentsPage, nil).Twice()
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
@@ -126,11 +125,11 @@ func TestReportsServiceGetStatement(t *testing.T) {
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).
 			Return(decimal.RequireFromString("100.0000000"), nil).Once()
 
-		// Mock Transactions - empty page (called twice: once for transactions, once for totals)
-		var emptyPage horizon.TransactionsPage
-		emptyPage.Embedded.Records = []horizon.Transaction{}
-		horizonClient.On("Transactions", mock.AnythingOfType("horizonclient.TransactionRequest")).
-			Return(emptyPage, nil).Twice()
+		// Mock Payments - empty page (called twice: once for transactions, once for totals)
+		var emptyPaymentsPage operations.OperationsPage
+		emptyPaymentsPage.Embedded.Records = []operations.Operation{}
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).
+			Return(emptyPaymentsPage, nil).Twice()
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
