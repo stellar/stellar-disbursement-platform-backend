@@ -1,12 +1,15 @@
 package utils
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/xdr"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -180,6 +183,60 @@ func Test_ExtractArgsMap(t *testing.T) {
 		_, err := ExtractArgsMap(args)
 		require.ErrorContains(t, err, "must be a string")
 	})
+}
+
+func Test_ValidateAndDecodeBase64XDR(t *testing.T) {
+	maxSize := 1024 // 1 KB for testing
+
+	testCases := []struct {
+		name        string
+		input       string
+		expectError string
+	}{
+		{
+			name:  "valid payload within limits",
+			input: base64.StdEncoding.EncodeToString(make([]byte, 512)),
+		},
+		{
+			name:  "payload exactly at limit",
+			input: base64.StdEncoding.EncodeToString(make([]byte, maxSize)),
+		},
+		{
+			name:        "encoded payload too large",
+			input:       base64.StdEncoding.EncodeToString(make([]byte, maxSize*2)),
+			expectError: "encoded payload too large",
+		},
+		{
+			name:        "decoded payload exceeds limit on edge case",
+			input:       base64.StdEncoding.EncodeToString(make([]byte, maxSize+1)),
+			expectError: "decoded payload too large",
+		},
+		{
+			name:        "invalid base64",
+			input:       "not-valid-base64!@#$",
+			expectError: "decoding base64 payload",
+		},
+		{
+			name:        "encoded size within limit but not valid base64",
+			input:       strings.Repeat("!", 100),
+			expectError: "decoding base64 payload",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded, err := ValidateAndDecodeBase64XDR(tc.input, maxSize)
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectError)
+				assert.Nil(t, decoded)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, decoded)
+				assert.LessOrEqual(t, len(decoded), maxSize)
+			}
+		})
+	}
 }
 
 func newTestAuthEntry(t *testing.T, account string) xdr.SorobanAuthorizationEntry {
