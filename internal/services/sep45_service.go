@@ -387,9 +387,9 @@ func (s *sep45Service) ValidateChallenge(ctx context.Context, req SEP45Validatio
 		return nil, fmt.Errorf("%w: authorization_entries is required", ErrSEP45Validation)
 	}
 
-	rawEntries, err := base64.StdEncoding.DecodeString(encodedEntries)
+	rawEntries, err := utils.ValidateAndDecodeBase64XDR(encodedEntries, utils.DefaultMaxXDRDecodedSize)
 	if err != nil {
-		return nil, fmt.Errorf("%w: decoding authorization entries: %w", ErrSEP45Validation, err)
+		return nil, fmt.Errorf("%w: authorization entries: %w", ErrSEP45Validation, err)
 	}
 
 	var entries xdr.SorobanAuthorizationEntries

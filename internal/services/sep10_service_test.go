@@ -423,6 +423,16 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 	service, err := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
 	require.NoError(t, err)
 
+	t.Run("challenge transaction too large", func(t *testing.T) {
+		oversizedTx := base64.StdEncoding.EncodeToString(make([]byte, 51*1024))
+
+		validationReq := ValidationRequest{Transaction: oversizedTx}
+		_, err := service.ValidateChallenge(context.Background(), validationReq)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid challenge transaction")
+		assert.Contains(t, err.Error(), "encoded payload too large")
+	})
+
 	t.Run("valid challenge validation", func(t *testing.T) {
 		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
 
@@ -495,7 +505,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		req := ValidationRequest{Transaction: "invalid-transaction"}
 		_, err := service.ValidateChallenge(context.Background(), req)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "could not parse challenge")
+		assert.Contains(t, err.Error(), "invalid challenge transaction")
 	})
 
 	t.Run("unsigned transaction", func(t *testing.T) {

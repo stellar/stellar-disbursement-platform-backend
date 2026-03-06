@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type SponsoredTransactionHandler struct {
@@ -36,9 +37,14 @@ func (r CreateSponsoredTransactionRequest) Validate() *httperror.HTTPError {
 
 	validator.Check(len(strings.TrimSpace(r.OperationXDR)) > 0, "operation_xdr", "operation_xdr should not be empty")
 	if r.OperationXDR != "" {
-		var invoke xdr.InvokeHostFunctionOp
-		if err := xdr.SafeUnmarshalBase64(r.OperationXDR, &invoke); err != nil {
-			validator.AddError("operation_xdr", "operation_xdr is not valid base64-encoded InvokeHostFunctionOp XDR")
+		xdrBytes, err := utils.ValidateAndDecodeBase64XDR(r.OperationXDR, utils.DefaultMaxXDRDecodedSize)
+		if err != nil {
+			validator.AddError("operation_xdr", "operation_xdr is invalid or too large")
+		} else {
+			var invoke xdr.InvokeHostFunctionOp
+			if err := xdr.SafeUnmarshal(xdrBytes, &invoke); err != nil {
+				validator.AddError("operation_xdr", "operation_xdr is not valid base64-encoded InvokeHostFunctionOp XDR")
+			}
 		}
 	}
 

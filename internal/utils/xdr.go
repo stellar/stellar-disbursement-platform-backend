@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,33 @@ import (
 	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
+
+// DefaultMaxXDRDecodedSize is the maximum allowed size in bytes for decoded XDR payloads.
+const DefaultMaxXDRDecodedSize = 50 * 1024 // 50 KB
+
+// ValidateAndDecodeBase64XDR validates the encoded size of a base64 payload, decodes it,
+// then validates the decoded size against maxDecodedSize. This prevents memory amplification
+// attacks (CWE-770) by rejecting oversized payloads before XDR deserialization.
+func ValidateAndDecodeBase64XDR(encoded string, maxDecodedSize int) ([]byte, error) {
+	// Check encoded size first to avoid large allocations during base64 decode.
+	// Base64 encodes 3 bytes into 4 characters, so the max encoded size for a given
+	// decoded limit is ceil(maxDecodedSize / 3) * 4.
+	maxEncodedSize := ((maxDecodedSize + 2) / 3) * 4
+	if len(encoded) > maxEncodedSize {
+		return nil, fmt.Errorf("encoded payload too large (%d bytes, max %d)", len(encoded), maxEncodedSize)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decoding base64 payload: %w", err)
+	}
+
+	if len(decoded) > maxDecodedSize {
+		return nil, fmt.Errorf("decoded payload too large (%d bytes, max %d)", len(decoded), maxDecodedSize)
+	}
+
+	return decoded, nil
+}
 
 // NewSymbolStringEntry constructs an ScMapEntry for the provided key/value pair.
 func NewSymbolStringEntry(key, value string) xdr.ScMapEntry {
