@@ -626,7 +626,22 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: "not-base64"})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSEP45Validation))
-		assert.Contains(t, err.Error(), "decoding authorization entries")
+		assert.Contains(t, err.Error(), "authorization entries: decoding base64 payload")
+		require.Nil(t, resp)
+	})
+
+	t.Run("authorization entries payload too large", func(t *testing.T) {
+		serverKP := keypair.MustRandom()
+		rpcMock := stellarMocks.NewMockRPCClient(t)
+		svc, _ := newService(t, rpcMock, serverKP)
+
+		// Create a base64 payload that decodes to > 50 KB
+		oversizedPayload := base64.StdEncoding.EncodeToString(make([]byte, 51*1024))
+
+		resp, err := svc.ValidateChallenge(ctx, SEP45ValidationRequest{AuthorizationEntries: oversizedPayload})
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrSEP45Validation))
+		assert.Contains(t, err.Error(), "authorization entries: encoded payload too large")
 		require.Nil(t, resp)
 	})
 
