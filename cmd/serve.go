@@ -478,8 +478,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 
 			// Validate reCAPTCHA keys are provided when reCAPTCHA is enabled
-			if err := validateReCAPTCHAConfig(serveOpts.DisableReCAPTCHA, serveOpts.ReCAPTCHASiteKey, serveOpts.ReCAPTCHASiteSecretKey); err != nil {
-				log.Fatal(err.Error())
+			if recaptchaErr := validateReCAPTCHAConfig(serveOpts.DisableReCAPTCHA, serveOpts.ReCAPTCHASiteKey, serveOpts.ReCAPTCHASiteSecretKey); recaptchaErr != nil {
+				log.Fatal(recaptchaErr.Error())
 			}
 
 			// Initializing monitor service
