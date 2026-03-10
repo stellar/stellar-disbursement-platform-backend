@@ -49,7 +49,6 @@ Config_Stellar_Env_Phone_XLM_Testnet=(
   "HORIZON_URL=https://horizon-testnet.stellar.org"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
-  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
   "BASE_URL=http://stellar.local:8000"
 )
 
@@ -64,7 +63,6 @@ Config_Stellar_Env_Email_XLM_Testnet=(
   "HORIZON_URL=https://horizon-testnet.stellar.org"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
-  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
   "BASE_URL=http://stellar.local:8000"
 )
 
@@ -79,7 +77,6 @@ Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
   "HORIZON_URL=https://horizon-testnet.stellar.org"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
-  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
   "BASE_URL=http://stellar.local:8000"
 )
 
@@ -94,7 +91,6 @@ Config_Stellar_EmbeddedWallet_XLM_Testnet=(
   "HORIZON_URL=https://horizon-testnet.stellar.org"
   "USER_EMAIL=integration-test-user@stellar.local"
   "USER_PASSWORD=Password123!"
-  "RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
   "BASE_URL=http://stellar.local:8000"
   "RPC_URL=https://soroban-testnet.stellar.org"
   "ENABLE_EMBEDDED_WALLETS=true"

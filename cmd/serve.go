@@ -271,17 +271,17 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:      "recaptcha-site-key",
-			Usage:     "The Google 'reCAPTCHA v2 - I'm not a robot' site key.",
+			Usage:     "The Google reCAPTCHA site key. Required when reCAPTCHA is enabled.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.ReCAPTCHASiteKey,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name:      "recaptcha-site-secret-key",
-			Usage:     "The Google 'reCAPTCHA v2 - I'm not a robot' site SECRET key.",
+			Usage:     "The Google reCAPTCHA site secret key. Required when reCAPTCHA is enabled.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.ReCAPTCHASiteSecretKey,
-			Required:  true,
+			Required:  false,
 		},
 		{
 			Name:           "captcha-type",
@@ -475,6 +475,11 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			err := configOpts.SetValues()
 			if err != nil {
 				log.Fatalf("Error setting values of config options: %s", err.Error())
+			}
+
+			// Validate reCAPTCHA keys are provided when reCAPTCHA is enabled
+			if err := validateReCAPTCHAConfig(serveOpts.DisableReCAPTCHA, serveOpts.ReCAPTCHASiteKey, serveOpts.ReCAPTCHASiteSecretKey); err != nil {
+				log.Fatal(err.Error())
 			}
 
 			// Initializing monitor service
@@ -712,4 +717,22 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	}
 
 	return cmd
+}
+
+// validateReCAPTCHAConfig checks that the reCAPTCHA site key and secret key are
+// provided when reCAPTCHA is enabled.
+func validateReCAPTCHAConfig(disableReCAPTCHA bool, siteKey, secretKey string) error {
+	if disableReCAPTCHA {
+		return nil
+	}
+
+	if siteKey == "" {
+		return fmt.Errorf("RECAPTCHA_SITE_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable")
+	}
+
+	if secretKey == "" {
+		return fmt.Errorf("RECAPTCHA_SITE_SECRET_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable")
+	}
+
+	return nil
 }
