@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -726,11 +727,11 @@ func validateReCAPTCHAConfig(disableReCAPTCHA bool, siteKey, secretKey string) e
 		return nil
 	}
 
-	if siteKey == "" {
+	if strings.TrimSpace(siteKey) == "" {
 		return fmt.Errorf("RECAPTCHA_SITE_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable")
 	}
 
-	if secretKey == "" {
+	if strings.TrimSpace(secretKey) == "" {
 		return fmt.Errorf("RECAPTCHA_SITE_SECRET_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable")
 	}
 
