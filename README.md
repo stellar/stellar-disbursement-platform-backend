@@ -83,7 +83,7 @@ The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisib
 
 #### Configuration
 
-- **CAPTCHA_TYPE**: Specifies the type of CAPTCHA to use. Options: `GOOGLE_RECAPTCHA_V2` (default) or `GOOGLE_RECAPTCHA_V3`
+- **CAPTCHA_TYPE**: Specifies the type of CAPTCHA to use. Options: `GOOGLE_RECAPTCHA_V3` or `GOOGLE_RECAPTCHA_V2`
 - **RECAPTCHA_SITE_KEY**: The Google reCAPTCHA site key
 - **RECAPTCHA_SITE_SECRET_KEY**: The Google reCAPTCHA site secret key
 - **RECAPTCHA_V3_MIN_SCORE**: Minimum score threshold for reCAPTCHA v3 (0.0 to 1.0, default: 0.5). Only used when CAPTCHA_TYPE is `GOOGLE_RECAPTCHA_V3`
