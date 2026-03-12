@@ -38,3 +38,14 @@ var XLMAsset = data.Asset{
 	Code:   XLMAssetCode,
 	Issuer: "",
 }
+
+// Meridian Pay: SWAG
+const (
+	SWAGAssetCode         = "SWAG"
+	SWAGAssetIssuerPubnet = "GA7ZMISKTW3TMY3QRJJ57ABPPPZ765BQ5PMF66QQOQT2WBBWCG5G7MNK"
+)
+
+var SWAGAssetPubnet = data.Asset{
+	Code:   SWAGAssetCode,
+	Issuer: SWAGAssetIssuerPubnet,
+}

@@ -38,6 +38,18 @@ var PubnetWallets = []data.Wallet{
 		Assets:      assets.AllAssetsPubnet,
 		UserManaged: true,
 	},
+	{
+		Name:              "Meridian Pay",
+		Homepage:          "https://meridianpay.stellar.org",
+		DeepLinkSchema:    "https://meridianpay.stellar.org",
+		SEP10ClientDomain: "",
+		UserManaged:       false,
+		Embedded:          true,
+		Enabled:           true,
+		Assets: []data.Asset{
+			assets.SWAGAssetPubnet,
+		},
+	},
 	// {
 	// 	Name:              "Beans App",
 	// 	Homepage:          "https://www.beansapp.com/disbursements",
