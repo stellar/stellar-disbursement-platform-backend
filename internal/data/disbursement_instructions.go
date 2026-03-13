@@ -379,6 +379,7 @@ func (di DisbursementInstructionModel) processReceiverWallets(ctx context.Contex
 			receiverIDToReceiverWalletIDMap[receiverID] = rwID
 		} else {
 			// Do not resend invitation if the receiver wallet already exists
+			log.Ctx(ctx).Infof("Receiver wallet already exists for receiver with ID %s, skipping invitation", receiverID)
 		}
 	}
 

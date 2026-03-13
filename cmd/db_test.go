@@ -547,13 +547,15 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		actualAssets, aErr := models.Assets.GetAll(ctx)
 		require.NoError(t, aErr)
 
-		assert.Len(t, actualAssets, 3)
+		assert.Len(t, actualAssets, 4)
 		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
-		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
-		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
-		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
-		assert.Empty(t, actualAssets[2].Issuer)
+		assert.Equal(t, assets.SWAGAssetCode, actualAssets[1].Code)
+		assert.Equal(t, assets.SWAGAssetIssuerPubnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, actualAssets[2].Code)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[2].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, actualAssets[3].Code)
+		assert.Empty(t, actualAssets[3].Issuer)
 
 		// Validating wallets
 		wallets, wErr := models.Wallets.GetAll(ctx)
@@ -584,6 +586,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			"updating/inserting assets for the 'pubnet' network",
 			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.SWAGAssetCode, assets.SWAGAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
 			"Name: Vibrant Assist",
@@ -605,13 +608,15 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		actualAssets, err = models.Assets.GetAll(ctx)
 		require.NoError(t, err)
 
-		require.Len(t, actualAssets, 3)
+		require.Len(t, actualAssets, 4)
 		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
-		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
-		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
-		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
-		assert.Empty(t, actualAssets[2].Issuer)
+		assert.Equal(t, assets.SWAGAssetCode, actualAssets[1].Code)
+		assert.Equal(t, assets.SWAGAssetIssuerPubnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, actualAssets[2].Code)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[2].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, actualAssets[3].Code)
+		assert.Empty(t, actualAssets[3].Issuer)
 
 		// Validating wallets
 		wallets, err = models.Wallets.GetAll(ctx)
@@ -645,6 +650,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			"updating/inserting assets for the 'pubnet' network",
 			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.SWAGAssetCode, assets.SWAGAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
 			"Name: Vibrant Assist",
@@ -711,13 +717,15 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		actualAssets, err := models.Assets.GetAll(ctx)
 		require.NoError(t, err)
 
-		assert.Len(t, actualAssets, 3)
+		assert.Len(t, actualAssets, 4)
 		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
-		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
-		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
-		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
-		assert.Empty(t, actualAssets[2].Issuer)
+		assert.Equal(t, assets.SWAGAssetCode, actualAssets[1].Code)
+		assert.Equal(t, assets.SWAGAssetIssuerPubnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, actualAssets[2].Code)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[2].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, actualAssets[3].Code)
+		assert.Empty(t, actualAssets[3].Issuer)
 		// Validating wallets
 		wallets, err = models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
@@ -746,6 +754,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			"updating/inserting assets for the 'pubnet' network",
 			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.SWAGAssetCode, assets.SWAGAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
 			"Name: Vibrant Assist",
