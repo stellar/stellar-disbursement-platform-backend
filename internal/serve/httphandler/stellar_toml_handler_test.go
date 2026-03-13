@@ -537,10 +537,19 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			is_asset_anchored = true
 			anchor_asset_type = "crypto"
 			desc = "XLM, the native token of the Stellar Network."
+
+			[[CURRENCIES]]
+			code = %q
+			issuer = %q
+			is_asset_anchored = true
+			anchor_asset_type = "fiat"
+			status = "live"
+			desc = %q
 		`,
 			network.PublicNetworkPassphrase, horizonPubnetURL,
 			assets.EURCAssetCode, assets.EURCAssetIssuerPubnet, assets.EURCAssetCode,
-			assets.USDCAssetCode, assets.USDCAssetIssuerPubnet, assets.USDCAssetCode)
+			assets.USDCAssetCode, assets.USDCAssetIssuerPubnet, assets.USDCAssetCode,
+			assets.SWAGAssetCode, assets.SWAGAssetIssuerPubnet, assets.SWAGAssetCode)
 		wantToml = strings.TrimSpace(wantToml)
 		wantToml = strings.ReplaceAll(wantToml, "\t", "")
 		assert.Equal(t, wantToml, rr.Body.String())
