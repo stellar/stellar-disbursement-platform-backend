@@ -35,8 +35,13 @@ var PubnetWallets = []data.Wallet{
 	},
 	{
 		Name:        "User Managed Wallet",
-		Assets:      assets.AllAssetsPubnet,
 		UserManaged: true,
+		Assets: []data.Asset{
+			assets.EURCAssetPubnet,
+			assets.USDCAssetPubnet,
+			assets.XLMAsset,
+			assets.SWAGAssetPubnet,
+		},
 	},
 	{
 		Name:              "Meridian Pay",
@@ -48,6 +53,7 @@ var PubnetWallets = []data.Wallet{
 		Enabled:           true,
 		Assets: []data.Asset{
 			assets.SWAGAssetPubnet,
+			assets.XLMAsset,
 		},
 	},
 	// {
