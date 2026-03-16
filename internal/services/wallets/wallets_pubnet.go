@@ -46,7 +46,7 @@ var PubnetWallets = []data.Wallet{
 	{
 		Name:              "Meridian Pay",
 		Homepage:          "https://meridianpay.stellar.org",
-		DeepLinkSchema:    "https://meridianpay.stellar.org",
+		DeepLinkSchema:    "https://meridianpay.stellar.org/invite",
 		SEP10ClientDomain: "",
 		UserManaged:       false,
 		Embedded:          true,
