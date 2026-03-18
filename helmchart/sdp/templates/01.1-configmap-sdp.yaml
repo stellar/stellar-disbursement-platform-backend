@@ -15,10 +15,12 @@ data:
   {{- if eq (include "isPubnet" .) "true" }}
   NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
   HORIZON_URL: "https://horizon.stellar.org"
+  SEP45_CONTRACT_ID: "CALI6JC3MSNDGFRP7Z2OKUEPREHOJRRXKMJEWQDEFZPFGXALA45RAUTH"
   STELLAR_EXPERT_URL: "https://stellar.expert/explorer/public"
   {{- else }}
   NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
   HORIZON_URL: "https://horizon-testnet.stellar.org"
+  SEP45_CONTRACT_ID: "CDY4CS2VWHAZOMYVTKUFKGNZKIVFBCXUFNFQ5KSXOTAHKL5H5ZRTAUTH"
   STELLAR_EXPERT_URL: "https://stellar.expert/explorer/testnet"
   {{- end }}
   BASE_URL: {{ include "sdp.baseURL" . | quote }}
@@ -48,6 +50,13 @@ Values from the `global` section
   {{- else }}
   BRIDGE_BASE_URL: {{ include "sdp.bridge.baseURL" $ | quote }}
   {{- end }}
+  {{- end }}
+  {{- /* RPC configuration */ -}}
+  {{- if and .rpc (index .rpc "url") }}
+  RPC_URL: {{ .rpc.url | quote }}
+  {{- end }}
+  {{- if and .rpc (index .rpc "requestAuthHeaderKey") }}
+  RPC_REQUEST_AUTH_HEADER_KEY: {{ .rpc.requestAuthHeaderKey | quote }}
   {{- end }}
   {{- end }}
   {{- /*
