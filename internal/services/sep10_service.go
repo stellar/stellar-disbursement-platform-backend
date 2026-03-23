@@ -23,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/seputil"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -272,6 +273,10 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 
 // validateChallengeCustom provides custom SEP-10 challenge validation that properly handles client_domain operations.
 func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, network, webAuthDomain string, homeDomains []string) (*ChallengeValidationResult, error) {
+	if _, err := utils.ValidateAndDecodeBase64XDR(challengeTx, utils.DefaultMaxXDRDecodedSize); err != nil {
+		return nil, fmt.Errorf("invalid challenge transaction: %w", err)
+	}
+
 	parsed, err := txnbuild.TransactionFromXDR(challengeTx)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse challenge: %w", err)

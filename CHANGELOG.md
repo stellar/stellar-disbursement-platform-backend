@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [6.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.2.0...6.3.0))
+
+### Changed
+
+- Update local dev config to default to v3 with reCAPTCHA disabled. [#1081](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1081)
+
+### Fixed
+
+- Fixed memo not being parsed from the SEP-10 token subject when generating SEP-24 tokens, causing it to be silently dropped. [#1077](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1077)
+
+### Security
+
+- Add global `MaxBodySize` middleware (10 MB) to all routes on both the SDP and admin servers to prevent unbounded request body sizes (CWE-770). [#1066](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1066)
+- Add XDR size validation (50 KB) to SEP-10 and SEP-45 auth endpoints to prevent XDR memory amplification attacks (CWE-770). [#1078](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1078)
+- Bump the npm_and_yarn group across 1 directory with 2 updates. [#1093](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1093)
+- Bump the all-actions group across 1 directory with 6 updates. [#1086](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1086)
+- Bump soroban-sdk from 22.0.9 to 22.0.11 in /contracts in the cargo group. [#1085](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1085)
+- Bump rollup from 4.44.2 to 4.59.0 in the npm_and_yarn group. [#1074](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1074)
+
 ## [6.2.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.2.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.1.0...6.2.0))
 
 ### Added

@@ -16,7 +16,7 @@ on:
 env:
   REPO_ORG: stellar
   REPO_NAME: stellar-disbursement-platform-backend
-  REVIEWER: JiahuiWho,marwen-abid,philipliu
+  REVIEWER: JiahuiWho,marwen-abid
 
 jobs:
   create-release:
@@ -50,7 +50,7 @@ jobs:
           git checkout -b release/${{ inputs.version }} origin/${{ github.ref_name }}
 
       - name: Install Node.js for tooling
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 

@@ -463,6 +463,16 @@ func Test_CreateSponsoredTransactionRequest_Validate(t *testing.T) {
 		assert.NotNil(t, err)
 	})
 
+	t.Run("returns error when operation_xdr exceeds max decoded size", func(t *testing.T) {
+		// Create a base64-encoded payload that exceeds DefaultMaxXDRDecodedSize (50 KB)
+		oversizedPayload := strings.Repeat("A", 70000) // ~52 KB decoded, exceeds 50 KB limit
+		req := CreateSponsoredTransactionRequest{
+			OperationXDR: oversizedPayload,
+		}
+		err := req.Validate()
+		assert.NotNil(t, err)
+	})
+
 	t.Run("returns nil when operation_xdr is a valid invoke host function op", func(t *testing.T) {
 		req := CreateSponsoredTransactionRequest{
 			OperationXDR: "AAAAAAAAAAEBAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fIAAAAAh0cmFuc2ZlcgAAAAMAAAASAAAAAAAAAAAXzoXCN9GMUZaRt9PhPtTS78G1YOFnR1iG5pXpG5+5SwAAABIAAAAAAAAAABfOhcI30YxRlpG30+E+1NLvwbVg4WdHWIbmlekbn7lLAAAACgAAAAAAAAAAAAAAAAAPQkAAAAAA",

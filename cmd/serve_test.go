@@ -163,7 +163,7 @@ func Test_serve(t *testing.T) {
 		Sep10ClientAttributionRequired: true,
 		ReCAPTCHASiteKey:               "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:         "reCAPTCHASiteSecretKey",
-		CAPTCHAType:                    validators.GoogleReCAPTCHAV2,
+		CAPTCHAType:                    validators.GoogleReCAPTCHAV3,
 		ReCAPTCHAV3MinScore:            0.5,
 		DisableMFA:                     false,
 		DisableReCAPTCHA:               false,
@@ -272,7 +272,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("RPC_URL", serveOpts.RPCConfig.RPCUrl)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA")
 	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
-	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
+	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableReCAPTCHA))
 	t.Setenv("DISTRIBUTION_SEED", distributionAccPrivKey)
 	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", distributionAccPrivKey)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
@@ -280,6 +280,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("WEBAUTHN_SESSION_TTL_SECONDS", fmt.Sprintf("%d", serveOpts.WebAuthnSessionTTLSeconds))
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
+	t.Setenv("CAPTCHA_TYPE", string(serveOpts.CAPTCHAType))
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", chAccEncryptionPassphrase)
@@ -294,4 +295,61 @@ func Test_serve(t *testing.T) {
 	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()
 	require.NoError(t, err)
+}
+
+func Test_validateReCAPTCHAConfig(t *testing.T) {
+	testCases := []struct {
+		name             string
+		disableReCAPTCHA bool
+		siteKey          string
+		secretKey        string
+		wantErr          string
+	}{
+		{
+			name:             "returns nil when reCAPTCHA is disabled and keys are empty",
+			disableReCAPTCHA: true,
+			siteKey:          "",
+			secretKey:        "",
+			wantErr:          "",
+		},
+		{
+			name:             "returns nil when reCAPTCHA is enabled and both keys are provided",
+			disableReCAPTCHA: false,
+			siteKey:          "site-key",
+			secretKey:        "secret-key",
+			wantErr:          "",
+		},
+		{
+			name:             "returns error when reCAPTCHA is enabled and site key is empty",
+			disableReCAPTCHA: false,
+			siteKey:          "",
+			secretKey:        "secret-key",
+			wantErr:          "RECAPTCHA_SITE_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable",
+		},
+		{
+			name:             "returns error when reCAPTCHA is enabled and secret key is empty",
+			disableReCAPTCHA: false,
+			siteKey:          "site-key",
+			secretKey:        "",
+			wantErr:          "RECAPTCHA_SITE_SECRET_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable",
+		},
+		{
+			name:             "returns error when reCAPTCHA is enabled and both keys are empty",
+			disableReCAPTCHA: false,
+			siteKey:          "",
+			secretKey:        "",
+			wantErr:          "RECAPTCHA_SITE_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateReCAPTCHAConfig(tc.disableReCAPTCHA, tc.siteKey, tc.secretKey)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
+			}
+		})
+	}
 }

@@ -386,6 +386,19 @@ func BasicAuthMiddleware(adminAccount, adminAPIKey string) func(http.Handler) ht
 	}
 }
 
+// DefaultMaxRequestBodySize is the default maximum request body size (10 MB) applied globally (CWE-770).
+const DefaultMaxRequestBodySize int64 = 10 * 1024 * 1024
+
+// MaxBodySize is a middleware that limits the size of the request body using http.MaxBytesReader (CWE-770).
+func MaxBodySize(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			req.Body = http.MaxBytesReader(rw, req.Body, maxBytes)
+			next.ServeHTTP(rw, req)
+		})
+	}
+}
+
 // extractTenantNameFromRequest attempts to extract the tenant name from the request HEADER[tenantHeaderKey] or the hostname prefix.
 func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	// 1. Try extracting from the TenantHeaderKey header first

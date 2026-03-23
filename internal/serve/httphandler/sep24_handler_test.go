@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -206,6 +207,43 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "error", transaction["status"])
 		assert.NotEmpty(t, transaction["started_at"])
+	})
+
+	t.Run("incomplete transaction includes memo in more_info_url token", func(t *testing.T) {
+		account := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+		memo := "67890"
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      account + ":" + memo,
+			ClientDomain: "client.example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=acct-txn-1", nil, webAuthClaims)
+		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response map[string]any
+		err := json.Unmarshal(rr.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		transaction := response["transaction"].(map[string]any)
+		assert.Equal(t, "incomplete", transaction["status"])
+
+		moreInfoURL := transaction["more_info_url"].(string)
+		parsedURL, err := url.Parse(moreInfoURL)
+		require.NoError(t, err)
+
+		tokenStr := parsedURL.Query().Get("token")
+		require.NotEmpty(t, tokenStr)
+
+		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+		require.NoError(t, err)
+		assert.Equal(t, account, sep24Claims.Account())
+		assert.Equal(t, memo, sep24Claims.Memo())
 	})
 }
 
@@ -491,7 +529,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		assert.NotEmpty(t, response["id"])
 	})
 
-	t.Run("accepts webauth (SEP-10/45) claims", func(t *testing.T) {
+	t.Run("accepts webauth (SEP-10) claims", func(t *testing.T) {
 		testCases := []struct {
 			name         string
 			claims       *sepauth.WebAuthClaims
@@ -543,6 +581,93 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 				assert.Contains(t, response["url"], "lang="+tc.expectedLang)
 			})
 		}
+	})
+
+	t.Run("account with memo preserves memo in token", func(t *testing.T) {
+		account := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+		memo := "12345"
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      account + ":" + memo,
+			ClientDomain: "client.example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		requestBody := map[string]string{
+			"asset_code": "USDC",
+		}
+		bodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(bodyBytes), webAuthClaims)
+		req.Header.Set("Content-Type", "application/json")
+		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response map[string]any
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "interactive_customer_info_needed", response["type"])
+		assert.NotEmpty(t, response["id"])
+
+		// Parse the generated SEP-24 token from the URL to verify memo is preserved
+		interactiveURL := response["url"].(string)
+		parsedURL, err := url.Parse(interactiveURL)
+		require.NoError(t, err)
+
+		tokenStr := parsedURL.Query().Get("token")
+		require.NotEmpty(t, tokenStr)
+
+		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+		require.NoError(t, err)
+		assert.Equal(t, account, sep24Claims.Account())
+		assert.Equal(t, memo, sep24Claims.Memo())
+	})
+
+	t.Run("explicit account in request body does not use memo from subject", func(t *testing.T) {
+		explicitAccount := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP:99999",
+			ClientDomain: "client.example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		requestBody := map[string]string{
+			"asset_code": "USDC",
+			"account":    explicitAccount,
+		}
+		bodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(bodyBytes), webAuthClaims)
+		req.Header.Set("Content-Type", "application/json")
+		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response map[string]any
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// When account is explicitly provided, memo from subject should NOT be used
+		interactiveURL := response["url"].(string)
+		parsedURL, err := url.Parse(interactiveURL)
+		require.NoError(t, err)
+
+		tokenStr := parsedURL.Query().Get("token")
+		require.NotEmpty(t, tokenStr)
+
+		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+		require.NoError(t, err)
+		assert.Equal(t, explicitAccount, sep24Claims.Account())
+		assert.Empty(t, sep24Claims.Memo())
 	})
 
 	t.Run("invalid JSON in request body", func(t *testing.T) {
