@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -39,17 +38,17 @@ func Test_SQLNullTime(t *testing.T) {
 	tests := []struct {
 		name string
 		arg  time.Time
-		want pq.NullTime
+		want sql.NullTime
 	}{
 		{
 			name: "zero time",
 			arg:  time.Time{},
-			want: pq.NullTime{Time: time.Time{}, Valid: false},
+			want: sql.NullTime{Time: time.Time{}, Valid: false},
 		},
 		{
 			name: "non-zero time",
 			arg:  wantTime,
-			want: pq.NullTime{Time: wantTime, Valid: true},
+			want: sql.NullTime{Time: wantTime, Valid: true},
 		},
 	}
 	for _, tc := range tests {

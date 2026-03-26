@@ -426,6 +426,68 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 	}
 }
 
+func Test_SetConfigOptionStellarContractId(t *testing.T) {
+	opts := struct{ stellarContractID string }{}
+
+	co := config.ConfigOption{
+		Name:           "stellar-contract-id",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarContractID,
+		ConfigKey:      &opts.stellarContractID,
+		Required:       false,
+	}
+	expectedContractID := "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"
+
+	testCases := []customSetterTestCase[string]{
+		{
+			name: "doesn't return an error if the contract id is empty",
+		},
+		{
+			name:            "returns an error if the contract id is invalid",
+			args:            []string{"--stellar-contract-id", "invalid_contract_id"},
+			wantErrContains: `validating contract id in stellar-contract-id: "invalid_contract_id"`,
+		},
+		{
+			name:            "returns an error if the contract id is invalid (public key instead)",
+			args:            []string{"--stellar-contract-id", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"},
+			wantErrContains: `validating contract id in stellar-contract-id: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+		},
+		{
+			name:            "returns an error if the contract id is invalid (private key instead)",
+			args:            []string{"--stellar-contract-id", "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"},
+			wantErrContains: `validating contract id in stellar-contract-id: "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"`,
+		},
+		{
+			name:       "🎉 handles Stellar contract id through the CLI flag",
+			args:       []string{"--stellar-contract-id", "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"},
+			wantResult: expectedContractID,
+		},
+		{
+			name:       "🎉 handles Stellar contract id through the ENV flag",
+			envValue:   "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+			wantResult: expectedContractID,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.stellarContractID = ""
+			customSetterTester(t, tc, co)
+		})
+	}
+
+	tc := customSetterTestCase[[]string]{
+		name:            "returns an error if contract id is empty and it's required",
+		args:            []string{"--stellar-contract-id", "   "}, // Workaround to test empty values
+		wantErrContains: "cannot be empty",
+	}
+	t.Run(tc.name, func(t *testing.T) {
+		opts.stellarContractID = ""
+		co.Required = true
+		customSetterTester(t, tc, co)
+	})
+}
+
 func Test_SetCorsAllowedOriginsFunc(t *testing.T) {
 	opts := struct{ corsAddressesFlag []string }{}
 
@@ -502,9 +564,9 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 
 	testCases := []customSetterTestCase[string]{
 		{
-			name:            "returns an error if the ui base url flag is empty",
-			args:            []string{"--sdp-ui-base-url", ""},
-			wantErrContains: "URL cannot be empty in sdp-ui-base-url",
+			name:       "🎉 handles ui base url is empty but it's not required",
+			args:       []string{"--sdp-ui-base-url", ""},
+			wantResult: "",
 		},
 		{
 			name:       "🎉 handles ui base url successfully (from CLI args)",
@@ -525,9 +587,20 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.uiBaseURL = ""
-			customSetterTester[string](t, tc, co)
+			customSetterTester(t, tc, co)
 		})
 	}
+
+	tc := customSetterTestCase[[]string]{
+		name:            "returns an error if ui base url is empty and it's required",
+		args:            []string{"--sdp-ui-base-url", "   "}, // Workaround to test empty values
+		wantErrContains: "cannot be empty",
+	}
+	t.Run(tc.name, func(t *testing.T) {
+		opts.uiBaseURL = ""
+		co.Required = true
+		customSetterTester(t, tc, co)
+	})
 }
 
 func Test_SetConfigOptionURLList(t *testing.T) {

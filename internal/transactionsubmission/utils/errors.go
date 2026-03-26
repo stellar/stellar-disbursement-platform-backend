@@ -12,8 +12,26 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/problem"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
+
+// TransactionError represents the base interface for handling transaction errors
+type TransactionError interface {
+	Error() string
+	IsRetryable() bool
+	ShouldMarkAsError() bool
+	ShouldReportToCrashTracker() bool
+	GetErrorType() string
+}
+
+// HorizonSpecificError represents errors that come from Horizon transaction submission
+type HorizonSpecificError interface {
+	TransactionError
+	IsBadSequence() bool
+	IsTxInsufficientFee() bool
+	IsDestinationAccountNotReady() bool
+}
 
 // TransactionStatusUpdateError is an error that occurs when failing to update a transaction's status.
 type TransactionStatusUpdateError struct {
@@ -324,6 +342,7 @@ func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
 		"op_not_authorized",
 		"op_no_issuer",
 		"entry_archived",
+		"function_trapped",
 	}
 	for _, opResult := range e.ResultCodes.OperationCodes {
 		if slices.Contains(failedOpCodes, opResult) {
@@ -359,4 +378,121 @@ func (e *HorizonErrorWrapper) handleExtrasResultCodes(msgBuilder *strings.Builde
 	}
 }
 
-var _ error = &HorizonErrorWrapper{}
+// IsRetryable returns true if the error should be retried
+func (e *HorizonErrorWrapper) IsRetryable() bool {
+	return !e.IsHorizonError() || !e.ShouldMarkAsError()
+}
+
+// ShouldReportToCrashTracker returns true if the error should be reported to crash tracker
+func (e *HorizonErrorWrapper) ShouldReportToCrashTracker() bool {
+	return e.ShouldMarkAsError() && !e.IsDestinationAccountNotReady()
+}
+
+// GetErrorType returns the error type identifier
+func (e *HorizonErrorWrapper) GetErrorType() string {
+	return "Horizon"
+}
+
+var (
+	_ error                = &HorizonErrorWrapper{}
+	_ TransactionError     = &HorizonErrorWrapper{}
+	_ HorizonSpecificError = &HorizonErrorWrapper{}
+)
+
+// RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
+//
+//nolint:errname // This is both an error and a wrapper
+type RPCErrorWrapper struct {
+	SimulationError *stellar.SimulationError
+	Err             error
+}
+
+func NewRPCErrorWrapper(err error) *RPCErrorWrapper {
+	if err == nil {
+		return nil
+	}
+
+	var existingWrapper *RPCErrorWrapper
+	if errors.As(err, &existingWrapper) {
+		return existingWrapper
+	}
+
+	var simErr *stellar.SimulationError
+	if errors.As(err, &simErr) {
+		return &RPCErrorWrapper{
+			SimulationError: simErr,
+			Err:             err,
+		}
+	}
+
+	return &RPCErrorWrapper{Err: err}
+}
+
+func (e *RPCErrorWrapper) Unwrap() error {
+	return e.Err
+}
+
+func (e *RPCErrorWrapper) Error() string {
+	if e.SimulationError != nil {
+		return fmt.Sprintf("rpc simulation error: %v", e.SimulationError)
+	}
+	return fmt.Sprintf("rpc error: %v", e.Err)
+}
+
+func (e *RPCErrorWrapper) IsRPCError() bool {
+	return e.SimulationError != nil
+}
+
+// IsRateLimit returns true if this is a rate limiting error (similar to Horizon)
+func (e *RPCErrorWrapper) IsRateLimit() bool {
+	if e.SimulationError == nil {
+		return false
+	}
+
+	if e.SimulationError.Type == stellar.SimulationErrorTypeNetwork {
+		msgLower := strings.ToLower(e.SimulationError.Error())
+		return sdpUtils.ContainsAny(msgLower, "rate limit", "too many requests", "throttle", "429")
+	}
+
+	return false
+}
+
+// IsGatewayTimeout returns true if this is a gateway timeout error (similar to Horizon)
+func (e *RPCErrorWrapper) IsGatewayTimeout() bool {
+	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
+}
+
+// ShouldMarkAsError determines whether a transaction needs to be marked as an error based on the
+// RPC error type so that TSS can determine whether it needs to be retried.
+func (e *RPCErrorWrapper) ShouldMarkAsError() bool {
+	if e.SimulationError == nil {
+		return false
+	}
+
+	switch e.SimulationError.Type {
+	case stellar.SimulationErrorTypeTransactionInvalid, stellar.SimulationErrorTypeAuth, stellar.SimulationErrorTypeContractExecution:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsRetryable returns true if the error should be retried
+func (e *RPCErrorWrapper) IsRetryable() bool {
+	return !e.ShouldMarkAsError()
+}
+
+// ShouldReportToCrashTracker returns true if the error should be reported to crash tracker
+func (e *RPCErrorWrapper) ShouldReportToCrashTracker() bool {
+	return e.ShouldMarkAsError()
+}
+
+// GetErrorType returns the error type identifier
+func (e *RPCErrorWrapper) GetErrorType() string {
+	return "RPC"
+}
+
+var (
+	_ error            = &RPCErrorWrapper{}
+	_ TransactionError = &RPCErrorWrapper{}
+)

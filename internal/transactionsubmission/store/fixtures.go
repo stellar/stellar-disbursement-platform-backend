@@ -3,11 +3,10 @@ package store
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"math/big"
 	"testing"
 	"time"
-
-	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
@@ -36,14 +36,19 @@ func CreateTransactionFixtures(t *testing.T,
 }
 
 type TransactionFixture struct {
-	ExternalID          string
-	AssetCode           string
-	AssetIssuer         string
-	DestinationAddress  string
-	Status              TransactionStatus
-	Amount              decimal.Decimal
-	TenantID            string
-	DistributionAccount string
+	ExternalID            string
+	TransactionType       TransactionType
+	AssetCode             string
+	AssetIssuer           string
+	DestinationAddress    string
+	Amount                decimal.Decimal
+	PublicKey             string
+	WasmHash              string
+	SponsoredAccount      string
+	SponsoredOperationXDR string
+	Status                TransactionStatus
+	TenantID              string
+	DistributionAccount   string
 }
 
 // CreateTransactionFixture creates a submitter transaction in the database
@@ -61,30 +66,35 @@ func CreateTransactionFixture(
 		txFixture.DestinationAddress = keypair.MustRandom().Address()
 	}
 
-	completedAt := pq.NullTime{}
+	completedAt := sql.NullTime{}
 	if txFixture.Status == TransactionStatusSuccess || txFixture.Status == TransactionStatusError {
 		timeElapsed, err := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
 		require.NoError(t, err)
 		randomCompletedAt := time.Unix(timeElapsed.Int64(), 0)
-		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
+		completedAt = sql.NullTime{Time: randomCompletedAt, Valid: true}
 	}
 
 	query := `
 		INSERT INTO submitter_transactions
-			(external_id, status, asset_code, asset_issuer, amount, destination, tenant_id, completed_at, started_at)
+			(external_id, transaction_type, status, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_operation_xdr, tenant_id, completed_at, started_at)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
 		RETURNING
 			` + TransactionColumnNames("", "")
 
 	tx := Transaction{}
 	err := sqlExec.GetContext(ctx, &tx, query,
 		txFixture.ExternalID,
+		string(txFixture.TransactionType),
 		string(txFixture.Status),
 		txFixture.AssetCode,
 		txFixture.AssetIssuer,
 		txFixture.Amount,
 		txFixture.DestinationAddress,
+		txFixture.PublicKey,
+		txFixture.WasmHash,
+		txFixture.SponsoredAccount,
+		txFixture.SponsoredOperationXDR,
 		txFixture.TenantID,
 		completedAt,
 	)

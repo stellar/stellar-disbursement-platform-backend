@@ -38,6 +38,13 @@ var PubnetWallets = []data.Wallet{
 		},
 	},
 	{
+		Name:           "Embedded Wallet",
+		DeepLinkSchema: "SELF",
+		Homepage:       "https://stellar.org",
+		Assets:         assets.AllAssetsPubnet,
+		Embedded:       true,
+	},
+	{
 		Name:        "User Managed Wallet",
 		Assets:      assets.AllAssetsPubnet,
 		UserManaged: true,

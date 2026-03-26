@@ -2,6 +2,7 @@ package validators
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,6 +65,39 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				"line 2 - amount":        "invalid amount. Amount must be a positive number",
 				"line 2 - id":            "id cannot be empty",
 				"line 2 - date of birth": "date of birth cannot be empty",
+			},
+		},
+		{
+			name: "🔴 id exceeds 64 characters",
+			instruction: &data.DisbursementInstruction{
+				Phone:             "+380445555555",
+				ID:                strings.Repeat("a", 65),
+				Amount:            "100.5",
+				VerificationValue: "1990-01-01",
+			},
+			lineNumber:        2,
+			contactType:       data.RegistrationContactTypePhone,
+			verificationField: data.VerificationTypeDateOfBirth,
+			hasErrors:         true,
+			expectedErrors: map[string]interface{}{
+				"line 2 - id": "id cannot exceed 64 characters",
+			},
+		},
+		{
+			name: "🔴 paymentID exceeds 64 characters",
+			instruction: &data.DisbursementInstruction{
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1990-01-01",
+				ExternalPaymentID: strings.Repeat("b", 65),
+			},
+			lineNumber:        2,
+			contactType:       data.RegistrationContactTypePhone,
+			verificationField: data.VerificationTypeDateOfBirth,
+			hasErrors:         true,
+			expectedErrors: map[string]interface{}{
+				"line 2 - paymentID": "paymentID cannot exceed 64 characters",
 			},
 		},
 		{

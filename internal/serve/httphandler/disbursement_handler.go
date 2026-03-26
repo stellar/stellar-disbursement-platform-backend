@@ -44,6 +44,8 @@ type DisbursementHandler struct {
 	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
+const DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
+
 type PostDisbursementRequest struct {
 	Name                                string                       `json:"name"`
 	WalletID                            string                       `json:"wallet_id"`
@@ -53,7 +55,7 @@ type PostDisbursementRequest struct {
 	ReceiverRegistrationMessageTemplate string                       `json:"receiver_registration_message_template"`
 }
 
-func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *validators.Validator {
+func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbursementRequest) *validators.Validator {
 	v := validators.NewValidator()
 
 	v.Check(req.Name != "", "name", "name is required")
@@ -65,12 +67,24 @@ func (d DisbursementHandler) validateRequest(req PostDisbursementRequest) *valid
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 	if !req.RegistrationContactType.IncludesWalletAddress {
-		v.Check(
-			slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
-			"verification_field",
-			fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
-		)
-		v.Check(req.WalletID != "", "wallet_id", "wallet_id is required")
+		trimmedWalletID := strings.TrimSpace(req.WalletID)
+		v.Check(trimmedWalletID != "", "wallet_id", "wallet_id is required")
+		var wallet *data.Wallet
+		if trimmedWalletID != "" {
+			if fetchedWallet, err := d.Models.Wallets.Get(ctx, trimmedWalletID); err == nil {
+				wallet = fetchedWallet
+			} else {
+				v.Check(false, "wallet_id", "wallet_id could not be retrieved")
+			}
+		}
+		walletIsEmbedded := wallet != nil && wallet.Embedded
+		if !walletIsEmbedded || req.VerificationField != "" {
+			v.Check(
+				slices.Contains(data.GetAllVerificationTypes(), req.VerificationField),
+				"verification_field",
+				fmt.Sprintf("verification_field must be one of %v", data.GetAllVerificationTypes()),
+			)
+		}
 	} else {
 		v.Check(req.VerificationField == "", "verification_field", "verification_field is not allowed for this registration contact type")
 		v.Check(req.WalletID == "", "wallet_id", "wallet_id is not allowed for this registration contact type")
@@ -92,15 +106,19 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if httpErr := d.limitCSVUploadRequestSize(w, r); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
 	// Handle request based on content type.
 	var disbursement *data.Disbursement
 	var httpErr *httperror.HTTPError
-	contentType := r.Header.Get("Content-Type")
-	if strings.HasPrefix(contentType, "multipart/form-data") {
+	if utils.IsMultipartFormData(r) {
 		disbursement, httpErr = d.postDisbursementWithInstructions(ctx, r, user)
 	} else {
 		var req PostDisbursementRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 			httperror.BadRequest(err.Error(), err, nil).Render(w)
 			return
 		}
@@ -291,7 +309,12 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	if err := db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	if httpErr := d.limitCSVUploadRequestSize(w, r); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
+	if err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if getErr != nil {
@@ -311,6 +334,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		} else {
 			httperror.InternalError(ctx, "Cannot process instructions for disbursement", err, nil).Render(w)
 		}
+		return
 	}
 
 	response := map[string]string{
@@ -320,13 +344,37 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	httpjson.Render(w, response, httpjson.JSON)
 }
 
+func (d DisbursementHandler) limitCSVUploadRequestSize(w http.ResponseWriter, r *http.Request) *httperror.HTTPError {
+	if !utils.IsMultipartFormData(r) {
+		return nil
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxCSVUploadSizeBytes)
+	if err := r.ParseMultipartForm(DefaultMaxCSVUploadSizeBytes); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			err = fmt.Errorf("request body too large: %w", err)
+			log.Ctx(r.Context()).Error(err)
+			return httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
+				"details": fmt.Sprintf("request too large. Max size %d bytes.", DefaultMaxCSVUploadSizeBytes),
+			})
+		}
+
+		err = fmt.Errorf("parsing multipart form: %w", err)
+		return httperror.BadRequest("could not parse multipart form data", err, nil)
+	}
+
+	return nil
+}
+
 func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context, r *http.Request, dbTx db.DBTransaction, authUser *auth.User, disbursement *data.Disbursement) error {
 	buf, header, parseHTTPErr := parseCsvFromMultipartRequest(r)
 	if parseHTTPErr != nil {
 		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
-	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType); err != nil {
+	skipVerification := disbursement.Wallet != nil && disbursement.Wallet.Embedded && disbursement.VerificationField == ""
+	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, skipVerification); err != nil {
 		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
 			disbursement.RegistrationContactType,
 			err)
@@ -486,14 +534,9 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	disbursementID := chi.URLParam(r, "id")
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot get token from context", err, nil).Render(w)
-		return
-	}
-	user, err := d.AuthManager.GetUser(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user from token", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
 		return
 	}
 
@@ -606,7 +649,7 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 }
 
 func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
-	v := d.validateRequest(req)
+	v := d.validateRequest(ctx, req)
 	if v.HasErrors() {
 		return nil, httperror.BadRequest("", nil, v.Errors)
 	}
@@ -645,7 +688,7 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 }
 
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
-func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType) error {
+func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType, skipVerification bool) error {
 	const (
 		phoneHeader             = "phone"
 		emailHeader             = "email"
@@ -699,13 +742,27 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 		},
 	}
 
+	rule := rules[registrationContactType]
+	if skipVerification {
+		// filter out the verification header from required headers
+		filtered := rule.required[:0]
+		for _, header := range rule.required {
+			if header != verificationHeader {
+				filtered = append(filtered, header)
+			}
+		}
+		rule.required = filtered
+		// And add it to disallowed
+		rule.disallowed = append(rule.disallowed, verificationHeader)
+	}
+
 	// Validate headers according to the rules
-	for _, req := range rules[registrationContactType].required {
+	for _, req := range rule.required {
 		if !hasHeaders[req] {
 			return fmt.Errorf("%s column is required", req)
 		}
 	}
-	for _, dis := range rules[registrationContactType].disallowed {
+	for _, dis := range rule.disallowed {
 		if hasHeaders[dis] {
 			return fmt.Errorf("%s column is not allowed for this registration contact type", dis)
 		}

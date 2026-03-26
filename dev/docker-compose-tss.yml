@@ -9,8 +9,11 @@ services:
       - "9000:9000"
     environment:
       DATABASE_URL: postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable
-      NETWORK_PASSPHRASE: "${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
-      HORIZON_URL: "${HORIZON_URL:-https://horizon-testnet.stellar.org}"
+      NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      HORIZON_URL: ${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
+      RPC_REQUEST_AUTH_HEADER_KEY: ${RPC_REQUEST_AUTH_HEADER_KEY:-}
+      RPC_REQUEST_AUTH_HEADER_VALUE: ${RPC_REQUEST_AUTH_HEADER_VALUE:-}
       NUM_CHANNEL_ACCOUNTS: ${NUM_CHANNEL_ACCOUNTS:-3}
       MAX_BASE_FEE: "${MAX_BASE_FEE:-1000000}"
       TSS_METRICS_PORT: "${TSS_METRICS_PORT:-9002}"

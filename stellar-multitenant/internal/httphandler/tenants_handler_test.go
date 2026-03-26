@@ -380,8 +380,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"circle_recipients",
 			"circle_transfer_requests",
 			"disbursements",
+			"embedded_wallets",
 			"messages",
 			"organizations",
+			"passkey_sessions",
 			"payments",
 			"receiver_verifications",
 			"receiver_verifications_audit",
@@ -391,9 +393,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"receivers_audit",
 			"sdp_migrations",
 			"short_urls",
+			"sponsored_transactions",
 			"wallets",
 			"wallets_assets",
 			"receiver_registration_attempts",
+			"sep_nonces",
 			"api_keys",
 			"api_keys_audit",
 		}
@@ -413,7 +417,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			fmt.Sprintf("%s:", assets.XLMAssetCode),
 		},
 		)
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"User Managed Wallet", "Demo Wallet", "Vibrant Assist"})
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"User Managed Wallet", "Demo Wallet", "Vibrant Assist", "Embedded Wallet"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
 	}
 

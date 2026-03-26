@@ -30,6 +30,7 @@ jobs:
         working-directory: dev
         run: |
           export SEP10_CLIENT_ATTRIBUTION_REQUIRED=false
+          export SINGLE_TENANT_MODE=true
           docker compose -f docker-compose-sdp.yml down && docker compose -f docker-compose-sdp.yml up --build -d
 
       - name: Install curl
@@ -43,6 +44,17 @@ jobs:
             sleep 15
           done
           echo 'SDP is up and running.'
+
+      - name: Ensure default tenant
+        working-directory: dev
+        run: |
+          docker compose -f docker-compose-sdp.yml exec -T sdp-api ./stellar-disbursement-platform tenants ensure-default \
+            --default-tenant-owner-email default@default.local \
+            --default-tenant-owner-first-name Default \
+            --default-tenant-owner-last-name Owner \
+            --default-tenant-distribution-account-type DISTRIBUTION_ACCOUNT.STELLAR.ENV \
+            --disable-mfa=true \
+            --disable-recaptcha=true
 
       - name: Install NodeJs
         uses: actions/setup-node@v6

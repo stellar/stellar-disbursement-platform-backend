@@ -351,3 +351,78 @@ func Test_ReceiverRegistration(t *testing.T) {
 		httpClientMock.AssertExpectations(t)
 	})
 }
+
+func Test_CreateEmbeddedWallet(t *testing.T) {
+	httpClientMock := httpclientMocks.HTTPClientMock{}
+
+	sa := ServerAPIIntegrationTests{
+		HTTPClient:       &httpClientMock,
+		ServerAPIBaseURL: "http://mock_server.com/",
+		TenantName:       "test-tenant",
+	}
+
+	ctx := context.Background()
+
+	reqBody := &httphandler.CreateWalletRequest{
+		Token:        "test-token-123",
+		PublicKey:    "04" + strings.Repeat("ab", 64), // 65 bytes hex-encoded P256 public key
+		CredentialID: "credential-id-123",
+	}
+
+	t.Run("error calling httpClient.Do", func(t *testing.T) {
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, fmt.Errorf("error calling the request")).Once()
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
+		require.EqualError(t, err, "making request to POST /embedded-wallets: error calling the request")
+		assert.Nil(t, wallet)
+
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("error registering embedded wallet on server api", func(t *testing.T) {
+		errorResponse := `{"error": "Invalid token"}`
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(errorResponse)),
+			StatusCode: http.StatusBadRequest,
+		}
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
+
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
+		require.EqualError(t, err, "error registering embedded wallet (statusCode=400)")
+		assert.Nil(t, wallet)
+
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("error invalid response body", func(t *testing.T) {
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader("")),
+			StatusCode: http.StatusAccepted,
+		}
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
+
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
+		require.EqualError(t, err, "decoding response body: EOF")
+		assert.Nil(t, wallet)
+
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("successfully registering embedded wallet", func(t *testing.T) {
+		walletResponse := `{
+			"status": "PENDING"
+		}`
+
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(walletResponse)),
+			StatusCode: http.StatusAccepted,
+		}
+		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
+
+		wallet, err := sa.CreateEmbeddedWallet(ctx, reqBody)
+		require.NoError(t, err)
+		assert.Equal(t, data.PendingWalletStatus, wallet.Status)
+		assert.Empty(t, wallet.ContractAddress)
+
+		httpClientMock.AssertExpectations(t)
+	})
+}

@@ -1,23 +1,23 @@
 # Transaction Submission Service
 
-The Transaction Submission Service (TSS) allows for transaction submission at scale to the Stellar network from a single [source/distribution account](#distribution-account), which is made possible through the use of [channel accounts](https://developers.stellar.org/docs/encyclopedia/channel-accounts) spawned from said distribution account. In the context of SDP, the TSS is responsible for submitting transactions to the network for each respective payment read from a shared database table that is "queued" by the SDP. It works seamlessly by way of graceful error handling and transaction retries alongside mechanisms such as [transaction fee bumps](#transaction-fee-bumps) and adjustment of the rate at which new transactions are polled when certain errors are encountered.
+The Transaction Submission Service (TSS) allows for transaction submission at scale to the Stellar network from a single [source/distribution account](#distribution-account), which is made possible through the use of [channel accounts](https://developers.stellar.org/docs/build/guides/transactions/channel-accounts) spawned from said distribution account. In the context of SDP, the TSS is responsible for submitting transactions to the network for each respective payment read from a shared database table that is "queued" by the SDP. It works seamlessly by way of graceful error handling and transaction retries alongside mechanisms such as [transaction fee bumps](#transaction-fee-bumps) and adjustment of the rate at which new transactions are polled when certain errors are encountered.
 
 Use of the Transaction Submission Service requires at least a single aforementioned channel account to be seeded in storage in advanced. We provide a set of CLI's that can be used to create, delete, and change the number of channel accounts the service manages with ease. To learn how to use these commands, please refer to the [Channel Accounts Management](#channel-accounts-management) section below.
 
 ## Transaction Fee Bumps
-During periods of high network activity, fee surges may occur as many submitted transactions from different sources may compete to be included into the next ledger. Running the TSS itself against a large number of payments with a higher than average configured accounts count will result in a high likelihood of this happening. To ensure that submitted transactions are competitive enough to be included in the ledger in a reasonable time window, the TSS utilizes fee bump transactions as part of its retry process. See [here](https://developers.stellar.org/docs/encyclopedia/fee-bump-transactions) for Stellar's official documentation about fee-bump transactions.
+During periods of high network activity, fee surges may occur as many submitted transactions from different sources may compete to be included into the next ledger. Running the TSS itself against a large number of payments with a higher than average configured accounts count will result in a high likelihood of this happening. To ensure that submitted transactions are competitive enough to be included in the ledger in a reasonable time window, the TSS utilizes fee bump transactions as part of its retry process. See [here](https://developers.stellar.org/docs/build/guides/transactions/fee-bump-transactions) for Stellar's official documentation about fee-bump transactions.
 
 ## Distribution Account
-The distribution account's balance is where the spending amount will be pulled from and also acts as the [sponsored reserve](https://developers.stellar.org/docs/encyclopedia/sponsored-reserves), used to pay the base reserve for any of its channel accounts that exist onchain.
+The distribution account's balance is where the spending amount will be pulled from and also acts as the [sponsored reserve](https://developers.stellar.org/docs/build/guides/transactions/sponsored-reserves), used to pay the base reserve for any of its channel accounts that exist onchain.
 
 Though the transaction submitter and channel account management commands allow the distribution private key to be specified upfront through the `distribution-seed` flag, we recommend users to configure it through the environment variable `DISTRIBUTION_SEED` in a one and done way to mitigate risks of exposing this information. For the distribution seed to be valid, the account associated with it must exist on the network.
 
-In terms of balance, the distribution account needs to hold some XLM balance in order to pay for gas fees and also to support the creation of Channel accounts (1 XLM is needed per channel account). The distribution account also must contain a balance of the assets that are specified by the payments/transactions records otherwise, these transactions will fail with an error explaining the reason. To learn how to fund a distribution account in testnet, refer to the section ["Create and Fund a Distribution Account"](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account) in the SDP startup guide.
+In terms of balance, the distribution account needs to hold some XLM balance in order to pay for gas fees and also to support the creation of Channel accounts (1 XLM is needed per channel account). The distribution account also must contain a balance of the assets that are specified by the payments/transactions records otherwise, these transactions will fail with an error explaining the reason. To learn how to fund a distribution account in testnet, refer to the section ["Create and Fund a Distribution Account"](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account) in the SDP startup guide.
 
 ## TSS Flow
 ![transaction_orchestration](./docs/images/tss_tx_flow.png)
 
-Running the transaction submitter command [detailed below](#transaction-submitter) spawns a worker that continously polls the database for any 'queued' payments that have not yet reached some terminal state at a configured polling interval. 
+Running the transaction submitter command [detailed below](#transaction-submitter) spawns a worker that continously polls the database for any 'queued' payments that have not yet reached some terminal state at a configured polling interval.
 
 When such a payment is found, the worker attempts to look for any free channel accounts and locks the payment and account records to the same ledger number as a bundle so to prevent the occurence of race conditions that guarantee failed transactions (i.e. attempting to submit multiple per channel account concurrently resulting in `tx_bad_seq` errors, etc...), then kicks off a job for the payment to create, sign, and submit to the network a transaction via Horizon.
 
@@ -74,7 +74,7 @@ Available Commands:
   ensure      Ensure we are managing exactly the number of channel accounts equal to some specified count by dynamically increasing or decreasing the number of managed channel accounts in storage and onchain
   verify      Verify the existence of all channel accounts in the database on the Stellar newtwork
   view        View all channel accounts currently managed in the database
-  
+
 Flags:
   -h, --help                 help for channel-accounts
       --horizon-url string   Horizon URL" (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
@@ -164,7 +164,7 @@ Flags:
 
 ## Testing
 ### Mocks
-TSS unit tests rely on mocks of its interfaces auto-generated by mockery. For installation instructions, see [here](https://vektra.github.io/mockery/installation/). 
+TSS unit tests rely on mocks of its interfaces auto-generated by mockery. For installation instructions, see [here](https://vektra.github.io/mockery/installation/).
 
 Refer to the output to learn how to annotate interfaces and about the different flags that you can leverage to manipulate the output.
 ```

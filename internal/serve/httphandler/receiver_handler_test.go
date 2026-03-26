@@ -411,6 +411,22 @@ func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be an integer"}}`,
 		},
 		{
+			name: "returns error when page_limit is zero",
+			queryParams: map[string]string{
+				"page_limit": "0",
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be a positive integer"}}`,
+		},
+		{
+			name: "returns error when page_limit exceeds max",
+			queryParams: map[string]string{
+				"page_limit": fmt.Sprintf("%d", validators.MaxPageLimit+1),
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"page_limit":"parameter must be less than or equal to %d"}}`, validators.MaxPageLimit),
+		},
+		{
 			name: "returns error when status is invalid",
 			queryParams: map[string]string{
 				"status": "invalid_status",

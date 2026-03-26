@@ -17,7 +17,50 @@ type Sep10JWTClaims struct {
 	HomeDomain   string `json:"home_domain,omitempty"`
 }
 
+type Sep45JWTClaims struct {
+	jwt.RegisteredClaims
+	ClientDomain string `json:"client_domain,omitempty"`
+	HomeDomain   string `json:"home_domain,omitempty"`
+}
+
 func (c Sep10JWTClaims) Valid() error {
+	if c.Issuer == "" {
+		return fmt.Errorf("issuer is required")
+	}
+
+	if c.Subject == "" {
+		return fmt.Errorf("subject is required")
+	}
+
+	if c.ID == "" {
+		return fmt.Errorf("jti (JWT ID) is required")
+	}
+
+	if c.IssuedAt == nil {
+		return fmt.Errorf("iat (issued at) is required")
+	}
+
+	if c.ExpiresAt == nil {
+		return fmt.Errorf("exp (expires at) is required")
+	}
+
+	err := c.RegisteredClaims.Valid()
+	if err != nil {
+		return fmt.Errorf("validating registered claims: %w", err)
+	}
+
+	if c.ClientDomain != "" && len(strings.TrimSpace(c.ClientDomain)) == 0 {
+		return fmt.Errorf("client_domain cannot be empty if provided")
+	}
+
+	if c.HomeDomain != "" && len(strings.TrimSpace(c.HomeDomain)) == 0 {
+		return fmt.Errorf("home_domain cannot be empty if provided")
+	}
+
+	return nil
+}
+
+func (c Sep45JWTClaims) Valid() error {
 	if c.Issuer == "" {
 		return fmt.Errorf("issuer is required")
 	}
@@ -77,10 +120,7 @@ func NewJWTManager(secret string, expirationMiliseconds int64) (*JWTManager, err
 // GenerateSEP24Token will generate a JWT token string using the token manager and the provided parameters.
 // The parameters are validated before generating the token.
 func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID string) (string, error) {
-	subject := stellarAccount
-	if stellarMemo != "" {
-		subject = fmt.Sprintf("%s:%s", stellarAccount, stellarMemo)
-	}
+	subject := FormatSubject(stellarAccount, stellarMemo)
 
 	claims := SEP24JWTClaims{
 		ClientDomainClaim: clientDomain,
@@ -101,10 +141,7 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 
 // GenerateSEP24MoreInfoToken will generate a JWT token string for more info URLs with transaction data.
 func (manager *JWTManager) GenerateSEP24MoreInfoToken(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID, lang string, transactionData map[string]string) (string, error) {
-	subject := stellarAccount
-	if stellarMemo != "" {
-		subject = fmt.Sprintf("%s:%s", stellarAccount, stellarMemo)
-	}
+	subject := FormatSubject(stellarAccount, stellarMemo)
 
 	// Prepare transaction data including language
 	data := make(map[string]string)
@@ -153,6 +190,26 @@ func (manager *JWTManager) GenerateSEP10Token(issuer, subject, jti, clientDomain
 	return token, nil
 }
 
+func (manager *JWTManager) GenerateSEP45Token(issuer, subject, jti, clientDomain, homeDomain string, iat, exp time.Time) (string, error) {
+	claims := Sep45JWTClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    issuer,
+			Subject:   subject,
+			ID:        jti,
+			IssuedAt:  jwt.NewNumericDate(iat),
+			ExpiresAt: jwt.NewNumericDate(exp),
+		},
+		ClientDomain: clientDomain,
+		HomeDomain:   homeDomain,
+	}
+
+	token, err := manager.signToken(claims)
+	if err != nil {
+		return "", fmt.Errorf("generating SEP45 token: %w", err)
+	}
+	return token, nil
+}
+
 // ParseDefaultTokenClaims will parse the default claims from a JWT token string.
 func (manager *JWTManager) ParseDefaultTokenClaims(tokenString string) (*jwt.RegisteredClaims, error) {
 	return parseTokenClaims(manager.secret, tokenString, &jwt.RegisteredClaims{}, "default")
@@ -162,6 +219,12 @@ func (manager *JWTManager) ParseDefaultTokenClaims(tokenString string) (*jwt.Reg
 // If the token is not a valid SEP-10 token, an error is returned instead.
 func (manager *JWTManager) ParseSEP10TokenClaims(tokenString string) (*Sep10JWTClaims, error) {
 	return parseTokenClaims(manager.secret, tokenString, &Sep10JWTClaims{}, "SEP10")
+}
+
+// ParseSEP45TokenClaims will parse the provided token string and return the Sep45JWTClaims, if possible.
+// If the token is not a valid SEP-45 token, an error is returned instead.
+func (manager *JWTManager) ParseSEP45TokenClaims(tokenString string) (*Sep45JWTClaims, error) {
+	return parseTokenClaims(manager.secret, tokenString, &Sep45JWTClaims{}, "SEP45")
 }
 
 // ParseSEP24TokenClaims will parse the provided token string and return the SEP24JWTClaims, if possible.

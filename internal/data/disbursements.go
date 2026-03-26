@@ -124,7 +124,7 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 			"updated_at",
 			"registration_contact_type",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"id",
 			"name",
 			"status::text",

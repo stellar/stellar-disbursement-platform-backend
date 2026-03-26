@@ -7,11 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -36,18 +36,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	}
 
 	t.Run("missing id parameter", func(t *testing.T) {
-		sep10Claims := &sepauth.Sep10JWTClaims{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:  "https://example.com",
-				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-				ID:      "jti-123",
-			},
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction", nil, sep10Claims)
+		req := setupRequestWithWebAuthClaims("GET", "/transaction", nil, webAuthClaims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -60,18 +57,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 	})
 
 	t.Run("transaction not found returns incomplete status", func(t *testing.T) {
-		sep10Claims := &sepauth.Sep10JWTClaims{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:  "https://example.com",
-				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-				ID:      "jti-123",
-			},
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id=non-existent-id", nil, sep10Claims)
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=non-existent-id", nil, webAuthClaims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -106,18 +100,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
-		sep10Claims := &sepauth.Sep10JWTClaims{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:  "https://example.com",
-				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-				ID:      "jti-123",
-			},
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id=test-transaction-id", nil, sep10Claims)
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=test-transaction-id", nil, webAuthClaims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -152,18 +143,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
-		sep10Claims := &sepauth.Sep10JWTClaims{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:  "https://example.com",
-				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-				ID:      "jti-123",
-			},
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id=test-transaction-id-2", nil, sep10Claims)
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=test-transaction-id-2", nil, webAuthClaims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -195,18 +183,15 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
-		sep10Claims := &sepauth.Sep10JWTClaims{
-			RegisteredClaims: jwt.RegisteredClaims{
-				Issuer:  "https://example.com",
-				Subject: "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-				ID:      "jti-123",
-			},
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
+			TokenType:    "sep10",
 		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("GET", "/transaction?id=test-transaction-id-3", nil, sep10Claims)
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=test-transaction-id-3", nil, webAuthClaims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -222,6 +207,43 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "error", transaction["status"])
 		assert.NotEmpty(t, transaction["started_at"])
+	})
+
+	t.Run("incomplete transaction includes memo in more_info_url token", func(t *testing.T) {
+		account := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+		memo := "67890"
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      account + ":" + memo,
+			ClientDomain: "client.example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=acct-txn-1", nil, webAuthClaims)
+		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response map[string]any
+		err := json.Unmarshal(rr.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		transaction := response["transaction"].(map[string]any)
+		assert.Equal(t, "incomplete", transaction["status"])
+
+		moreInfoURL := transaction["more_info_url"].(string)
+		parsedURL, err := url.Parse(moreInfoURL)
+		require.NoError(t, err)
+
+		tokenStr := parsedURL.Query().Get("token")
+		require.NotEmpty(t, tokenStr)
+
+		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+		require.NoError(t, err)
+		assert.Equal(t, account, sep24Claims.Account())
+		assert.Equal(t, memo, sep24Claims.Memo())
 	})
 }
 
@@ -279,7 +301,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 
 	t.Run("missing authorization header", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", nil, nil)
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", nil, nil)
 		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -291,142 +313,132 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		assert.Equal(t, "Missing or invalid authorization header", errResp.Message)
 	})
 
-	t.Run("missing asset_code in JSON request", func(t *testing.T) {
-		token, err := jwtManager.GenerateSEP10Token(
-			"https://example.com",
-			"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			"jti-123",
-			"mars.example.com",
-			"example.com",
-			time.Now(),
-			time.Now().Add(time.Hour),
-		)
-		require.NoError(t, err)
+	t.Run("missing asset_code in JSON or form request", func(t *testing.T) {
+		buildAuthClaims := func() *sepauth.WebAuthClaims {
+			token, err := jwtManager.GenerateSEP10Token(
+				"https://example.com",
+				"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+				"jti-123",
+				"mars.example.com",
+				"example.com",
+				time.Now(),
+				time.Now().Add(time.Hour),
+			)
+			require.NoError(t, err)
 
-		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", strings.NewReader(`{}`), sep10Claims)
-		req.Header.Set("Content-Type", "application/json")
-		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		var errResp httperror.HTTPError
-		err = json.Unmarshal(rr.Body.Bytes(), &errResp)
-		require.NoError(t, err)
-		assert.Equal(t, "asset_code is required", errResp.Message)
-	})
-
-	t.Run("missing asset_code in form request", func(t *testing.T) {
-		token, err := jwtManager.GenerateSEP10Token(
-			"https://example.com",
-			"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			"jti-123",
-			"titan.example.com",
-			"example.com",
-			time.Now(),
-			time.Now().Add(time.Hour),
-		)
-		require.NoError(t, err)
-
-		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", strings.NewReader(""), sep10Claims)
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		var errResp httperror.HTTPError
-		err = json.Unmarshal(rr.Body.Bytes(), &errResp)
-		require.NoError(t, err)
-		assert.Equal(t, "asset_code is required", errResp.Message)
-	})
-
-	t.Run("successful JSON request", func(t *testing.T) {
-		token, err := jwtManager.GenerateSEP10Token(
-			"https://example.com",
-			"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			"jti-123",
-			"terra.example.com",
-			"example.com",
-			time.Now(),
-			time.Now().Add(time.Hour),
-		)
-		require.NoError(t, err)
-
-		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
-		require.NoError(t, err)
-
-		requestBody := map[string]string{
-			"asset_code": "USDC",
-			"account":    "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			"lang":       "en",
+			sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
+			require.NoError(t, err)
+			return &sepauth.WebAuthClaims{
+				Subject:      sep10Claims.Subject,
+				ClientDomain: sep10Claims.ClientDomain,
+				HomeDomain:   sep10Claims.HomeDomain,
+				TokenType:    sepauth.WebAuthTokenTypeSEP10,
+			}
 		}
-		requestBodyBytes, err := json.Marshal(requestBody)
-		require.NoError(t, err)
 
-		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), sep10Claims)
-		req.Header.Set("Content-Type", "application/json")
-		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+		testCases := []struct {
+			name        string
+			contentType string
+			body        string
+		}{
+			{
+				name:        "json",
+				contentType: "application/json",
+				body:        `{}`,
+			},
+			{
+				name:        "form",
+				contentType: "application/x-www-form-urlencoded",
+				body:        "",
+			},
+		}
 
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				rr := httptest.NewRecorder()
+				req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", strings.NewReader(tc.body), buildAuthClaims())
+				req.Header.Set("Content-Type", tc.contentType)
 
-		var response map[string]any
-		err = json.Unmarshal(rr.Body.Bytes(), &response)
-		require.NoError(t, err)
+				http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
 
-		assert.Equal(t, "interactive_customer_info_needed", response["type"])
-		assert.Contains(t, response["url"], "https://example.com/wallet-registration/start")
-		assert.Contains(t, response["url"], "transaction_id=")
-		assert.Contains(t, response["url"], "token=")
-		assert.Contains(t, response["url"], "lang=en")
-		assert.NotEmpty(t, response["id"])
+				resp := rr.Result()
+				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+				var errResp httperror.HTTPError
+				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
+				require.NoError(t, err)
+				assert.Equal(t, "asset_code is required", errResp.Message)
+			})
+		}
 	})
 
-	t.Run("successful form request", func(t *testing.T) {
-		token, err := jwtManager.GenerateSEP10Token(
-			"https://example.com",
-			"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			"jti-123",
-			"necron.example.com",
-			"example.com",
-			time.Now(),
-			time.Now().Add(time.Hour),
-		)
-		require.NoError(t, err)
+	t.Run("successful deposit requests", func(t *testing.T) {
+		buildAuthClaims := func() *sepauth.WebAuthClaims {
+			token, err := jwtManager.GenerateSEP10Token(
+				"https://example.com",
+				"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+				"jti-123",
+				"terra.example.com",
+				"example.com",
+				time.Now(),
+				time.Now().Add(time.Hour),
+			)
+			require.NoError(t, err)
 
-		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
-		require.NoError(t, err)
+			sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
+			require.NoError(t, err)
+			return &sepauth.WebAuthClaims{
+				Subject:      sep10Claims.Subject,
+				ClientDomain: sep10Claims.ClientDomain,
+				HomeDomain:   sep10Claims.HomeDomain,
+				TokenType:    sepauth.WebAuthTokenTypeSEP10,
+			}
+		}
 
-		formData := "asset_code=XLM&account=GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU&lang=es"
+		testCases := []struct {
+			name        string
+			contentType string
+			body        string
+			expectLang  string
+		}{
+			{
+				name:        "json with explicit account/lang",
+				contentType: "application/json",
+				body:        `{"asset_code":"USDC","account":"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU","lang":"en"}`,
+				expectLang:  "lang=en",
+			},
+			{
+				name:        "form with explicit account/lang",
+				contentType: "application/x-www-form-urlencoded",
+				body:        "asset_code=XLM&account=GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU&lang=es",
+				expectLang:  "lang=es",
+			},
+		}
 
-		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", strings.NewReader(formData), sep10Claims)
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				rr := httptest.NewRecorder()
+				req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", strings.NewReader(tc.body), buildAuthClaims())
+				req.Header.Set("Content-Type", tc.contentType)
+				http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
 
-		resp := rr.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+				resp := rr.Result()
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var response map[string]any
-		err = json.Unmarshal(rr.Body.Bytes(), &response)
-		require.NoError(t, err)
+				var response map[string]any
+				err := json.Unmarshal(rr.Body.Bytes(), &response)
+				require.NoError(t, err)
 
-		assert.Equal(t, "interactive_customer_info_needed", response["type"])
-		assert.Contains(t, response["url"], "https://example.com/wallet-registration/start")
-		assert.Contains(t, response["url"], "transaction_id=")
-		assert.Contains(t, response["url"], "token=")
-		assert.Contains(t, response["url"], "lang=es")
-		assert.NotEmpty(t, response["id"])
+				assert.Equal(t, "interactive_customer_info_needed", response["type"])
+				assert.Contains(t, response["url"], "https://example.com/wallet-registration/start")
+				assert.Contains(t, response["url"], "transaction_id=")
+				assert.Contains(t, response["url"], "token=")
+				assert.Contains(t, response["url"], tc.expectLang)
+				assert.NotEmpty(t, response["id"])
+			})
+		}
 	})
 
 	t.Run("uses account from token when not provided", func(t *testing.T) {
@@ -443,6 +455,12 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 
 		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
 		require.NoError(t, err)
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      sep10Claims.Subject,
+			ClientDomain: sep10Claims.ClientDomain,
+			HomeDomain:   sep10Claims.HomeDomain,
+			TokenType:    "sep10",
+		}
 
 		requestBody := map[string]string{
 			"asset_code": "USDC",
@@ -452,7 +470,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), sep10Claims)
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), webAuthClaims)
 		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
 
@@ -481,6 +499,12 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 
 		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
 		require.NoError(t, err)
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      sep10Claims.Subject,
+			ClientDomain: sep10Claims.ClientDomain,
+			HomeDomain:   sep10Claims.HomeDomain,
+			TokenType:    "sep10",
+		}
 
 		requestBody := map[string]string{
 			"asset_code": "XLM",
@@ -489,7 +513,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), sep10Claims)
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(requestBodyBytes), webAuthClaims)
 		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
 
@@ -503,6 +527,147 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		assert.Equal(t, "interactive_customer_info_needed", response["type"])
 		assert.Contains(t, response["url"], "lang=en")
 		assert.NotEmpty(t, response["id"])
+	})
+
+	t.Run("accepts webauth (SEP-10) claims", func(t *testing.T) {
+		testCases := []struct {
+			name         string
+			claims       *sepauth.WebAuthClaims
+			expectedLang string
+		}{
+			{
+				name: "SEP-10 pubkey subject",
+				claims: &sepauth.WebAuthClaims{
+					Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+					ClientDomain: "client.example.com",
+					HomeDomain:   "home.example.com",
+					TokenType:    sepauth.WebAuthTokenTypeSEP10,
+				},
+				expectedLang: "en",
+			},
+			{
+				name: "SEP-45 contract subject",
+				claims: &sepauth.WebAuthClaims{
+					Subject:      "CCYU2FUIMK23K34U3SWCN2O2JVI6JBGUGQUILYK7GRPCIDABVVTCS7R4",
+					ClientDomain: "client.example.com",
+					HomeDomain:   "home.example.com",
+					TokenType:    sepauth.WebAuthTokenTypeSEP45,
+				},
+				expectedLang: "en",
+			},
+		}
+
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				requestBody := map[string]string{
+					"asset_code": "USDC",
+				}
+				bodyBytes, err := json.Marshal(requestBody)
+				require.NoError(t, err)
+
+				rr := httptest.NewRecorder()
+				req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(bodyBytes), tc.claims)
+				req.Header.Set("Content-Type", "application/json")
+				http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+
+				assert.Equal(t, http.StatusOK, rr.Code)
+
+				var response map[string]any
+				err = json.Unmarshal(rr.Body.Bytes(), &response)
+				require.NoError(t, err)
+
+				assert.Equal(t, "interactive_customer_info_needed", response["type"])
+				assert.Contains(t, response["url"], "lang="+tc.expectedLang)
+			})
+		}
+	})
+
+	t.Run("account with memo preserves memo in token", func(t *testing.T) {
+		account := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+		memo := "12345"
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      account + ":" + memo,
+			ClientDomain: "client.example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		requestBody := map[string]string{
+			"asset_code": "USDC",
+		}
+		bodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(bodyBytes), webAuthClaims)
+		req.Header.Set("Content-Type", "application/json")
+		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response map[string]any
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "interactive_customer_info_needed", response["type"])
+		assert.NotEmpty(t, response["id"])
+
+		// Parse the generated SEP-24 token from the URL to verify memo is preserved
+		interactiveURL := response["url"].(string)
+		parsedURL, err := url.Parse(interactiveURL)
+		require.NoError(t, err)
+
+		tokenStr := parsedURL.Query().Get("token")
+		require.NotEmpty(t, tokenStr)
+
+		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+		require.NoError(t, err)
+		assert.Equal(t, account, sep24Claims.Account())
+		assert.Equal(t, memo, sep24Claims.Memo())
+	})
+
+	t.Run("explicit account in request body does not use memo from subject", func(t *testing.T) {
+		explicitAccount := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP:99999",
+			ClientDomain: "client.example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		requestBody := map[string]string{
+			"asset_code": "USDC",
+			"account":    explicitAccount,
+		}
+		bodyBytes, err := json.Marshal(requestBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(bodyBytes), webAuthClaims)
+		req.Header.Set("Content-Type", "application/json")
+		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var response map[string]any
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		// When account is explicitly provided, memo from subject should NOT be used
+		interactiveURL := response["url"].(string)
+		parsedURL, err := url.Parse(interactiveURL)
+		require.NoError(t, err)
+
+		tokenStr := parsedURL.Query().Get("token")
+		require.NotEmpty(t, tokenStr)
+
+		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
+		require.NoError(t, err)
+		assert.Equal(t, explicitAccount, sep24Claims.Account())
+		assert.Empty(t, sep24Claims.Memo())
 	})
 
 	t.Run("invalid JSON in request body", func(t *testing.T) {
@@ -519,9 +684,15 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 
 		sep10Claims, err := jwtManager.ParseSEP10TokenClaims(token)
 		require.NoError(t, err)
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      sep10Claims.Subject,
+			ClientDomain: sep10Claims.ClientDomain,
+			HomeDomain:   sep10Claims.HomeDomain,
+			TokenType:    "sep10",
+		}
 
 		rr := httptest.NewRecorder()
-		req := setupRequestWithSEP10Claims("POST", "/deposit/interactive", strings.NewReader(`{"invalid": json`), sep10Claims)
+		req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", strings.NewReader(`{"invalid": json`), webAuthClaims)
 		req.Header.Set("Content-Type", "application/json")
 		http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
 
@@ -535,10 +706,10 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 	})
 }
 
-func setupRequestWithSEP10Claims(method, url string, body io.Reader, sep10Claims *sepauth.Sep10JWTClaims) *http.Request {
+func setupRequestWithWebAuthClaims(method, url string, body io.Reader, webAuthClaims *sepauth.WebAuthClaims) *http.Request {
 	ctx := context.Background()
-	if sep10Claims != nil {
-		ctx = context.WithValue(ctx, sepauth.SEP10ClaimsContextKey, sep10Claims)
+	if webAuthClaims != nil {
+		ctx = context.WithValue(ctx, sepauth.WebAuthClaimsContextKey, webAuthClaims)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {

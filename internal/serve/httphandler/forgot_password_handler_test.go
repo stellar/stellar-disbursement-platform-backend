@@ -19,11 +19,16 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	type Req struct {
 		body ForgotPasswordRequest
 	}
@@ -35,7 +40,11 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 	}{
 		{
 			name: "🔴 invalid body fields with reCAPTCHA enabled",
-			expected: httperror.BadRequest("", nil, map[string]interface{}{
+			handler: ForgotPasswordHandler{
+				ReCAPTCHADisabled: false,
+				Models:            models,
+			},
+			expected: httperror.BadRequest("", nil, map[string]any{
 				"email":           "email is required",
 				"recaptcha_token": "reCAPTCHA token is required",
 			}),
@@ -44,13 +53,18 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 			name: "🔴 invalid body fields with reCAPTCHA disabled",
 			handler: ForgotPasswordHandler{
 				ReCAPTCHADisabled: true,
+				Models:            models,
 			},
-			expected: httperror.BadRequest("", nil, map[string]interface{}{
+			expected: httperror.BadRequest("", nil, map[string]any{
 				"email": "email is required",
 			}),
 		},
 		{
 			name: "🟢 valid request with reCAPTCHA enabled",
+			handler: ForgotPasswordHandler{
+				ReCAPTCHADisabled: false,
+				Models:            models,
+			},
 			req: Req{
 				body: ForgotPasswordRequest{
 					Email:          "foobar@test.com",
@@ -60,14 +74,15 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "🟢 valid request with mfa & reCAPTCHA disabled",
+			name: "🟢 valid request with reCAPTCHA disabled",
+			handler: ForgotPasswordHandler{
+				ReCAPTCHADisabled: true,
+				Models:            models,
+			},
 			req: Req{
 				body: ForgotPasswordRequest{
 					Email: "foobar@test.com",
 				},
-			},
-			handler: ForgotPasswordHandler{
-				ReCAPTCHADisabled: true,
 			},
 			expected: nil,
 		},
@@ -75,7 +90,14 @@ func Test_ForgotPasswordHandler_validateRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.handler.validateRequest(tc.req.body)
+			ctx := context.Background()
+			captchaDisabled := tc.handler.ReCAPTCHADisabled
+			err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				CAPTCHADisabled: &captchaDisabled,
+			})
+			require.NoError(t, err)
+
+			err = tc.handler.validateRequest(ctx, tc.req.body)
 			if tc.expected == nil {
 				require.Nil(t, err)
 			} else {

@@ -176,6 +176,21 @@ func TestValidateStringLength(t *testing.T) {
 			maxLength:   50,
 			expectError: false,
 		},
+		{
+			name:        "🟢success - multibyte characters at exact max length",
+			field:       strings.Repeat("ñ", 50),
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: false,
+		},
+		{
+			name:        "🔴error - multibyte characters exceeding max length",
+			field:       strings.Repeat("ї", 51),
+			fieldName:   "username",
+			maxLength:   50,
+			expectError: true,
+			errorMsg:    "username cannot exceed 50 characters",
+		},
 	}
 
 	for _, tc := range tests {

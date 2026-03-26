@@ -40,10 +40,15 @@ type ForgotPasswordRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-func (h ForgotPasswordHandler) validateRequest(req ForgotPasswordRequest) *httperror.HTTPError {
+func (h ForgotPasswordHandler) validateRequest(ctx context.Context, req ForgotPasswordRequest) *httperror.HTTPError {
 	v := validators.NewValidator()
 	v.Check(req.Email != "", "email", "email is required")
-	v.Check(h.ReCAPTCHADisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
+
+	captchaDisabled := IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	})
+	v.Check(captchaDisabled || req.ReCAPTCHAToken != "", "recaptcha_token", "reCAPTCHA token is required")
 
 	if v.HasErrors() {
 		return httperror.BadRequest("", nil, v.Errors)
@@ -71,7 +76,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		httperror.BadRequest("", err, nil).Render(w)
 		return
 	}
-	if httpErr := h.validateRequest(forgotPasswordRequest); httpErr != nil {
+	if httpErr := h.validateRequest(ctx, forgotPasswordRequest); httpErr != nil {
 		httpErr.Render(w)
 		return
 	}
@@ -79,7 +84,10 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	truncatedEmail := utils.TruncateString(forgotPasswordRequest.Email, 3)
 
 	// Step 3: Run the reCAPTCHA validation if it is enabled
-	if !h.ReCAPTCHADisabled {
+	if !IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	}) {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {
@@ -114,7 +122,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		if errors.Is(err, auth.ErrUserNotFound) {
 			log.Ctx(ctx).Errorf("in forgot password handler, email not found: %s", truncatedEmail)
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("in forgot password handler, user has a valid token")
+			log.Ctx(ctx).Errorf("in forgot password handler, a valid reset token already exists")
 		} else {
 			httperror.InternalError(ctx, "Failed to reset password", err, nil).Render(w)
 			return

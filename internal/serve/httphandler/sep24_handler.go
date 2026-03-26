@@ -87,12 +87,13 @@ type SEP24InteractiveResponse struct {
 }
 
 // generateMoreInfoURL creates a secure more_info_url with JWT token for SEP-24 transactions
-func (h SEP24Handler) generateMoreInfoURL(sep10Claims *sepauth.Sep10JWTClaims, transactionID, status string) (string, error) {
+func (h SEP24Handler) generateMoreInfoURL(webAuthClaims *sepauth.WebAuthClaims, transactionID, status string) (string, error) {
+	account, memo := sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24MoreInfoToken(
-		sep10Claims.Subject,
-		"",
-		sep10Claims.ClientDomain,
-		sep10Claims.HomeDomain,
+		account,
+		memo,
+		webAuthClaims.ClientDomain,
+		webAuthClaims.HomeDomain,
 		transactionID,
 		"en",
 		map[string]string{
@@ -109,7 +110,7 @@ func (h SEP24Handler) generateMoreInfoURL(sep10Claims *sepauth.Sep10JWTClaims, t
 		return "", fmt.Errorf("failed to parse base URL: %w", err)
 	}
 
-	tenantBaseURL := fmt.Sprintf("%s://%s", baseURLParsed.Scheme, sep10Claims.HomeDomain)
+	tenantBaseURL := fmt.Sprintf("%s://%s", baseURLParsed.Scheme, webAuthClaims.HomeDomain)
 	return fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s&token=%s",
 		tenantBaseURL, transactionID, sep24Token), nil
 }
@@ -117,8 +118,8 @@ func (h SEP24Handler) generateMoreInfoURL(sep10Claims *sepauth.Sep10JWTClaims, t
 func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sep10Claims := sepauth.GetSEP10Claims(ctx)
-	if sep10Claims == nil {
+	webAuthClaims := sepauth.GetWebAuthClaims(ctx)
+	if webAuthClaims == nil {
 		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
 		return
 	}
@@ -141,7 +142,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 			transaction["status"] = SEP24StatusIncomplete
 			transaction["started_at"] = time.Now().UTC().Format(time.RFC3339)
 
-			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusIncomplete)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(webAuthClaims, transactionID, SEP24StatusIncomplete)
 			if moreInfoErr != nil {
 				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
@@ -165,7 +166,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		case data.ReadyReceiversWalletStatus:
 			transaction["status"] = SEP24StatusPendingUserInfoUpdate
 
-			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(sep10Claims, transactionID, SEP24StatusPendingUserInfoUpdate)
+			moreInfoURL, moreInfoErr := h.generateMoreInfoURL(webAuthClaims, transactionID, SEP24StatusPendingUserInfoUpdate)
 			if moreInfoErr != nil {
 				httperror.InternalError(ctx, "Failed to generate more info URL", moreInfoErr, nil).Render(w)
 				return
@@ -232,13 +233,13 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 
 	// Get SEP-10 claims from middleware
-	sep10Claims := sepauth.GetSEP10Claims(ctx)
-	if sep10Claims == nil {
+	webAuthClaims := sepauth.GetWebAuthClaims(ctx)
+	if webAuthClaims == nil {
 		httperror.Unauthorized("Missing or invalid authorization header", nil, nil).Render(w)
 		return
 	}
 
-	var assetCode, account, lang string
+	var assetCode, account, memo, lang string
 	contentType := r.Header.Get("Content-Type")
 
 	if strings.Contains(contentType, "application/json") {
@@ -262,10 +263,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	}
 
 	if account == "" {
-		account = sep10Claims.Subject
-		if idx := strings.Index(account, ":"); idx > 0 {
-			account = account[:idx]
-		}
+		account, memo = sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
 	}
 
 	if lang == "" {
@@ -276,9 +274,9 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 
 	sep24Token, err := h.SEP24JWTManager.GenerateSEP24Token(
 		account,
-		"",
-		sep10Claims.ClientDomain,
-		sep10Claims.HomeDomain,
+		memo,
+		webAuthClaims.ClientDomain,
+		webAuthClaims.HomeDomain,
 		txnID,
 	)
 	if err != nil {
@@ -292,7 +290,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	tenantBaseURL := fmt.Sprintf("%s://%s", baseURLParsed.Scheme, sep10Claims.HomeDomain)
+	tenantBaseURL := fmt.Sprintf("%s://%s", baseURLParsed.Scheme, webAuthClaims.HomeDomain)
 
 	interactiveURL := fmt.Sprintf("%s/wallet-registration/start?transaction_id=%s&token=%s&lang=%s",
 		tenantBaseURL, txnID, sep24Token, lang)
@@ -304,7 +302,7 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 	}
 
 	log.Ctx(ctx).Infof("SEP-24 deposit initiated - ID: %s, Account: %s, Asset: %s, ClientDomain: %s",
-		txnID, account, assetCode, sep10Claims.ClientDomain)
+		txnID, account, assetCode, webAuthClaims.ClientDomain)
 
 	httpjson.Render(w, response, httpjson.JSON)
 }

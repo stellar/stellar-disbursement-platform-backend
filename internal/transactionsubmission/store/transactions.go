@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,14 @@ import (
 
 var ErrRecordNotFound = errors.New("record not found")
 
+type TransactionType string
+
+const (
+	TransactionTypePayment        TransactionType = "PAYMENT"
+	TransactionTypeWalletCreation TransactionType = "WALLET_CREATION"
+	TransactionTypeSponsored      TransactionType = "SPONSORED"
+)
+
 type Transaction struct {
 	ID string `db:"id"`
 	// ExternalID contains an external ID for the transaction. This is used for reconciliation.
@@ -32,12 +41,11 @@ type Transaction struct {
 	Status        TransactionStatus        `db:"status"`
 	StatusMessage sql.NullString           `db:"status_message"`
 	StatusHistory TransactionStatusHistory `db:"status_history"`
-	AssetCode     string                   `db:"asset_code"`
-	AssetIssuer   string                   `db:"asset_issuer"`
-	Amount        decimal.Decimal          `db:"amount"`
-	Destination   string                   `db:"destination"`
-	Memo          string                   `db:"memo"`
-	MemoType      schema.MemoType          `db:"memo_type"`
+
+	TransactionType TransactionType `db:"transaction_type"`
+	Payment
+	WalletCreation
+	Sponsored
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
@@ -66,9 +74,35 @@ type Transaction struct {
 	LockedUntilLedgerNumber sql.NullInt32 `db:"locked_until_ledger_number"`
 }
 
+type Payment struct {
+	AssetCode   string          `db:"asset_code"`
+	AssetIssuer string          `db:"asset_issuer"`
+	Amount      decimal.Decimal `db:"amount"`
+	Destination string          `db:"destination"`
+	Memo        string          `db:"memo"`
+	MemoType    schema.MemoType `db:"memo_type"`
+}
+
+type WalletCreation struct {
+	PublicKey string `db:"public_key"`
+	WasmHash  string `db:"wasm_hash"`
+}
+
+type Sponsored struct {
+	SponsoredAccount      string `db:"sponsored_account"`
+	SponsoredOperationXDR string `db:"sponsored_operation_xdr"`
+}
+
 func (tx *Transaction) BuildMemo() (txnbuild.Memo, error) {
-	//nolint:wrapcheck // This is a wrapper method
-	return schema.NewMemo(tx.MemoType, tx.Memo)
+	if tx.TransactionType != TransactionTypePayment {
+		return nil, fmt.Errorf("transaction type %q does not support memo", tx.TransactionType)
+	}
+
+	memo, err := schema.NewMemo(tx.MemoType, tx.Memo)
+	if err != nil {
+		return nil, fmt.Errorf("building memo: %w", err)
+	}
+	return memo, nil
 }
 
 func (tx *Transaction) IsLocked(currentLedgerNumber int32) bool {
@@ -80,26 +114,88 @@ func (tx *Transaction) validate() error {
 	if tx.ExternalID == "" {
 		return fmt.Errorf("external ID is required")
 	}
-	if len(tx.AssetCode) < 1 || len(tx.AssetCode) > 12 {
+
+	if tx.TenantID == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
+
+	switch tx.TransactionType {
+	case TransactionTypePayment:
+		if err := tx.Payment.validate(); err != nil {
+			return fmt.Errorf("validating payment transaction: %w", err)
+		}
+	case TransactionTypeWalletCreation:
+		if err := tx.WalletCreation.validate(); err != nil {
+			return fmt.Errorf("validating wallet creation transaction: %w", err)
+		}
+	case TransactionTypeSponsored:
+		if err := tx.Sponsored.validate(); err != nil {
+			return fmt.Errorf("validating sponsored transaction: %w", err)
+		}
+	default:
+		return fmt.Errorf("invalid transaction type %q", tx.TransactionType)
+	}
+	return nil
+}
+
+// validateWalletCreation checks if the transaction fields are valid and can be added to the DB.
+func (wc *WalletCreation) validate() error {
+	if wc.PublicKey == "" {
+		return fmt.Errorf("public key is required")
+	} else {
+		_, err := hex.DecodeString(wc.PublicKey)
+		if err != nil {
+			return fmt.Errorf("public key %q is not a valid hex string: %w", wc.PublicKey, err)
+		}
+	}
+	if wc.WasmHash == "" {
+		return fmt.Errorf("wasm hash is required")
+	} else {
+		_, err := hex.DecodeString(wc.WasmHash)
+		if err != nil {
+			return fmt.Errorf("wasm hash %q is not a valid hex string: %w", wc.WasmHash, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Payment) validate() error {
+	if len(p.AssetCode) < 1 || len(p.AssetCode) > 12 {
 		return fmt.Errorf("asset code must have between 1 and 12 characters")
 	}
-	if strings.ToLower(tx.AssetCode) != "xlm" {
-		if tx.AssetIssuer == "" {
+	if strings.ToLower(p.AssetCode) != "xlm" {
+		if p.AssetIssuer == "" {
 			return fmt.Errorf("asset issuer is required")
 		}
 
-		if !strkey.IsValidEd25519PublicKey(tx.AssetIssuer) {
-			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", tx.AssetIssuer)
+		if !strkey.IsValidEd25519PublicKey(p.AssetIssuer) {
+			return fmt.Errorf("asset issuer %q is not a valid ed25519 public key", p.AssetIssuer)
 		}
 	}
-	if tx.Amount.LessThanOrEqual(decimal.Zero) {
+	if p.Amount.LessThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("amount must be positive")
 	}
-	if !strkey.IsValidEd25519PublicKey(tx.Destination) && !strkey.IsValidContractAddress(tx.Destination) {
-		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", tx.Destination)
+	if !strkey.IsValidEd25519PublicKey(p.Destination) && !strkey.IsValidContractAddress(p.Destination) {
+		return fmt.Errorf("destination %q is not a valid ed25519 public key or contract address", p.Destination)
 	}
-	if tx.TenantID == "" {
-		return fmt.Errorf("tenant ID is required")
+	return nil
+}
+
+func (s *Sponsored) validate() error {
+	if s.SponsoredAccount == "" {
+		return fmt.Errorf("sponsored account is required")
+	}
+	if !strkey.IsValidContractAddress(s.SponsoredAccount) {
+		return fmt.Errorf("sponsored account %q is not a valid contract address", s.SponsoredAccount)
+	}
+
+	if s.SponsoredOperationXDR == "" {
+		return fmt.Errorf("sponsored operation XDR is required")
+	}
+	var operation xdr.InvokeHostFunctionOp
+	if err := xdr.SafeUnmarshalBase64(s.SponsoredOperationXDR, &operation); err != nil {
+		return fmt.Errorf("invalid sponsored operation XDR %q: %w", s.SponsoredOperationXDR, err)
 	}
 	return nil
 }
@@ -120,11 +216,8 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"id",
 			"external_id",
 			"tenant_id",
+			"transaction_type",
 			"distribution_account",
-			"asset_code",
-			"asset_issuer",
-			"amount",
-			"destination",
 			"status",
 			"status_message",
 			"status_history",
@@ -141,9 +234,19 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"locked_at",
 			"locked_until_ledger_number",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
+			"asset_code",
+			"asset_issuer",
+			"destination",
+			"public_key",
+			"wasm_hash",
+			"sponsored_account",
+			"sponsored_operation_xdr",
 			"memo",
 			"memo_type::text",
+		},
+		CoalesceFloat64Columns: []string{
+			"amount",
 		},
 	}.Build()
 
@@ -167,21 +270,26 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_operation_xdr, tenant_id, memo, memo_type) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
-	valueArgs := make([]interface{}, 0, len(transactions)*6)
+	valueArgs := make([]interface{}, 0, len(transactions)*13)
 
 	for _, transaction := range transactions {
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
+			transaction.TransactionType,
 			transaction.ExternalID,
-			transaction.AssetCode,
-			transaction.AssetIssuer,
-			transaction.Amount,
-			transaction.Destination,
+			sdpUtils.SQLNullString(transaction.AssetCode),
+			sdpUtils.SQLNullString(transaction.AssetIssuer),
+			sdpUtils.SQLNullNumeric(transaction.Amount),
+			sdpUtils.SQLNullString(transaction.Destination),
+			sdpUtils.SQLNullString(transaction.PublicKey),
+			sdpUtils.SQLNullString(transaction.WasmHash),
+			sdpUtils.SQLNullString(transaction.SponsoredAccount),
+			sdpUtils.SQLNullString(transaction.SponsoredOperationXDR),
 			transaction.TenantID,
 			sdpUtils.SQLNullString(transaction.Memo),
 			sdpUtils.SQLNullString(string(transaction.MemoType)),
@@ -221,7 +329,7 @@ func (t *TransactionModel) Get(ctx context.Context, txID string) (*Transaction, 
 	return &transaction, nil
 }
 
-func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []string) ([]*Transaction, error) {
+func (t *TransactionModel) GetAllByExternalIDs(ctx context.Context, externalIDs []string) ([]*Transaction, error) {
 	var transactions []*Transaction
 	q := `
 		SELECT
@@ -231,7 +339,7 @@ func (t *TransactionModel) GetAllByPaymentIDs(ctx context.Context, paymentIDs []
 		WHERE
 			t.external_id = ANY($1)
 		`
-	err := t.DBConnectionPool.SelectContext(ctx, &transactions, q, pq.Array(paymentIDs))
+	err := t.DBConnectionPool.SelectContext(ctx, &transactions, q, pq.Array(externalIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error querying transactions: %w", err)
 	}
@@ -295,9 +403,13 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 	return &updatedTx, nil
 }
 
-func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Context, txID string, txHash, txXDRSent string) (*Transaction, error) {
+func (t *TransactionModel) UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error) {
 	if len(txHash) != 64 {
 		return nil, fmt.Errorf("invalid transaction hash %q", txHash)
+	}
+
+	if !strkey.IsValidEd25519PublicKey(distributionAccount) {
+		return nil, fmt.Errorf("distribution account %q is not a valid ed25519 public key", distributionAccount)
 	}
 
 	var txEnvelope xdr.TransactionEnvelope
@@ -312,15 +424,16 @@ func (t *TransactionModel) UpdateStellarTransactionHashAndXDRSent(ctx context.Co
 		SET 
 			stellar_transaction_hash = $1::text,
 			xdr_sent = $2,
+			distribution_account = $3,
 			sent_at = NOW(),
-			status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), status, 'Updating Stellar Transaction Hash', $1::text, $2, xdr_received)),
+			status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), status, 'Updating Stellar Transaction Hash, XDR Sent and Distribution Account', $1::text, $2, xdr_received)),
 			attempts_count = attempts_count + 1
 		WHERE 
-			id = $3
+			id = $4
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var tx Transaction
-	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, txID)
+	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, distributionAccount, txID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -362,7 +475,8 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 }
 
 // GetTransactionBatchForUpdate returns a batch of transactions that are ready to be synced. Locks the rows for update.
-func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*Transaction, error) {
+// Only returns transactions of the specified transaction type.
+func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string, transactionType TransactionType) ([]*Transaction, error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
@@ -381,14 +495,15 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 		    status IN ('SUCCESS', 'ERROR')
 		    AND synced_at IS NULL
 		    AND tenant_id = $1
+		    AND transaction_type = $2
 		ORDER BY 
 		    completed_at ASC
 		LIMIT 
-		    $2
+		    $3
 		FOR UPDATE SKIP LOCKED
 		`
 
-	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, batchSize)
+	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, transactionType, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting transactions: %w", err)
 	}
@@ -396,7 +511,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 	return transactions, nil
 }
 
-func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
+func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string, expectedTransactionType TransactionType) (*Transaction, error) {
 	query := `
 		SELECT 
 			` + TransactionColumnNames("", "") + `
@@ -406,11 +521,12 @@ func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, 
 			id = $1
 			AND status IN ('SUCCESS', 'ERROR')
 			AND synced_at IS NULL
+			AND transaction_type = $2
 		FOR UPDATE SKIP LOCKED
 	`
 
 	var tx Transaction
-	err := dbTx.GetContext(ctx, &tx, query, txID)
+	err := dbTx.GetContext(ctx, &tx, query, txID, expectedTransactionType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound

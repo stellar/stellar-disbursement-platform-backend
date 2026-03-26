@@ -728,7 +728,7 @@ func Test_CirclePaymentPayoutDispatcher_DispatchPayments(t *testing.T) {
 		{
 			name: "🔴 if SendPayout fails return error",
 			fnSetup: func(t *testing.T, m *circle.MockService, payment *data.Payment, circleRecipient *data.CircleRecipient) {
-				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, payment.ID)
+				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, dbConnectionPool, payment.ID)
 				require.NoError(t, setupErr)
 
 				m.On("SendPayout", ctx, circle.PaymentRequest{
@@ -813,7 +813,7 @@ func Test_CirclePaymentPayoutDispatcher_DispatchPayments(t *testing.T) {
 		tests = append(tests, TestCase{
 			name: fmt.Sprintf("🟠[CircleAPI.error.code=%d] should move the CircleRecipient to status=denied", circleErrCode),
 			fnSetup: func(t *testing.T, m *circle.MockService, payment *data.Payment, circleRecipient *data.CircleRecipient) {
-				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, payment.ID)
+				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, dbConnectionPool, payment.ID)
 				require.NoError(t, setupErr)
 
 				m.On("SendPayout", ctx, circle.PaymentRequest{

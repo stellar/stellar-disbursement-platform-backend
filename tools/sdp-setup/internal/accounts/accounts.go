@@ -31,9 +31,16 @@ func Generate(network utils.NetworkType, distributionSeed string) Info {
 	fmt.Printf("   ✓ Distribution account: %s\n", distKp.Address())
 
 	if network.IsTestnet() {
+		fmt.Println("   💰 Funding SEP10 account with XLM via Friendbot...")
+		if err := fundTestnetAccount(sep10Kp.Address()); err != nil {
+			fmt.Printf("   ⚠️  Failed to fund SEP10 account: %v\n", err)
+		} else {
+			fmt.Println("   ✓ SEP10 account funded with XLM")
+		}
+
 		fmt.Println("   💰 Funding distribution with XLM via Friendbot...")
 		if err := fundTestnetAccount(distKp.Address()); err != nil {
-			fmt.Printf("   ⚠️  Failed to fund account: %v\n", err)
+			fmt.Printf("   ⚠️  Failed to fund distribution account: %v\n", err)
 		} else {
 			fmt.Println("   ✓ Distribution funded with XLM")
 		}

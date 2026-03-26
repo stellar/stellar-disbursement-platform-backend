@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -20,6 +21,7 @@ type ReceiverRegistrationHandler struct {
 	ReceiverWalletModel *data.ReceiverWalletModel
 	ReCAPTCHADisabled   bool
 	ReCAPTCHASiteKey    string
+	CAPTCHAType         validators.CAPTCHAType
 }
 
 type ReceiverRegistrationResponse struct {
@@ -30,6 +32,7 @@ type ReceiverRegistrationResponse struct {
 	IsRegistered         bool   `json:"is_registered"`
 	IsRecaptchaDisabled  bool   `json:"is_recaptcha_disabled"`
 	ReCAPTCHASiteKey     string `json:"recaptcha_site_key,omitempty"`
+	CAPTCHAType          string `json:"captcha_type,omitempty"`
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.
@@ -74,16 +77,22 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	captchaDisabled := IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	})
+
 	response := ReceiverRegistrationResponse{
 		PrivacyPolicyLink:   privacyPolicyLink,
 		OrganizationName:    organization.Name,
 		OrganizationLogo:    logoURL,
-		IsRecaptchaDisabled: h.ReCAPTCHADisabled,
+		IsRecaptchaDisabled: captchaDisabled,
 		ReCAPTCHASiteKey:    h.ReCAPTCHASiteKey,
+		CAPTCHAType:         h.CAPTCHAType.String(),
 	}
 
-	memo := sep24Claims.SEP10StellarMemo()
-	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.ClientDomain(), &memo)
+	memo := sep24Claims.Memo()
+	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.Account(), sep24Claims.ClientDomain(), &memo)
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		httperror.InternalError(ctx, "Cannot register receiver wallet", err, nil).WithErrorCode(httperror.Code500_4).Render(w)
 		return

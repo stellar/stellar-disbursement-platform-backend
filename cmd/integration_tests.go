@@ -32,7 +32,7 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Name:      "disbursed-asset-issuer",
 			Usage:     "Issuer if the asset to be disbursed",
 			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.DisbursetAssetIssuer,
+			ConfigKey: &integrationTestsOpts.DisbursedAssetIssuer,
 			Required:  false,
 		},
 		{
@@ -148,7 +148,8 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 
 	startIntegrationTestsCmd := c.StartIntegrationTestsCommand(integrationTestsOpts)
 	createIntegrationTestsDataCmd := c.CreateIntegrationTestsDataCommand(integrationTestsOpts)
-	integrationTestsCmd.AddCommand(startIntegrationTestsCmd, createIntegrationTestsDataCmd)
+	startEmbeddedWalletTestsCmd := c.StartEmbeddedWalletTestsCommand(integrationTestsOpts)
+	integrationTestsCmd.AddCommand(startIntegrationTestsCmd, createIntegrationTestsDataCmd, startEmbeddedWalletTestsCmd)
 
 	return integrationTestsCmd
 }
@@ -306,4 +307,69 @@ func (c *IntegrationTestsCommand) CreateIntegrationTestsDataCommand(integrationT
 	}
 
 	return createIntegrationTestsDataCmd
+}
+
+func (c *IntegrationTestsCommand) StartEmbeddedWalletTestsCommand(integrationTestsOpts *integrationtests.IntegrationTestsOpts) *cobra.Command {
+	configOpts := config.ConfigOptions{
+		{
+			Name:      "embedded-wallets-wasm-hash",
+			Usage:     "The WASM hash of the embedded wallet smart contract",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.EmbeddedWalletsWasmHash,
+			Required:  true,
+		},
+		{
+			Name:           "rpc-url",
+			Usage:          "URL of the Stellar RPC server used for contract deployment",
+			OptType:        types.String,
+			CustomSetValue: utils.SetConfigOptionURLString,
+			ConfigKey:      &integrationTestsOpts.RPCUrl,
+			Required:       true,
+		},
+		{
+			Name:      "disbursement-csv-file-name",
+			Usage:     "File name of the integration test disbursement file.",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.DisbursementCSVFileName,
+			Required:  true,
+		},
+		{
+			Name:      "disbursement-csv-file-path",
+			Usage:     "File path of the integration test disbursement file.",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.DisbursementCSVFilePath,
+			Required:  true,
+		},
+	}
+
+	startEmbeddedWalletTestsCmd := &cobra.Command{
+		Use:   "start-embedded-wallet",
+		Short: "Run the embedded wallet (contract account) e2e tests",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+
+			// Validate & ingest input parameters
+			configOpts.Require()
+			err := configOpts.SetValues()
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+			}
+		},
+		Run: func(cmd *cobra.Command, _ []string) {
+			ctx := cmd.Context()
+
+			err := c.Service.StartEmbeddedWalletIntegrationTests(ctx, *integrationTestsOpts)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error starting embedded wallet integration tests: %s", err.Error())
+			}
+		},
+	}
+
+	err := configOpts.Init(startEmbeddedWalletTestsCmd)
+	if err != nil {
+		log.Ctx(startEmbeddedWalletTestsCmd.Context()).Fatalf("Error initializing StartEmbeddedWalletTestsCommand: %s", err.Error())
+	}
+
+	return startEmbeddedWalletTestsCmd
 }

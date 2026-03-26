@@ -27,7 +27,7 @@ type paymentFromSubmitterJob struct {
 
 func NewPaymentFromSubmitterJob(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) Job {
 	if paymentJobInterval < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", paymentFromSubmitterJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", paymentFromSubmitterJobName, DefaultMinimumJobIntervalSeconds)
 	}
 	return &paymentFromSubmitterJob{
 		service:            services.NewPaymentFromSubmitterService(models, tssDBConnectionPool),

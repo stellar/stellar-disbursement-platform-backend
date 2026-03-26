@@ -24,6 +24,8 @@ type Models struct {
 	ReceiverVerification        *ReceiverVerificationModel
 	ReceiverRegistrationAttempt *ReceiverRegistrationAttemptModel
 	ReceiverWallet              *ReceiverWalletModel
+	EmbeddedWallets             *EmbeddedWalletModel
+	SponsoredTransactions       *SponsoredTransactionModel
 	DisbursementReceivers       *DisbursementReceiverModel
 	Message                     *MessageModel
 	CircleTransferRequests      *CircleTransferRequestModel
@@ -31,6 +33,8 @@ type Models struct {
 	BridgeIntegration           *BridgeIntegrationModel
 	URLShortener                *URLShortenerModel
 	APIKeys                     *APIKeyModel
+	SEPNonces                   *SEPNonceModel
+	PasskeySessions             *PasskeySessionModel
 	DBConnectionPool            db.DBConnectionPool
 }
 
@@ -48,6 +52,8 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		DisbursementInstructions:    NewDisbursementInstructionModel(dbConnectionPool),
 		ReceiverVerification:        &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
 		ReceiverWallet:              &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
+		EmbeddedWallets:             &EmbeddedWalletModel{dbConnectionPool: dbConnectionPool},
+		SponsoredTransactions:       &SponsoredTransactionModel{},
 		ReceiverRegistrationAttempt: &ReceiverRegistrationAttemptModel{dbConnectionPool: dbConnectionPool},
 		DisbursementReceivers:       &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
 		Message:                     &MessageModel{dbConnectionPool: dbConnectionPool},
@@ -56,6 +62,8 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		BridgeIntegration:           &BridgeIntegrationModel{dbConnectionPool: dbConnectionPool},
 		APIKeys:                     &APIKeyModel{dbConnectionPool: dbConnectionPool},
 		URLShortener:                NewURLShortenerModel(dbConnectionPool),
+		SEPNonces:                   NewSEPNonceModel(dbConnectionPool),
+		PasskeySessions:             NewPasskeySessionModel(dbConnectionPool),
 		DBConnectionPool:            dbConnectionPool,
 	}, nil
 }

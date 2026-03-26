@@ -9,17 +9,19 @@ import (
 )
 
 var (
-	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
-	ErrUserIDNotFoundInContext = errors.New("user ID not found in context")
-	ErrTokenNotFoundInContext  = errors.New("token not found in context")
-	ErrAPIKeyNotFoundInContext = errors.New("API key not found in context")
+	ErrTenantNotFoundInContext                = errors.New("tenant not found in context")
+	ErrUserIDNotFoundInContext                = errors.New("user ID not found in context")
+	ErrTokenNotFoundInContext                 = errors.New("token not found in context")
+	ErrAPIKeyNotFoundInContext                = errors.New("API key not found in context")
+	ErrWalletContractAddressNotFoundInContext = errors.New("wallet contract address not found in context")
 )
 
 type (
-	tenantContextKey struct{}
-	tokenContextKey  struct{}
-	userIDContextKey struct{}
-	apiKeyContextKey struct{}
+	tenantContextKey                struct{}
+	tokenContextKey                 struct{}
+	userIDContextKey                struct{}
+	apiKeyContextKey                struct{}
+	walletContractAddressContextKey struct{}
 )
 
 const (
@@ -89,4 +91,18 @@ func GetAPIKeyFromContext(ctx context.Context) (*data.APIKey, error) {
 // SetAPIKeyInContext stores the API key in the context.
 func SetAPIKeyInContext(ctx context.Context, apiKey *data.APIKey) context.Context {
 	return context.WithValue(ctx, apiKeyContextKey{}, apiKey)
+}
+
+// GetWalletContractAddressFromContext retrieves the wallet contract address from the context.
+func GetWalletContractAddressFromContext(ctx context.Context) (string, error) {
+	contractAddress, ok := ctx.Value(walletContractAddressContextKey{}).(string)
+	if !ok || contractAddress == "" {
+		return "", ErrWalletContractAddressNotFoundInContext
+	}
+	return contractAddress, nil
+}
+
+// SetWalletContractAddressInContext stores the wallet contract address in the context.
+func SetWalletContractAddressInContext(ctx context.Context, contractAddress string) context.Context {
+	return context.WithValue(ctx, walletContractAddressContextKey{}, contractAddress)
 }

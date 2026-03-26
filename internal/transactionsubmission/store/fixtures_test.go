@@ -23,15 +23,18 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 
 	ctx := context.Background()
 	tx := Transaction{
-		AssetCode:   "USDC",
-		AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-		Amount:      decimal.NewFromInt(1),
+		Payment: Payment{
+			AssetCode:   "USDC",
+			AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+			Amount:      decimal.NewFromInt(1),
+		},
 	}
 
 	t.Run("create transaction with pending status", func(t *testing.T) {
 		tx.ExternalID = uuid.NewString()
 		createdTx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 			ExternalID:         tx.ExternalID,
+			TransactionType:    TransactionTypePayment,
 			AssetCode:          tx.AssetCode,
 			AssetIssuer:        tx.AssetIssuer,
 			DestinationAddress: tx.Destination,
@@ -50,6 +53,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 		tx.ExternalID = uuid.NewString()
 		createdTx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
 			ExternalID:         tx.ExternalID,
+			TransactionType:    TransactionTypePayment,
 			AssetCode:          tx.AssetCode,
 			AssetIssuer:        tx.AssetIssuer,
 			DestinationAddress: tx.Destination,
@@ -74,15 +78,18 @@ func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
 
 	ctx := context.Background()
 	tx := Transaction{
-		ExternalID:  "external-id-1",
-		AssetCode:   "USDC",
-		AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
-		Amount:      decimal.NewFromInt(1),
+		ExternalID: "external-id-1",
+		Payment: Payment{
+			AssetCode:   "USDC",
+			AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+			Amount:      decimal.NewFromInt(1),
+		},
 	}
 
 	t.Run("create and delete transactions", func(t *testing.T) {
 		txCount := 5
 		createdTxs := CreateTransactionFixtures(t, ctx, dbConnectionPool, txCount, TransactionFixture{
+			TransactionType:    TransactionTypePayment,
 			AssetCode:          tx.AssetCode,
 			AssetIssuer:        tx.AssetIssuer,
 			DestinationAddress: tx.Destination,

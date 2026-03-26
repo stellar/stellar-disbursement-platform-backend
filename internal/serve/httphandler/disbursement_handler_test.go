@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -40,6 +42,26 @@ import (
 )
 
 func Test_DisbursementHandler_validateRequest(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+	wallet := wallets[0]
+
+	embeddedWalletFixture := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWalletFixture.ID)
+	embeddedWallet := data.GetWalletFixture(t, ctx, dbConnectionPool, embeddedWalletFixture.Name)
+
+	handler := &DisbursementHandler{Models: models}
+
 	type TestCase struct {
 		name           string
 		request        PostDisbursementRequest
@@ -59,11 +81,24 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 wallet_id does not exist",
+			request: PostDisbursementRequest{
+				Name:                    "disbursement 1",
+				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                "non-existent-wallet-id",
+				RegistrationContactType: data.RegistrationContactTypePhone,
+				VerificationField:       data.VerificationTypeDateOfBirth,
+			},
+			expectedErrors: map[string]interface{}{
+				"wallet_id": "wallet_id could not be retrieved",
+			},
+		},
+		{
 			name: "🔴 wallet_id and verification_field not allowed for user managed wallet",
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				WalletID:                wallet.ID,
 				RegistrationContactType: data.RegistrationContactTypePhoneAndWalletAddress,
 				VerificationField:       data.VerificationTypeDateOfBirth,
 			},
@@ -77,7 +112,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:     "disbursement 1",
 				AssetID:  "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID: "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				WalletID: wallet.ID,
 				RegistrationContactType: data.RegistrationContactType{
 					ReceiverContactType: "invalid1",
 				},
@@ -93,7 +128,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                                "disbursement 1",
 				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				WalletID:                            wallet.ID,
 				RegistrationContactType:             data.RegistrationContactTypePhone,
 				VerificationField:                   data.VerificationTypeDateOfBirth,
 				ReceiverRegistrationMessageTemplate: "<a href='evil.com'>Redeem money</a>",
@@ -107,7 +142,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                                "disbursement 1",
 				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				WalletID:                            wallet.ID,
 				RegistrationContactType:             data.RegistrationContactTypePhone,
 				VerificationField:                   data.VerificationTypeDateOfBirth,
 				ReceiverRegistrationMessageTemplate: "javascript:alert(localStorage.getItem('sdp_session'))",
@@ -121,7 +156,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
 				AssetID:                 "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				WalletID:                wallet.ID,
 				RegistrationContactType: data.RegistrationContactTypePhone,
 				VerificationField:       data.VerificationTypeDateOfBirth,
 			},
@@ -131,10 +166,19 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			request: PostDisbursementRequest{
 				Name:                                "disbursement 1",
 				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
-				WalletID:                            "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+				WalletID:                            wallet.ID,
 				RegistrationContactType:             data.RegistrationContactTypePhone,
 				VerificationField:                   data.VerificationTypeDateOfBirth,
 				ReceiverRegistrationMessageTemplate: "My custom invitation message",
+			},
+		},
+		{
+			name: "🟢 embedded wallet allows empty verification_field",
+			request: PostDisbursementRequest{
+				Name:                    "embedded disbursement",
+				AssetID:                 "asset-id",
+				WalletID:                embeddedWallet.ID,
+				RegistrationContactType: data.RegistrationContactTypePhone,
 			},
 		},
 	}
@@ -160,7 +204,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			expectedErrors: expectedErrors,
 		}
 		if !rct.IncludesWalletAddress {
-			newTestCase.request.WalletID = "aab4a4a9-2493-4f37-9741-01d5bd31d68b"
+			newTestCase.request.WalletID = wallet.ID
 		}
 
 		testCases = append(testCases, newTestCase)
@@ -168,8 +212,7 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := &DisbursementHandler{}
-			v := handler.validateRequest(tc.request)
+			v := handler.validateRequest(ctx, tc.request)
 			if len(tc.expectedErrors) == 0 {
 				assert.False(t, v.HasErrors())
 			} else {
@@ -202,6 +245,10 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	enabledWallet := wallets[0]
 	disabledWallet := wallets[1]
 	data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
+
+	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
+	embeddedWallet = data.GetWalletFixture(t, ctx, dbConnectionPool, embeddedWallet.Name)
 
 	userManagedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "User Managed Wallet", "stellar.org", "stellar.org", "stellar://")
 	data.MakeWalletUserManaged(t, ctx, dbConnectionPool, userManagedWallet.ID)
@@ -251,7 +298,12 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantResponseBodyFn: func(d *data.Disbursement) string {
-				return `{"error":"Wallet ID could not be retrieved"}`
+				return `{
+					"error": "The request was invalid in some way.",
+					"extras": {
+						"wallet_id": "wallet_id could not be retrieved"
+					}
+				}`
 			},
 		},
 		{
@@ -387,6 +439,104 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		testCases = append(testCases, successfulTestCase)
 	}
 
+	embeddedCases := []struct {
+		name          string
+		verification  data.VerificationType
+		responseLabel string
+	}{
+		{
+			name:          "🟢 embedded wallet allows no verification",
+			verification:  data.VerificationType(""),
+			responseLabel: "embedded empty verification",
+		},
+		{
+			name:          "🟢 embedded wallet accepts verification",
+			verification:  data.VerificationTypeDateOfBirth,
+			responseLabel: "embedded with verification",
+		},
+	}
+
+	for _, embeddedCase := range embeddedCases {
+		caseCopy := embeddedCase
+		prepare := func(t *testing.T, mMonitorService *monitorMocks.MockMonitorService) {
+			labels := monitor.DisbursementLabels{
+				Asset:  asset.Code,
+				Wallet: embeddedWallet.Name,
+				CommonLabels: monitor.CommonLabels{
+					TenantName: "default-tenant",
+				},
+			}
+			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+		}
+
+		reqBody := map[string]interface{}{
+			"name":                      caseCopy.responseLabel,
+			"asset_id":                  asset.ID,
+			"wallet_id":                 embeddedWallet.ID,
+			"registration_contact_type": data.RegistrationContactTypePhone.String(),
+		}
+		if caseCopy.verification != "" {
+			reqBody["verification_field"] = caseCopy.verification
+		}
+
+		wantFn := func(d *data.Disbursement) string {
+			require.NotNil(t, d)
+			require.Equal(t, caseCopy.verification, d.VerificationField)
+			wallet := d.Wallet
+			assetResp := d.Asset
+			respMap := map[string]interface{}{
+				"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+				"id":                                     d.ID,
+				"name":                                   caseCopy.responseLabel,
+				"receiver_registration_message_template": "",
+				"registration_contact_type":              data.RegistrationContactTypePhone.String(),
+				"updated_at":                             d.UpdatedAt.Format(time.RFC3339Nano),
+				"status":                                 data.DraftDisbursementStatus,
+				"status_history": []map[string]interface{}{
+					{
+						"status":    data.DraftDisbursementStatus,
+						"timestamp": d.StatusHistory[0].Timestamp,
+						"user_id":   user.ID,
+					},
+				},
+				"asset": map[string]interface{}{
+					"code":       assetResp.Code,
+					"id":         assetResp.ID,
+					"issuer":     assetResp.Issuer,
+					"created_at": assetResp.CreatedAt.Format(time.RFC3339Nano),
+					"updated_at": assetResp.UpdatedAt.Format(time.RFC3339Nano),
+					"deleted_at": nil,
+				},
+				"wallet": map[string]interface{}{
+					"id":                   wallet.ID,
+					"name":                 wallet.Name,
+					"deep_link_schema":     wallet.DeepLinkSchema,
+					"homepage":             wallet.Homepage,
+					"sep_10_client_domain": wallet.SEP10ClientDomain,
+					"created_at":           wallet.CreatedAt.Format(time.RFC3339Nano),
+					"updated_at":           wallet.UpdatedAt.Format(time.RFC3339Nano),
+					"enabled":              wallet.Enabled,
+					"embedded":             wallet.Embedded,
+				},
+			}
+			if caseCopy.verification != "" {
+				respMap["verification_field"] = caseCopy.verification
+			}
+
+			resp, err := json.Marshal(respMap)
+			require.NoError(t, err)
+			return string(resp)
+		}
+
+		testCases = append(testCases, TestCase{
+			name:               caseCopy.name,
+			prepareMocksFn:     prepare,
+			reqBody:            reqBody,
+			wantStatusCode:     http.StatusCreated,
+			wantResponseBodyFn: wantFn,
+		})
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mAuthManager := &auth.AuthManagerMock{}
@@ -482,6 +632,22 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusBadRequest,
 			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be an integer"}}`,
+		},
+		{
+			name: "returns error when page_limit is zero",
+			queryParams: map[string]string{
+				"page_limit": "0",
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be a positive integer"}}`,
+		},
+		{
+			name: "returns error when page_limit exceeds max",
+			queryParams: map[string]string{
+				"page_limit": fmt.Sprintf("%d", validators.MaxPageLimit+1),
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"page_limit":"parameter must be less than or equal to %d"}}`, validators.MaxPageLimit),
 		},
 		{
 			name: "returns error when status is invalid",
@@ -1044,6 +1210,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
+			name:           "🔴 csv upload too large",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{strings.Repeat("a", int(DefaultMaxCSVUploadSizeBytes)+1024*1024), "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "request too large",
+		},
+		{
 			name:           "🔴 .bat is rejected",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
@@ -1271,6 +1447,65 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			assert.Contains(t, bodyStr, tc.expectedMessage)
 		})
 		authManagerMock.AssertExpectations(t)
+	}
+}
+
+func Test_validateCSVHeaders(t *testing.T) {
+	makeReader := func(headers []string) io.Reader {
+		var buf bytes.Buffer
+		writer := csv.NewWriter(&buf)
+		require.NoError(t, writer.Write(headers))
+		writer.Flush()
+		return bytes.NewReader(buf.Bytes())
+	}
+
+	testCases := []struct {
+		name                   string
+		headers                []string
+		rct                    data.RegistrationContactType
+		skipVerification       bool
+		expectedErrorSubstring string
+	}{
+		{
+			name:                   "phone contact requires verification when not skipped",
+			headers:                []string{"phone"},
+			rct:                    data.RegistrationContactTypePhone,
+			skipVerification:       false,
+			expectedErrorSubstring: "verification column is required",
+		},
+		{
+			name:                   "email contact disallows verification header when skipped",
+			headers:                []string{"email", "verification"},
+			rct:                    data.RegistrationContactTypeEmail,
+			skipVerification:       true,
+			expectedErrorSubstring: "verification column is not allowed",
+		},
+		{
+			name:             "phone and wallet contact does not require verification",
+			headers:          []string{"phone", "walletAddress"},
+			rct:              data.RegistrationContactTypePhoneAndWalletAddress,
+			skipVerification: false,
+		},
+		{
+			name:                   "phone and wallet contact disallows verification header",
+			headers:                []string{"phone", "walletAddress", "verification"},
+			rct:                    data.RegistrationContactTypePhoneAndWalletAddress,
+			skipVerification:       false,
+			expectedErrorSubstring: "verification column is not allowed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := makeReader(tc.headers)
+			err := validateCSVHeaders(reader, tc.rct, tc.skipVerification)
+			if tc.expectedErrorSubstring == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedErrorSubstring)
+		})
 	}
 }
 
@@ -1571,6 +1806,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctx = sdpcontext.SetTokenInContext(ctx, token)
 	userID := "valid-user-id"
+	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 	user := &auth.User{
 		ID:    userID,
 		Email: "email@email.com",
@@ -1647,7 +1883,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("cannot get distribution account", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1673,7 +1909,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1705,7 +1941,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		})
 
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1752,8 +1988,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Email: "approver@mail.org",
 		}
 
+		// Create a context with the approver's userID for this test
+		approverCtx := sdpcontext.SetUserIDInContext(ctx, approverUser.ID)
+
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, approverUser.ID).
 			Return(approverUser, nil).
 			Once()
 
@@ -1768,7 +2007,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+		req, err := http.NewRequestWithContext(approverCtx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1780,7 +2019,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement started - then paused", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Twice()
 
@@ -1845,7 +2084,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement can't be paused", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1864,7 +2103,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement status can't be changed", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -1883,7 +2122,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		authManagerMock.
-			On("GetUser", mock.Anything, token).
+			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
 			Once()
 
@@ -2171,12 +2410,15 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
-	labels := monitor.DisbursementLabels{
-		Asset:  asset.Code,
-		Wallet: enabledWallet.Name,
-		CommonLabels: monitor.CommonLabels{
-			TenantName: "default-tenant",
-		},
+	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
+	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
+	data.CreateWalletAssets(t, ctx, dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+
+	walletNamesByID := map[string]string{
+		enabledWallet.ID:     enabledWallet.Name,
+		disabledWallet.ID:    disabledWallet.Name,
+		userManagedWallet.ID: userManagedWallet.Name,
+		embeddedWallet.ID:    embeddedWallet.Name,
 	}
 
 	// Setup Mocks
@@ -2195,10 +2437,6 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 		})
 
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
-	mMonitorService.
-		On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).
-		Return(nil).
-		Maybe()
 
 	// Setup handler
 	handler := &DisbursementHandler{
@@ -2215,6 +2453,20 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 		expectedStatus   int
 		expectedMessage  string
 	}{
+		{
+			name: "🟢 embedded wallet without verification field",
+			disbursementData: map[string]interface{}{
+				"name":                      "embedded wallet without verification",
+				"asset_id":                  asset.ID,
+				"wallet_id":                 embeddedWallet.ID,
+				"registration_contact_type": data.RegistrationContactTypePhone,
+			},
+			csvRecords: [][]string{
+				{"phone", "id", "amount"},
+				{"+380445555555", "123456789", "100.5"},
+			},
+			expectedStatus: http.StatusCreated,
+		},
 		{
 			name: "🟢 successful creation with phone verification",
 			disbursementData: map[string]interface{}{
@@ -2312,7 +2564,27 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		t.Run(tc.name, func(t *testing.T) {
+			walletName := enabledWallet.Name
+			if walletID, ok := tc.disbursementData["wallet_id"].(string); ok {
+				if name, exists := walletNamesByID[walletID]; exists {
+					walletName = name
+				}
+			}
+
+			labels := monitor.DisbursementLabels{
+				Asset:        asset.Code,
+				Wallet:       walletName,
+				CommonLabels: monitor.CommonLabels{TenantName: "default-tenant"},
+			}
+
+			mMonitorService.
+				On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).
+				Return(nil).
+				Maybe()
+
 			// Create multipart form data
 			body := &bytes.Buffer{}
 			writer := multipart.NewWriter(body)

@@ -34,6 +34,9 @@ func NewEmptyPaginatedResponse() PaginatedResponse {
 
 // NewPaginatedResponse returns a PaginatedResponse with pagination information.
 func NewPaginatedResponse(r *http.Request, data interface{}, currentPage, pageLimit, totalItems int) (PaginatedResponse, error) {
+	if pageLimit <= 0 {
+		return PaginatedResponse{}, fmt.Errorf("page_limit must be a positive integer")
+	}
 	totalPages := (totalItems + pageLimit - 1) / pageLimit
 	pagination := PaginationInfo{Pages: totalPages, Total: totalItems}
 

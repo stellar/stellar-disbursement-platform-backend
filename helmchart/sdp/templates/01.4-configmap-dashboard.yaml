@@ -26,6 +26,7 @@ data:
     {{- $_ := set $config "SINGLE_TENANT_MODE" .Values.global.singleTenantMode }}
     {{- $_ := set $config "RECAPTCHA_SITE_KEY" .Values.global.recaptchaSiteKey }}
     {{- $_ := set $config "API_URL" ( include "sdp.baseURL" . ) }}
+    {{- $_ := set $config "RPC_ENABLED" (eq (include "sdp.rpcEnabled" . | trim) "true") }}
     {{- /*
 Values from the dashboard configmap section - These will override the global values
   */}}

@@ -18,6 +18,8 @@ export type ApiError = {
   extras_codes?: string[];
 };
 
+export type CaptchaType = "GOOGLE_RECAPTCHA_V2" | "GOOGLE_RECAPTCHA_V3";
+
 export type Sep24DepositInitResponse = {
   privacy_policy_link: string;
   organization_name: string;
@@ -26,6 +28,7 @@ export type Sep24DepositInitResponse = {
   truncated_contact_info?: string;
   is_recaptcha_disabled?: boolean;
   recaptcha_site_key?: string;
+  captcha_type?: CaptchaType;
 };
 
 export type Sep24DepositOtpResponse = {

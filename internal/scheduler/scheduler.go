@@ -194,6 +194,20 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
+func WithSEPNonceCleanupJobOption(models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSEPNonceCleanupJob(models)
+		s.addJob(j)
+	}
+}
+
+func WithPasskeySessionCleanupJobOption(models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPasskeySessionCleanupJob(models)
+		s.addJob(j)
+	}
+}
+
 func WithCirclePaymentToSubmitterJobOption(options jobs.CirclePaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewCirclePaymentToSubmitterJob(options)
@@ -208,6 +222,20 @@ func WithStellarPaymentToSubmitterJobOption(options jobs.StellarPaymentToSubmitt
 	}
 }
 
+func WithWalletCreationToSubmitterJobOption(options jobs.WalletCreationToSubmitterJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewWalletCreationToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
+func WithSponsoredTransactionsToSubmitterJobOption(options jobs.SponsoredTransactionsToSubmitterJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSponsoredTransactionsToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
 func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewCircleReconciliationJob(options)
@@ -218,6 +246,20 @@ func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptio
 func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewPaymentFromSubmitterJob(paymentJobInterval, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
+func WithWalletCreationFromSubmitterJobOption(walletCreationJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool, networkPassphrase string) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewWalletCreationFromSubmitterJob(walletCreationJobInterval, models, tssDBConnectionPool, networkPassphrase)
+		s.addJob(j)
+	}
+}
+
+func WithSponsoredTransactionFromSubmitterJobOption(sponsoredTransactionJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSponsoredTransactionFromSubmitterJob(sponsoredTransactionJobInterval, models, tssDBConnectionPool)
 		s.addJob(j)
 	}
 }

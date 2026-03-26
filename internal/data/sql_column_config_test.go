@@ -55,7 +55,7 @@ func Test_SQLColumnConfig_Build(t *testing.T) {
 		{
 			name: "columns with coalesce",
 			config: SQLColumnConfig{
-				CoalesceColumns: []string{"id", "name"},
+				CoalesceStringColumns: []string{"id", "name"},
 			},
 			expected: []string{
 				`COALESCE(id, '') AS "id"`,
@@ -72,7 +72,7 @@ func Test_SQLColumnConfig_Build(t *testing.T) {
 		{
 			name: "columns with COALESCE and type cast",
 			config: SQLColumnConfig{
-				CoalesceColumns: []string{"verification_field::text"},
+				CoalesceStringColumns: []string{"verification_field::text"},
 			},
 			expected: []string{`COALESCE(verification_field::text, '') AS "verification_field"`},
 		},
@@ -93,9 +93,9 @@ func Test_SQLColumnConfig_Build(t *testing.T) {
 		{
 			name: "all features",
 			config: SQLColumnConfig{
-				TableReference:  "rw",
-				ResultAlias:     "receiver_wallet",
-				CoalesceColumns: []string{`receiver_id::text AS "receiver.id"`},
+				TableReference:        "rw",
+				ResultAlias:           "receiver_wallet",
+				CoalesceStringColumns: []string{`receiver_id::text AS "receiver.id"`},
 			},
 			expected: []string{`COALESCE(rw.receiver_id::text, '') AS "receiver_wallet.receiver.id"`},
 		},

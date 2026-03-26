@@ -181,14 +181,45 @@ func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 	return nil
 }
 
-func SetConfigOptionURLString(co *config.ConfigOption) error {
-	u := viper.GetString(co.Name)
+func SetConfigOptionStellarContractID(co *config.ConfigOption) error {
+	contractID := viper.GetString(co.Name)
+	contractID = strings.TrimSpace(contractID)
 
-	if u == "" {
+	if !co.Required && contractID == "" {
+		return nil
+	}
+
+	if contractID == "" {
+		return fmt.Errorf("contract id cannot be empty in %s", co.Name)
+	}
+
+	isValid := strkey.IsValidContractAddress(contractID)
+	if !isValid {
+		return fmt.Errorf("validating contract id in %s: %q", co.Name, contractID)
+	}
+
+	key, ok := co.ConfigKey.(*string)
+	if !ok {
+		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
+	}
+	*key = contractID
+
+	return nil
+}
+
+func SetConfigOptionURLString(co *config.ConfigOption) error {
+	urlStr := viper.GetString(co.Name)
+	urlStr = strings.TrimSpace(urlStr)
+
+	if !co.Required && urlStr == "" {
+		return nil
+	}
+
+	if urlStr == "" {
 		return fmt.Errorf("URL cannot be empty in %s", co.Name)
 	}
 
-	_, err := url.ParseRequestURI(u)
+	_, err := url.ParseRequestURI(urlStr)
 	if err != nil {
 		return fmt.Errorf("parsing URL in %s: %w", co.Name, err)
 	}
@@ -197,7 +228,7 @@ func SetConfigOptionURLString(co *config.ConfigOption) error {
 	if !ok {
 		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
-	*key = u
+	*key = urlStr
 
 	return nil
 }

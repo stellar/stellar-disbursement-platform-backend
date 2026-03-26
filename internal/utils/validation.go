@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
@@ -96,7 +97,7 @@ func ValidateStringLength(field, fieldName string, maxLength int) error {
 		return fmt.Errorf("%s field is required", fieldName)
 	}
 
-	if len(field) > maxLength {
+	if utf8.RuneCountInString(field) > maxLength {
 		return fmt.Errorf("%s cannot exceed %d characters", fieldName, maxLength)
 	}
 

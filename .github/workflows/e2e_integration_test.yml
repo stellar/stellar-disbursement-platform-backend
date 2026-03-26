@@ -30,6 +30,7 @@ jobs:
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
           - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
+          - "Stellar-embeddedWallet" # Embedded wallet (contract account) E2E test with disbursement to C-address
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
@@ -76,6 +77,16 @@ jobs:
             DISBURSED_ASSET_CODE: "XLM"
             NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
             HORIZON_URL: "https://horizon-futurenet.stellar.org"
+          - platform: "Stellar-embeddedWallet"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_embedded_wallet.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "XLM"
+            NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+            HORIZON_URL: "https://horizon-testnet.stellar.org"
+            RPC_URL: "https://soroban-testnet.stellar.org"
+            TEST_TYPE: "embedded-wallet"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
@@ -86,6 +97,10 @@ jobs:
       NETWORK_PASSPHRASE: ${{ matrix.NETWORK_PASSPHRASE }}
       HORIZON_URL: ${{ matrix.HORIZON_URL }}
       CIRCLE_API_TYPE: ${{ matrix.CIRCLE_API_TYPE || 'TRANSFERS' }}
+      RPC_URL: ${{ matrix.RPC_URL }}
+      ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS}}
+      EMBEDDED_WALLETS_WASM_HASH: ${{ matrix.EMBEDDED_WALLETS_WASM_HASH }}
+      TEST_TYPE: ${{ matrix.TEST_TYPE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -148,7 +163,12 @@ jobs:
       - name: Start integration test command
         run: |
           echo "Running integration tests with native SDP SEP services"
-          docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
+          if [ "${{ env.TEST_TYPE }}" = "embedded-wallet" ]; then
+            echo "Running embedded wallet integration tests..."
+            docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start-embedded-wallet"
+          else
+            docker exec e2e-sdp-api sh -c "./stellar-disbursement-platform integration-tests start"
+          fi
         shell: bash
 
       - name: Docker logs

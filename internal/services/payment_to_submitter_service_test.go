@@ -284,7 +284,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 			// 👀 [STELLAR] Validate: TSS submitter_transactions table
 			if tc.distributionAccount.IsStellar() {
-				transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{paymentRegistered.ID, paymentReady.ID})
+				transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{paymentRegistered.ID, paymentReady.ID})
 				require.NoError(t, err)
 				require.Len(t, transactions, 1)
 
@@ -675,7 +675,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	assert.Len(t, transactions, 1)
 
@@ -689,7 +689,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	_, err = tssModel.UpdateStatusToError(ctx, *transaction, "Failing Test")
 	require.NoError(t, err)
 
-	transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	assert.Len(t, transactions, 1)
 
@@ -720,7 +720,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	assert.Len(t, transactions, 2)
 

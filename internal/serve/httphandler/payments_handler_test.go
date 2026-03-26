@@ -26,6 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
@@ -94,6 +95,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Asset:             *asset,
 		ReceiverWallet:    receiverWallet,
 		ExternalPaymentID: "mockID",
+		SenderAddress:     "GDOSPKDCGMYZTPHXPFAZSSVIHNKBPEGQXQVEWEJ4JXMKYZNXEVCFGMC2",
 	})
 	t.Run("successfully returns payment details for given ID", func(t *testing.T) {
 		// test
@@ -170,7 +172,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			},
 			"created_at": "` + payment.CreatedAt.Format(time.RFC3339Nano) + `",
 			"updated_at": "` + payment.UpdatedAt.Format(time.RFC3339Nano) + `",
-			"external_payment_id": "` + payment.ExternalPaymentID + `"
+			"external_payment_id": "` + payment.ExternalPaymentID + `",
+			"sender_address": "` + payment.SenderAddress + `"
 		}`
 
 		assert.JSONEq(t, wantJSON, rr.Body.String())
@@ -385,6 +388,22 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusBadRequest,
 			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be an integer"}}`,
+		},
+		{
+			name: "returns error when page_limit is zero",
+			queryParams: map[string]string{
+				"page_limit": "0",
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   `{"error":"request invalid", "extras":{"page_limit":"parameter must be a positive integer"}}`,
+		},
+		{
+			name: "returns error when page_limit exceeds max",
+			queryParams: map[string]string{
+				"page_limit": fmt.Sprintf("%d", validators.MaxPageLimit+1),
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"page_limit":"parameter must be less than or equal to %d"}}`, validators.MaxPageLimit),
 		},
 		{
 			name: "returns error when status is invalid",

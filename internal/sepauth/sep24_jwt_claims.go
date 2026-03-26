@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -22,23 +22,31 @@ func (c *SEP24JWTClaims) TransactionID() string {
 	return c.ID
 }
 
-func (c *SEP24JWTClaims) SEP10StellarAccount() string {
-	// The SEP-10 account will be in the format "account:memo", in case there's a memo.
-	// That's why we'll split the string on ":" and get the first element.
-	// ref: https://github.com/stellar/java-stellar-anchor-sdk/blob/bfa9b1d735f099bc6a21f0b9c55bd381a50c16b8/platform/src/main/java/org/stellar/anchor/platform/service/SimpleInteractiveUrlConstructor.java#L47-L50
-	splits := strings.Split(c.Subject, ":")
-	return splits[0]
+// ParseAccountAndMemo splits a SEP-10 subject into Stellar account and memo.
+// accounts with memo use the format "account:memo".
+func ParseAccountAndMemo(subject string) (account, memo string) {
+	if before, after, found := strings.Cut(subject, ":"); found && before != "" {
+		return before, after
+	}
+	return subject, ""
 }
 
-func (c *SEP24JWTClaims) SEP10StellarMemo() string {
-	// The SEP-10 account will be in the format "account:memo", in case there's a memo.
-	// That's why we'll split the string on ":" and get the second element.
-	// ref: https://github.com/stellar/java-stellar-anchor-sdk/blob/bfa9b1d735f099bc6a21f0b9c55bd381a50c16b8/platform/src/main/java/org/stellar/anchor/platform/service/SimpleInteractiveUrlConstructor.java#L47-L50
-	splits := strings.Split(c.Subject, ":")
-	if len(splits) > 1 {
-		return splits[1]
+// FormatSubject constructs a SEP-10 subject from account and optional memo.
+func FormatSubject(stellarAccount, stellarMemo string) string {
+	if stellarMemo != "" {
+		return stellarAccount + ":" + stellarMemo
 	}
-	return ""
+	return stellarAccount
+}
+
+func (c *SEP24JWTClaims) Account() string {
+	account, _ := ParseAccountAndMemo(c.Subject)
+	return account
+}
+
+func (c *SEP24JWTClaims) Memo() string {
+	_, memo := ParseAccountAndMemo(c.Subject)
+	return memo
 }
 
 func (c *SEP24JWTClaims) ExpiresAt() *time.Time {
@@ -70,9 +78,9 @@ func (c SEP24JWTClaims) Valid() error {
 		return fmt.Errorf("transaction_id is required")
 	}
 
-	_, err = keypair.ParseAddress(c.SEP10StellarAccount())
-	if err != nil {
-		return fmt.Errorf("stellar account is invalid: %w", err)
+	stellarAccount := c.Account()
+	if !strkey.IsValidEd25519PublicKey(stellarAccount) && !strkey.IsValidContractAddress(stellarAccount) {
+		return fmt.Errorf("stellar account is invalid")
 	}
 
 	if c.ClientDomain() != "" {

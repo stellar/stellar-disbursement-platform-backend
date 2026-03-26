@@ -28,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -147,19 +148,22 @@ func Test_serve(t *testing.T) {
 		MonitorService:                 mMonitorService,
 		AdminDBConnectionPool:          dbConnectionPool,
 		MtnDBConnectionPool:            dbConnectionPool,
+		TSSDBConnectionPool:            dbConnectionPool,
 		EC256PrivateKey:                "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:             []string{"*"},
-		SEP24JWTSecret:                 "jwt_secret_1234567890",
+		SEP24JWTSecret:                 "jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4",
 		BaseURL:                        "https://sdp-backend.stellar.org",
 		ResetTokenExpirationHours:      24,
 		NetworkPassphrase:              network.TestNetworkPassphrase,
 		NetworkType:                    utils.TestnetNetworkType,
 		Sep10SigningPublicKey:          "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		Sep10SigningPrivateKey:         "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
+		Sep45ContractID:                "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+		RPCConfig:                      stellar.RPCOptions{RPCUrl: "https://soroban-testnet.stellar.org"},
 		Sep10ClientAttributionRequired: true,
 		ReCAPTCHASiteKey:               "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:         "reCAPTCHASiteSecretKey",
-		CAPTCHAType:                    validators.GoogleReCAPTCHAV2,
+		CAPTCHAType:                    validators.GoogleReCAPTCHAV3,
 		ReCAPTCHAV3MinScore:            0.5,
 		DisableMFA:                     false,
 		DisableReCAPTCHA:               false,
@@ -170,6 +174,7 @@ func Test_serve(t *testing.T) {
 		DistAccEncryptionPassphrase: distributionAccPrivKey,
 		CircleService:               mCircleService,
 		CircleAPIType:               circle.APITypeTransfers,
+		WebAuthnSessionTTLSeconds:   300,
 	}
 
 	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
@@ -263,15 +268,19 @@ func Test_serve(t *testing.T) {
 	t.Setenv("SEP24_JWT_SECRET", serveOpts.SEP24JWTSecret)
 	t.Setenv("SEP10_SIGNING_PUBLIC_KEY", serveOpts.Sep10SigningPublicKey)
 	t.Setenv("SEP10_SIGNING_PRIVATE_KEY", serveOpts.Sep10SigningPrivateKey)
+	t.Setenv("SEP45_CONTRACT_ID", serveOpts.Sep45ContractID)
+	t.Setenv("RPC_URL", serveOpts.RPCConfig.RPCUrl)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA")
 	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
-	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
+	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableReCAPTCHA))
 	t.Setenv("DISTRIBUTION_SEED", distributionAccPrivKey)
 	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", distributionAccPrivKey)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
+	t.Setenv("WEBAUTHN_SESSION_TTL_SECONDS", fmt.Sprintf("%d", serveOpts.WebAuthnSessionTTLSeconds))
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
+	t.Setenv("CAPTCHA_TYPE", string(serveOpts.CAPTCHAType))
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", chAccEncryptionPassphrase)
@@ -286,4 +295,61 @@ func Test_serve(t *testing.T) {
 	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()
 	require.NoError(t, err)
+}
+
+func Test_validateReCAPTCHAConfig(t *testing.T) {
+	testCases := []struct {
+		name             string
+		disableReCAPTCHA bool
+		siteKey          string
+		secretKey        string
+		wantErr          string
+	}{
+		{
+			name:             "returns nil when reCAPTCHA is disabled and keys are empty",
+			disableReCAPTCHA: true,
+			siteKey:          "",
+			secretKey:        "",
+			wantErr:          "",
+		},
+		{
+			name:             "returns nil when reCAPTCHA is enabled and both keys are provided",
+			disableReCAPTCHA: false,
+			siteKey:          "site-key",
+			secretKey:        "secret-key",
+			wantErr:          "",
+		},
+		{
+			name:             "returns error when reCAPTCHA is enabled and site key is empty",
+			disableReCAPTCHA: false,
+			siteKey:          "",
+			secretKey:        "secret-key",
+			wantErr:          "RECAPTCHA_SITE_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable",
+		},
+		{
+			name:             "returns error when reCAPTCHA is enabled and secret key is empty",
+			disableReCAPTCHA: false,
+			siteKey:          "site-key",
+			secretKey:        "",
+			wantErr:          "RECAPTCHA_SITE_SECRET_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable",
+		},
+		{
+			name:             "returns error when reCAPTCHA is enabled and both keys are empty",
+			disableReCAPTCHA: false,
+			siteKey:          "",
+			secretKey:        "",
+			wantErr:          "RECAPTCHA_SITE_KEY is required when reCAPTCHA is enabled. Set DISABLE_RECAPTCHA=true to disable",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateReCAPTCHAConfig(tc.disableReCAPTCHA, tc.siteKey, tc.secretKey)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
+			}
+		})
+	}
 }

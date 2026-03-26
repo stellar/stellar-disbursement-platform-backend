@@ -68,3 +68,68 @@ func Test_TruncateString(t *testing.T) {
 		})
 	}
 }
+
+func Test_ContainsAny(t *testing.T) {
+	testCases := []struct {
+		name       string
+		message    string
+		substrings []string
+		want       bool
+	}{
+		{
+			name:       "message contains one substring",
+			message:    "rate limit exceeded",
+			substrings: []string{"rate limit", "throttle"},
+			want:       true,
+		},
+		{
+			name:       "message contains multiple substrings",
+			message:    "too many requests throttled",
+			substrings: []string{"too many", "throttle"},
+			want:       true,
+		},
+		{
+			name:       "message contains none of the substrings",
+			message:    "connection timeout",
+			substrings: []string{"rate limit", "throttle"},
+			want:       false,
+		},
+		{
+			name:       "empty message",
+			message:    "",
+			substrings: []string{"rate limit"},
+			want:       false,
+		},
+		{
+			name:       "empty substrings",
+			message:    "some message",
+			substrings: []string{},
+			want:       false,
+		},
+		{
+			name:       "substring is empty string (skipped)",
+			message:    "some message",
+			substrings: []string{"", "nomatch"},
+			want:       false,
+		},
+		{
+			name:       "case sensitive match",
+			message:    "Rate Limit exceeded",
+			substrings: []string{"rate limit"},
+			want:       false,
+		},
+		{
+			name:       "case sensitive match works when lowercased",
+			message:    "rate limit exceeded",
+			substrings: []string{"rate limit"},
+			want:       true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ContainsAny(tc.message, tc.substrings...)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
