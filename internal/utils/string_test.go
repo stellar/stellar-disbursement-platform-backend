@@ -69,6 +69,32 @@ func Test_TruncateString(t *testing.T) {
 	}
 }
 
+func Test_TruncateToMaxLength(t *testing.T) {
+	testCases := []struct {
+		name   string
+		s      string
+		maxLen int
+		want   string
+	}{
+		{name: "shorter than maxLen", s: "hello", maxLen: 10, want: "hello"},
+		{name: "equal to maxLen", s: "hello", maxLen: 5, want: "hello"},
+		{name: "longer than maxLen", s: "hello world", maxLen: 8, want: "hello..."},
+		{name: "maxLen is 3 — no room for ellipsis", s: "hello", maxLen: 3, want: "hel"},
+		{name: "maxLen is 2", s: "hello", maxLen: 2, want: "he"},
+		{name: "maxLen is 1", s: "hello", maxLen: 1, want: "h"},
+		{name: "maxLen is 0", s: "hello", maxLen: 0, want: ""},
+		{name: "maxLen is negative", s: "hello", maxLen: -1, want: ""},
+		{name: "empty string", s: "", maxLen: 5, want: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := TruncateToMaxLength(tc.s, tc.maxLen)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func Test_ContainsAny(t *testing.T) {
 	testCases := []struct {
 		name       string
