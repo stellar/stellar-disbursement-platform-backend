@@ -42,8 +42,14 @@ func TruncateString(str string, borderSizeToKeep int) string {
 
 // TruncateToMaxLength returns s truncated to maxLen characters, with "..." appended if truncated.
 func TruncateToMaxLength(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(s) <= maxLen {
 		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
 }
