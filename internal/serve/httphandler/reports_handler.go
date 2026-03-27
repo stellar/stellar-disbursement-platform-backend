@@ -32,7 +32,6 @@ const (
 type ReportsHandler struct {
 	DistributionAccountResolver signing.DistributionAccountResolver
 	ReportsService              services.ReportsServiceInterface
-	StatementQueryValidator     *validators.StatementQueryValidator
 	Models                      *data.Models
 	DBConnectionPool            db.DBConnectionPool
 	HorizonClient               horizonclient.ClientInterface
@@ -43,9 +42,10 @@ type ReportsHandler struct {
 func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	params := h.StatementQueryValidator.ValidateAndGetStatementParams(r)
-	if h.StatementQueryValidator.HasErrors() {
-		httperror.BadRequest("invalid query parameters", nil, h.StatementQueryValidator.Validator.Errors).Render(w)
+	v := validators.NewStatementQueryValidator()
+	params := v.ValidateAndGetStatementParams(r)
+	if v.HasErrors() {
+		httperror.BadRequest("invalid query parameters", nil, v.Validator.Errors).Render(w)
 		return
 	}
 

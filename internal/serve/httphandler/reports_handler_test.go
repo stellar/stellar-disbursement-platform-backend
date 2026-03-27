@@ -16,7 +16,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/transaction"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
@@ -191,7 +190,6 @@ func TestReportsHandlerGetStatementExport(t *testing.T) {
 			h := ReportsHandler{
 				DistributionAccountResolver: mResolver,
 				ReportsService:              mSvc,
-				StatementQueryValidator:     validators.NewStatementQueryValidator(),
 			}
 
 			rr := httptest.NewRecorder()

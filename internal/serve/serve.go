@@ -679,7 +679,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		reportsHandler := httphandler.ReportsHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			ReportsService:              reportsService,
-			StatementQueryValidator:     validators.NewStatementQueryValidator(),
 			Models:                      o.Models,
 			DBConnectionPool:            o.MtnDBConnectionPool,
 			HorizonClient:               o.SubmitterEngine.HorizonClient,
