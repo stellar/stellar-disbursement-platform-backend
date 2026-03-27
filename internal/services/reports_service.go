@@ -225,7 +225,7 @@ func (s *ReportsService) fetchPaymentsInRange(
 
 	req := horizonclient.OperationRequest{
 		ForAccount: accountAddress,
-		Order:      horizonclient.OrderAsc,
+		Order:      horizonclient.OrderDesc,
 		Limit:      StatementPaymentsPageLimit,
 	}
 
@@ -247,13 +247,16 @@ func (s *ReportsService) fetchPaymentsInRange(
 			break
 		}
 
-		req.Cursor, err = s.getNextPaymentsPageCursor(page)
-		if err != nil {
-			return nil, decimal.Zero, decimal.Zero, err
-		}
-		if req.Cursor == "" {
+		cursor := getNextPaymentsPageCursor(page)
+		if cursor == "" {
 			break
 		}
+		req.Cursor = cursor
+	}
+
+	// Reverse to chronological (ascending) order for display.
+	for i, j := 0, len(accumulator.transactions)-1; i < j; i, j = i+1, j-1 {
+		accumulator.transactions[i], accumulator.transactions[j] = accumulator.transactions[j], accumulator.transactions[i]
 	}
 
 	return accumulator.transactions, accumulator.totalCredits, accumulator.totalDebits, nil
@@ -270,7 +273,7 @@ func (s *ReportsService) fetchTotalsInRange(
 
 	req := horizonclient.OperationRequest{
 		ForAccount: accountAddress,
-		Order:      horizonclient.OrderAsc,
+		Order:      horizonclient.OrderDesc,
 		Limit:      StatementPaymentsPageLimit,
 	}
 
@@ -292,13 +295,11 @@ func (s *ReportsService) fetchTotalsInRange(
 			break
 		}
 
-		req.Cursor, err = s.getNextPaymentsPageCursor(page)
-		if err != nil {
-			return decimal.Zero, decimal.Zero, err
-		}
-		if req.Cursor == "" {
+		cursor := getNextPaymentsPageCursor(page)
+		if cursor == "" {
 			break
 		}
+		req.Cursor = cursor
 	}
 
 	return accumulator.totalCredits, accumulator.totalDebits, nil
@@ -316,10 +317,11 @@ func (s *ReportsService) processPaymentPage(
 		op := page.Embedded.Records[i]
 		createdAt := op.GetBase().LedgerCloseTime
 
-		if createdAt.Before(fromStart) {
+		if createdAt.After(toEnd) {
 			continue
 		}
-		if createdAt.After(toEnd) {
+
+		if createdAt.Before(fromStart) {
 			return true, nil
 		}
 
@@ -344,15 +346,14 @@ func (s *ReportsService) shouldContinuePaymentsPagination(page operations.Operat
 	return len(page.Embedded.Records) >= StatementPaymentsPageLimit
 }
 
-func (s *ReportsService) getNextPaymentsPageCursor(page operations.OperationsPage) (string, error) {
-	nextPage, err := s.HorizonClient.NextPaymentsPage(page)
-	if err != nil {
-		return "", fmt.Errorf("next payments page: %w", err)
+// Returns the last record's paging token.
+// Horizon cursors are exclusive, so this fetches the next page without skipping records.
+func getNextPaymentsPageCursor(page operations.OperationsPage) string {
+	records := page.Embedded.Records
+	if len(records) == 0 {
+		return ""
 	}
-	if len(nextPage.Embedded.Records) == 0 {
-		return "", nil
-	}
-	return nextPage.Embedded.Records[0].PagingToken(), nil
+	return records[len(records)-1].PagingToken()
 }
 
 // processPaymentOperation processes a single payment operation and returns a StatementTransaction line
