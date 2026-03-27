@@ -166,6 +166,16 @@ func TestFormatWithCommas(t *testing.T) {
 			input:    "1234",
 			expected: "1,234",
 		},
+		{
+			name:     "negative 3-digit integer (no comma expected)",
+			input:    "-123",
+			expected: "-123",
+		},
+		{
+			name:     "negative 6-digit integer",
+			input:    "-123456",
+			expected: "-123,456",
+		},
 	}
 
 	for _, tt := range tests {

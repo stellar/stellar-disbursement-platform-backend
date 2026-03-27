@@ -37,15 +37,23 @@ func formatWithCommas(s string) string {
 		decimalPart = "." + parts[1]
 	}
 
-	// Add commas every 3 digits from right to left
+	// Strip leading minus so the sign is not counted as a digit when placing commas.
+	sign := ""
+	digits := integerPart
+	if strings.HasPrefix(integerPart, "-") {
+		sign = "-"
+		digits = integerPart[1:]
+	}
+
+	// Add commas every 3 digits from right to left.
 	var result strings.Builder
-	length := len(integerPart)
-	for i, digit := range integerPart {
+	length := len(digits)
+	for i, digit := range digits {
 		if i > 0 && (length-i)%3 == 0 {
 			result.WriteString(",")
 		}
 		result.WriteRune(digit)
 	}
 
-	return result.String() + decimalPart
+	return sign + result.String() + decimalPart
 }
