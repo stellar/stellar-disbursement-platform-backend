@@ -119,6 +119,7 @@ type getPaymentResponse struct {
 	UpdatedAt               time.Time                 `json:"updated_at"`
 	ExternalPaymentID       string                    `json:"external_payment_id,omitempty"`
 	CircleTransferRequestID *string                   `json:"circle_transfer_request_id,omitempty"`
+	SenderAddress           string                    `json:"sender_address,omitempty"`
 }
 
 func paymentToGetPaymentResponse(p data.Payment) getPaymentResponse {
@@ -136,6 +137,7 @@ func paymentToGetPaymentResponse(p data.Payment) getPaymentResponse {
 		UpdatedAt:               p.UpdatedAt,
 		ExternalPaymentID:       p.ExternalPaymentID,
 		CircleTransferRequestID: p.CircleTransferRequestID,
+		SenderAddress:           p.SenderAddress,
 	}
 	if p.ReceiverWallet != nil {
 		resp.ReceiverWallet = &getPaymentReceiverWallet{
