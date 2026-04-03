@@ -31,6 +31,7 @@ type HorizonSpecificError interface {
 	IsBadSequence() bool
 	IsTxInsufficientFee() bool
 	IsDestinationAccountNotReady() bool
+	IsEntryArchived() bool
 }
 
 // TransactionStatusUpdateError is an error that occurs when failing to update a transaction's status.
@@ -315,6 +316,16 @@ func (e *HorizonErrorWrapper) IsDestinationAccountNotReady() bool {
 		e.IsLineFull())
 }
 
+// IsEntryArchived verifies if the Horizon Error is related to a Soroban ledger
+// entry being archived due to state archival.
+func (e *HorizonErrorWrapper) IsEntryArchived() bool {
+	if !e.HasResultCodes() {
+		return false
+	}
+
+	return slices.Contains(e.ResultCodes.OperationCodes, "entry_archived")
+}
+
 // ShouldMarkAsError determines whether a transaction neeeds to be marked as an error based on the
 // transaction error code or failed op code so that TSS can determine whether it needs
 // to be retried.
@@ -341,7 +352,6 @@ func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
 		"op_line_full",
 		"op_not_authorized",
 		"op_no_issuer",
-		"entry_archived",
 		"function_trapped",
 	}
 	for _, opResult := range e.ResultCodes.OperationCodes {

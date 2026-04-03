@@ -809,12 +809,6 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			resultCodes:     map[string]interface{}{"operations": []string{"op_no_issuer"}},
 			crashTrackerMsg: crashTrackerMessage,
 		},
-		// - 400: with entry_archived error code
-		{
-			name:            "400 (entry_archived) - Bad Request",
-			resultCodes:     map[string]interface{}{"operations": []string{"entry_archived"}},
-			crashTrackerMsg: crashTrackerMessage,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -902,6 +896,300 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
 		})
 	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	const (
+		resultXDR    = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+		txHash       = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+		envelopeXDR  = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+		contractAddr = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+	)
+
+	makeEntryArchivedError := func() *utils.HorizonErrorWrapper {
+		return utils.NewHorizonErrorWrapper(horizonclient.Error{
+			Problem: problem.P{
+				Status: http.StatusBadRequest,
+				Extras: map[string]interface{}{"result_codes": map[string]interface{}{"operations": []string{"entry_archived"}}},
+			},
+		})
+	}
+
+	makeHorizonTransaction := func(channelAccountPublicKey string) horizon.Transaction {
+		return horizon.Transaction{
+			ID: txHash, ResultXdr: resultXDR, EnvelopeXdr: envelopeXDR,
+			Successful: false, Account: channelAccountPublicKey,
+		}
+	}
+
+	createContractTxJob := func(t *testing.T, ctx context.Context, distAccountAddr string) (TxJob, *store.TransactionModel, *store.ChannelAccountModel) {
+		t.Helper()
+		txModel := store.NewTransactionModel(dbConnectionPool)
+		chAccModel := store.NewChannelAccountModel(dbConnectionPool)
+		tx := store.CreateTransactionFixture(t, ctx, dbConnectionPool, store.TransactionFixture{
+			ExternalID:         uuid.NewString(),
+			TransactionType:    store.TransactionTypePayment,
+			AssetCode:          "USDC",
+			AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			DestinationAddress: contractAddr,
+			Status:             store.TransactionStatusProcessing,
+			Amount:             decimal.NewFromInt(1),
+			TenantID:           uuid.NewString(),
+		})
+		chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 1)[0]
+		tx, txErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, txHash, envelopeXDR, distAccountAddr)
+		require.NoError(t, txErr)
+		txJob := TxJob{ChannelAccount: *chAcc, Transaction: *tx, LockedUntilLedgerNumber: 2}
+		return txJob, txModel, chAccModel
+	}
+
+	setupMonitorMocks := func(t *testing.T, ctx context.Context, txJob *TxJob, isRetryable bool) (*MockTransactionHandler, tssMonitor.TSSMonitorService) {
+		t.Helper()
+		mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
+		mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
+		monitorSvc := tssMonitor.TSSMonitorService{Version: "0.01", GitCommitHash: "0xABC", Client: mMonitorClient}
+		transactionHandler := NewMockTransactionHandler(t)
+		transactionHandler.
+			On("MonitorTransactionProcessingFailed", ctx, txJob, mock.Anything, isRetryable, mock.Anything).
+			Run(func(args mock.Arguments) {
+				mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+			}).
+			Return()
+		return transactionHandler, monitorSvc
+	}
+
+	t.Run("non-contract destination falls back to marking as error", func(t *testing.T) {
+		ctx := context.Background()
+		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+		tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
+		tw.jobUUID = uuid.NewString()
+
+		// createTxJobFixture creates a tx with G-address destination (not a contract)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
+		tx, txErr := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+		require.NoError(t, txErr)
+		txJob.Transaction = *tx
+
+		hErr := makeEntryArchivedError()
+
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+		tw.txProcessingLimiter = mockTxProcessingLimiter
+
+		mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+		mockCrashTrackerClient.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "entry_archived: restoration failed").
+			Return().Once()
+		tw.crashTrackerClient = mockCrashTrackerClient
+
+		transactionHandler, monitorSvc := setupMonitorMocks(t, ctx, &txJob, false)
+		tw.monitorSvc = monitorSvc
+		tw.txHandler = transactionHandler
+
+		txErr = tw.handleFailedTransaction(ctx, &txJob, makeHorizonTransaction(txJob.ChannelAccount.PublicKey), hErr)
+		require.NoError(t, txErr)
+
+		updatedTx, txErr := tw.txModel.Get(ctx, txJob.Transaction.ID)
+		require.NoError(t, txErr)
+		assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
+		assert.Contains(t, updatedTx.StatusMessage.String, "entry_archived is only recoverable for contract destinations")
+	})
+
+	t.Run("max restore attempts exceeded marks as error", func(t *testing.T) {
+		ctx := context.Background()
+		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+		distributionKP := keypair.MustRandom()
+		txJob, txModel, chAccModel := createContractTxJob(t, ctx, distributionKP.Address())
+
+		// Simulate prior attempts to exceed maxRestoreAttempts.
+		// createContractTxJob already calls Update once (attempts_count=1), so we need maxRestoreAttempts more.
+		for i := 0; i < maxRestoreAttempts; i++ {
+			_, prepErr := txModel.PrepareTransactionForReprocessing(ctx, dbConnectionPool, txJob.Transaction.ID)
+			require.NoError(t, prepErr)
+			tx, updErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, distributionKP.Address())
+			require.NoError(t, updErr)
+			txJob.Transaction = *tx
+		}
+
+		hErr := makeEntryArchivedError()
+
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+
+		mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+		mockCrashTrackerClient.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "entry_archived: max restoration attempts exceeded").
+			Return().Once()
+
+		transactionHandler, monitorSvc := setupMonitorMocks(t, ctx, &txJob, false)
+
+		tw := TransactionWorker{
+			dbConnectionPool:    dbConnectionPool,
+			txModel:             txModel,
+			chAccModel:          chAccModel,
+			engine:              getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{}).engine,
+			crashTrackerClient:  mockCrashTrackerClient,
+			txProcessingLimiter: mockTxProcessingLimiter,
+			monitorSvc:          monitorSvc,
+			txHandler:           transactionHandler,
+			jobUUID:             uuid.NewString(),
+		}
+
+		handleErr := tw.handleFailedTransaction(ctx, &txJob, makeHorizonTransaction(txJob.ChannelAccount.PublicKey), hErr)
+		require.NoError(t, handleErr)
+
+		updatedTx, getErr := txModel.Get(ctx, txJob.Transaction.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
+		assert.Contains(t, updatedTx.StatusMessage.String, "max restoration attempts")
+	})
+
+	t.Run("contract destination restores and reprocesses successfully", func(t *testing.T) {
+		ctx := context.Background()
+		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+		distributionKP := keypair.MustRandom()
+		distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
+		txJob, txModel, chAccModel := createContractTxJob(t, ctx, distributionKP.Address())
+		hErr := makeEntryArchivedError()
+
+		// Set up engine with mocked Horizon and real signing
+		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
+
+		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+		sigService, sigErr := signing.NewSignatureService(signing.SignatureServiceOptions{
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DBConnectionPool:            dbConnectionPool,
+			DistributionPrivateKey:      distributionKP.Seed(),
+			ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
+			DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
+			LedgerNumberTracker:         mLedgerNumberTracker,
+			DistributionAccountResolver: mDistAccResolver,
+		})
+		require.NoError(t, sigErr)
+
+		mockHorizon := &horizonclient.MockClient{}
+		mockHorizon.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).
+			Return(horizon.Account{Sequence: 123}, nil).Once()
+		mockHorizon.
+			On("SubmitFeeBumpTransactionWithOptions", mock.AnythingOfType("*txnbuild.FeeBumpTransaction"), mock.Anything).
+			Return(horizon.Transaction{Successful: true}, nil).Once()
+
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+
+		transactionHandler, monitorSvc := setupMonitorMocks(t, ctx, &txJob, true)
+
+		tw := TransactionWorker{
+			dbConnectionPool: dbConnectionPool,
+			txModel:          txModel,
+			chAccModel:       chAccModel,
+			engine: &engine.SubmitterEngine{
+				HorizonClient:       mockHorizon,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				SignatureService:    sigService,
+				MaxBaseFee:          100,
+			},
+			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
+			txProcessingLimiter: mockTxProcessingLimiter,
+			monitorSvc:          monitorSvc,
+			txHandler:           transactionHandler,
+			jobUUID:             uuid.NewString(),
+		}
+
+		handleErr := tw.handleFailedTransaction(ctx, &txJob, makeHorizonTransaction(txJob.ChannelAccount.PublicKey), hErr)
+		require.NoError(t, handleErr)
+
+		// Assert transaction is prepared for reprocessing, not marked as error
+		updatedTx, getErr := txModel.Get(ctx, txJob.Transaction.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+		assert.False(t, updatedTx.StellarTransactionHash.Valid)
+		assert.False(t, updatedTx.XDRSent.Valid)
+	})
+
+	t.Run("restore tx submission fails marks as error", func(t *testing.T) {
+		ctx := context.Background()
+		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+		distributionKP := keypair.MustRandom()
+		distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
+		txJob, txModel, chAccModel := createContractTxJob(t, ctx, distributionKP.Address())
+		hErr := makeEntryArchivedError()
+
+		// Set up engine — restore tx submission will fail
+		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
+
+		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+		sigService, sigErr := signing.NewSignatureService(signing.SignatureServiceOptions{
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DBConnectionPool:            dbConnectionPool,
+			DistributionPrivateKey:      distributionKP.Seed(),
+			ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
+			DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
+			LedgerNumberTracker:         mLedgerNumberTracker,
+			DistributionAccountResolver: mDistAccResolver,
+		})
+		require.NoError(t, sigErr)
+
+		mockHorizon := &horizonclient.MockClient{}
+		mockHorizon.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).
+			Return(horizon.Account{Sequence: 123}, nil).Once()
+		mockHorizon.
+			On("SubmitFeeBumpTransactionWithOptions", mock.AnythingOfType("*txnbuild.FeeBumpTransaction"), mock.Anything).
+			Return(horizon.Transaction{}, errors.New("horizon timeout")).Once()
+
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+
+		mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+		mockCrashTrackerClient.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "entry_archived: restoration failed").
+			Return().Once()
+
+		transactionHandler, monitorSvc := setupMonitorMocks(t, ctx, &txJob, false)
+
+		tw := TransactionWorker{
+			dbConnectionPool: dbConnectionPool,
+			txModel:          txModel,
+			chAccModel:       chAccModel,
+			engine: &engine.SubmitterEngine{
+				HorizonClient:       mockHorizon,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				SignatureService:    sigService,
+				MaxBaseFee:          100,
+			},
+			crashTrackerClient:  mockCrashTrackerClient,
+			txProcessingLimiter: mockTxProcessingLimiter,
+			monitorSvc:          monitorSvc,
+			txHandler:           transactionHandler,
+			jobUUID:             uuid.NewString(),
+		}
+
+		handleErr := tw.handleFailedTransaction(ctx, &txJob, makeHorizonTransaction(txJob.ChannelAccount.PublicKey), hErr)
+		require.NoError(t, handleErr)
+
+		updatedTx, getErr := txModel.Get(ctx, txJob.Transaction.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
+		assert.Contains(t, updatedTx.StatusMessage.String, "submitting restore transaction")
+	})
 }
 
 func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTriggersCrashTracker(t *testing.T) {

@@ -10,11 +10,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/strkey"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -25,6 +27,10 @@ import (
 
 // ErrTransactionHandled is returned when a transaction error has been handled and processing should stop
 var ErrTransactionHandled = errors.New("transaction error was handled")
+
+// maxRestoreAttempts caps the number of times we attempt to restore archived Soroban ledger entries
+// for a given transaction before marking it as a terminal error.
+const maxRestoreAttempts = 3
 
 type TxJob store.ChannelTransactionBundle
 
@@ -173,8 +179,12 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 // Errors marked as definitive error, that won't be resolved with retries:
 //
 //	Horizon: 400 with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
-//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer, entry_archived]
+//	Horizon: 400 with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer, function_trapped]
 //	RPC: Contract errors, auth failures
+//
+// Errors handled via auto-restoration before retry:
+//
+//	Horizon: 400 entry_archived — attempts RestoreFootprint for contract destinations, marks as error if restoration fails or max attempts exceeded.
 //
 // Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
 //
@@ -187,7 +197,10 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, txErr utils.TransactionError) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job (%s): %v", txErr.GetErrorType(), txErr)
 
-	defer tw.txHandler.MonitorTransactionProcessingFailed(ctx, txJob, tw.jobUUID, txErr.IsRetryable(), txErr.Error())
+	isRetryable := txErr.IsRetryable()
+	defer func() {
+		tw.txHandler.MonitorTransactionProcessingFailed(ctx, txJob, tw.jobUUID, isRetryable, txErr.Error())
+	}()
 
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
@@ -195,6 +208,13 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	}
 
 	tw.txProcessingLimiter.AdjustLimitIfNeeded(txErr)
+
+	var hErr utils.HorizonSpecificError
+	if errors.As(txErr, &hErr) && hErr.IsEntryArchived() {
+		retryable, handleErr := tw.handleEntryArchived(ctx, txJob, txErr)
+		isRetryable = retryable
+		return handleErr
+	}
 
 	if txErr.ShouldMarkAsError() {
 		if markErr := tw.markTransactionAsError(ctx, txJob, txErr.Error()); markErr != nil {
@@ -211,8 +231,8 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			}
 		}
 
-		if horizonErr, ok := txErr.(utils.HorizonSpecificError); ok && horizonErr.IsBadSequence() {
-			// Special handling for bad sequence errors (Horizon-specific)
+		var horizonErr utils.HorizonSpecificError
+		if errors.As(txErr, &horizonErr) && horizonErr.IsBadSequence() {
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "tx_bad_seq detected!")
 		}
 	}
@@ -223,6 +243,34 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	}
 
 	return nil
+}
+
+// handleEntryArchived attempts to restore archived Soroban ledger entries and reprocess the transaction.
+// Returns (retryable, error) where retryable indicates whether the transaction will be retried.
+func (tw *TransactionWorker) handleEntryArchived(ctx context.Context, txJob *TxJob, txErr utils.TransactionError) (bool, error) {
+	if txJob.Transaction.AttemptsCount > maxRestoreAttempts {
+		log.Ctx(ctx).Errorf("Max restoration attempts (%d) exceeded for transaction %s", maxRestoreAttempts, txJob.Transaction.ID)
+		if markErr := tw.markTransactionAsError(ctx, txJob, fmt.Sprintf("entry_archived: max restoration attempts (%d) exceeded", maxRestoreAttempts)); markErr != nil {
+			return false, markErr
+		}
+		tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "entry_archived: max restoration attempts exceeded")
+		return false, tw.unlockJob(ctx, txJob)
+	}
+
+	if restoreErr := tw.restoreArchivedEntries(ctx, txJob); restoreErr != nil {
+		log.Ctx(ctx).Errorf("Failed to restore archived entries for transaction %s: %v", txJob.Transaction.ID, restoreErr)
+		if markErr := tw.markTransactionAsError(ctx, txJob, restoreErr.Error()); markErr != nil {
+			return false, markErr
+		}
+		tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "entry_archived: restoration failed")
+		return false, tw.unlockJob(ctx, txJob)
+	}
+
+	log.Ctx(ctx).Infof("Successfully restored archived entries for %s, marking for reprocessing...", txJob.Transaction.Destination)
+	if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+		return true, fmt.Errorf("preparing transaction for reprocessing after restore: %w", prepareErr)
+	}
+	return true, tw.unlockJob(ctx, txJob)
 }
 
 // markTransactionAsError handles the process of marking a transaction as ERROR and producing events
@@ -496,6 +544,87 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 		return fmt.Errorf("updating XDRReceived(%s) for job %v: %w", resultXDR, txJob, err)
 	}
 	txJob.Transaction = *updatedTx
+
+	return nil
+}
+
+// restoreArchivedEntries submits a RestoreFootprint transaction to restore the recipient's
+// archived SAC balance entry. Only restores the balance entry; if other footprint entries
+// (e.g. SAC contract instance) are also archived, restoration won't be sufficient.
+func (tw *TransactionWorker) restoreArchivedEntries(ctx context.Context, txJob *TxJob) error {
+	if !strkey.IsValidContractAddress(txJob.Transaction.Destination) {
+		return fmt.Errorf("entry_archived is only recoverable for contract destinations, got %s", txJob.Transaction.Destination)
+	}
+
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	if err != nil {
+		return fmt.Errorf("resolving distribution account: %w", err)
+	}
+
+	var asset txnbuild.Asset = txnbuild.NativeAsset{}
+	if txJob.Transaction.AssetCode != assets.XLMAssetCode && txJob.Transaction.AssetCode != assets.XLMAssetCodeAlias {
+		asset = txnbuild.CreditAsset{
+			Code:   txJob.Transaction.AssetCode,
+			Issuer: txJob.Transaction.AssetIssuer,
+		}
+	}
+
+	restoreOp, err := txnbuild.NewAssetBalanceRestoration(txnbuild.AssetBalanceRestorationParams{
+		NetworkPassphrase: tw.engine.SignatureService.NetworkPassphrase(),
+		Contract:          txJob.Transaction.Destination,
+		Asset:             asset,
+		SourceAccount:     distributionAccount.Address,
+	})
+	if err != nil {
+		return fmt.Errorf("building restore footprint operation: %w", err)
+	}
+
+	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
+	if err != nil {
+		return fmt.Errorf("getting channel account detail: %w", err)
+	}
+
+	restoreTx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount: &txnbuild.SimpleAccount{
+			AccountID: txJob.ChannelAccount.PublicKey,
+			Sequence:  horizonAccount.Sequence,
+		},
+		Operations:           []txnbuild.Operation{&restoreOp},
+		BaseFee:              int64(tw.engine.MaxBaseFee),
+		Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(300)},
+		IncrementSequenceNum: true,
+	})
+	if err != nil {
+		return fmt.Errorf("building restore transaction: %w", err)
+	}
+
+	chAccount := schema.TransactionAccount{
+		Address: txJob.ChannelAccount.PublicKey,
+		Type:    schema.ChannelAccountStellarDB,
+	}
+	restoreTx, err = tw.engine.SignerRouter.SignStellarTransaction(ctx, restoreTx, chAccount, distributionAccount)
+	if err != nil {
+		return fmt.Errorf("signing restore transaction: %w", err)
+	}
+
+	feeBumpTx, err := txnbuild.NewFeeBumpTransaction(txnbuild.FeeBumpTransactionParams{
+		Inner:      restoreTx,
+		FeeAccount: distributionAccount.Address,
+		BaseFee:    int64(tw.engine.MaxBaseFee),
+	})
+	if err != nil {
+		return fmt.Errorf("building restore fee bump transaction: %w", err)
+	}
+
+	feeBumpTx, err = tw.engine.SignerRouter.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccount)
+	if err != nil {
+		return fmt.Errorf("signing restore fee bump transaction: %w", err)
+	}
+
+	_, err = tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	if err != nil {
+		return fmt.Errorf("submitting restore transaction: %w", err)
+	}
 
 	return nil
 }
