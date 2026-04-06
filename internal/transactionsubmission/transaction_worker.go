@@ -248,25 +248,30 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 // handleEntryArchived attempts to restore archived Soroban ledger entries and reprocess the transaction.
 // Returns (retryable, error) where retryable indicates whether the transaction will be retried.
 func (tw *TransactionWorker) handleEntryArchived(ctx context.Context, txJob *TxJob, txErr utils.TransactionError) (bool, error) {
+	if !strkey.IsValidContractAddress(txJob.Transaction.Destination) {
+		errMsg := fmt.Sprintf("entry_archived is only recoverable for contract destinations, got %s", txJob.Transaction.Destination)
+		if markErr := tw.markTransactionAsError(ctx, txJob, errMsg); markErr != nil {
+			return false, markErr
+		}
+		tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "entry_archived: non-contract destination")
+		return false, tw.unlockJob(ctx, txJob)
+	}
+
 	if txJob.Transaction.AttemptsCount > maxRestoreAttempts {
 		log.Ctx(ctx).Errorf("Max restoration attempts (%d) exceeded for transaction %s", maxRestoreAttempts, txJob.Transaction.ID)
 		if markErr := tw.markTransactionAsError(ctx, txJob, fmt.Sprintf("entry_archived: max restoration attempts (%d) exceeded", maxRestoreAttempts)); markErr != nil {
 			return false, markErr
 		}
-		tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "entry_archived: max restoration attempts exceeded")
+		tw.crashTrackerClient.LogAndReportErrors(ctx, fmt.Errorf("entry_archived: max restoration attempts exceeded for %v: %w", txJob.Transaction.ID, txErr), "entry_archived: max restoration attempts exceeded")
 		return false, tw.unlockJob(ctx, txJob)
 	}
 
 	if restoreErr := tw.restoreArchivedEntries(ctx, txJob); restoreErr != nil {
-		log.Ctx(ctx).Errorf("Failed to restore archived entries for transaction %s: %v", txJob.Transaction.ID, restoreErr)
-		if markErr := tw.markTransactionAsError(ctx, txJob, restoreErr.Error()); markErr != nil {
-			return false, markErr
-		}
-		tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "entry_archived: restoration failed")
-		return false, tw.unlockJob(ctx, txJob)
+		log.Ctx(ctx).Warnf("Restore attempt failed for transaction %s (will retry): %v", txJob.Transaction.ID, restoreErr)
+	} else {
+		log.Ctx(ctx).Infof("Successfully restored archived entries for %s", txJob.Transaction.Destination)
 	}
 
-	log.Ctx(ctx).Infof("Successfully restored archived entries for %s, marking for reprocessing...", txJob.Transaction.Destination)
 	if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
 		return true, fmt.Errorf("preparing transaction for reprocessing after restore: %w", prepareErr)
 	}
@@ -552,10 +557,6 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 // archived SAC balance entry. Only restores the balance entry; if other footprint entries
 // (e.g. SAC contract instance) are also archived, restoration won't be sufficient.
 func (tw *TransactionWorker) restoreArchivedEntries(ctx context.Context, txJob *TxJob) error {
-	if !strkey.IsValidContractAddress(txJob.Transaction.Destination) {
-		return fmt.Errorf("entry_archived is only recoverable for contract destinations, got %s", txJob.Transaction.Destination)
-	}
-
 	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
 	if err != nil {
 		return fmt.Errorf("resolving distribution account: %w", err)

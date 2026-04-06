@@ -986,7 +986,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 
 		mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
 		mockCrashTrackerClient.
-			On("LogAndReportErrors", mock.Anything, mock.Anything, "entry_archived: restoration failed").
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "entry_archived: non-contract destination").
 			Return().Once()
 		tw.crashTrackerClient = mockCrashTrackerClient
 
@@ -1121,7 +1121,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		assert.False(t, updatedTx.XDRSent.Valid)
 	})
 
-	t.Run("restore tx submission fails marks as error", func(t *testing.T) {
+	t.Run("restore tx submission fails still reprocesses", func(t *testing.T) {
 		ctx := context.Background()
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
@@ -1131,7 +1131,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		txJob, txModel, chAccModel := createContractTxJob(t, ctx, distributionKP.Address())
 		hErr := makeEntryArchivedError()
 
-		// Set up engine — restore tx submission will fail
+		// Set up engine — restore tx submission will fail, but tx should still be reprocessed
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
 
@@ -1158,12 +1158,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
 		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
 
-		mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
-		mockCrashTrackerClient.
-			On("LogAndReportErrors", mock.Anything, mock.Anything, "entry_archived: restoration failed").
-			Return().Once()
-
-		transactionHandler, monitorSvc := setupMonitorMocks(t, ctx, &txJob, false)
+		transactionHandler, monitorSvc := setupMonitorMocks(t, ctx, &txJob, true)
 
 		tw := TransactionWorker{
 			dbConnectionPool: dbConnectionPool,
@@ -1175,7 +1170,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 				SignatureService:    sigService,
 				MaxBaseFee:          100,
 			},
-			crashTrackerClient:  mockCrashTrackerClient,
+			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 			txProcessingLimiter: mockTxProcessingLimiter,
 			monitorSvc:          monitorSvc,
 			txHandler:           transactionHandler,
@@ -1185,10 +1180,12 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		handleErr := tw.handleFailedTransaction(ctx, &txJob, makeHorizonTransaction(txJob.ChannelAccount.PublicKey), hErr)
 		require.NoError(t, handleErr)
 
+		// Restore failed but tx should still be reprocessed (restore may have succeeded on network)
 		updatedTx, getErr := txModel.Get(ctx, txJob.Transaction.ID)
 		require.NoError(t, getErr)
-		assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
-		assert.Contains(t, updatedTx.StatusMessage.String, "submitting restore transaction")
+		assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+		assert.False(t, updatedTx.StellarTransactionHash.Valid)
+		assert.False(t, updatedTx.XDRSent.Valid)
 	})
 }
 
