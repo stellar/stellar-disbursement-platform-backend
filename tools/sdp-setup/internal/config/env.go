@@ -33,6 +33,7 @@ type Config struct {
 	HorizonURL         string // Horizon API endpoint
 	DatabaseName       string // Database name for this configuration
 	DisableMFA         string // Whether to disable MFA (string for env file)
+	DisableCAPTCHA     string // Whether to disable CAPTCHA (string for env file)
 	SEP10PublicKey     string // SEP-10 authentication public key
 	SEP10PrivateKey    string // SEP-10 authentication private key
 	DistributionPublic string // Distribution account public key
@@ -162,6 +163,7 @@ func Load(path string) (Config, error) {
 		HorizonURL:         envMap["HORIZON_URL"],
 		DatabaseName:       envMap["DATABASE_NAME"],
 		DisableMFA:         envMap["DISABLE_MFA"],
+		DisableCAPTCHA:     envMap["DISABLE_RECAPTCHA"],
 		SEP10PublicKey:     envMap["SEP10_SIGNING_PUBLIC_KEY"],
 		SEP10PrivateKey:    envMap["SEP10_SIGNING_PRIVATE_KEY"],
 		DistributionPublic: envMap["DISTRIBUTION_PUBLIC_KEY"],
@@ -242,6 +244,7 @@ func Write(cfg Config, path string) error {
 		"HORIZON_URL":                                cfg.HorizonURL,
 		"DATABASE_NAME":                              cfg.DatabaseName,
 		"DISABLE_MFA":                                cfg.DisableMFA,
+		"DISABLE_RECAPTCHA":                          cfg.DisableCAPTCHA,
 		"SINGLE_TENANT_MODE":                         singleTenantModeStr,
 		"SETUP_NAME":                                 cfg.SetupName,
 		"SEP10_SIGNING_PUBLIC_KEY":                   cfg.SEP10PublicKey,
@@ -316,17 +319,20 @@ func fromAccounts(networkType utils.NetworkType, acc accounts.Info) Config {
 		cfg.HorizonURL = "https://horizon.stellar.org"
 		cfg.DatabaseName = "sdp_pubnet"
 		cfg.DisableMFA = "false"
+		cfg.DisableCAPTCHA = "false"
 	case utils.TestnetNetworkType:
 		cfg.NetworkPassphrase = "Test SDF Network ; September 2015"
 		cfg.HorizonURL = "https://horizon-testnet.stellar.org"
 		cfg.DatabaseName = "sdp_mtn"
 		cfg.DisableMFA = "true"
+		cfg.DisableCAPTCHA = "true"
 	default:
 		// Default to testnet for unknown networks
 		cfg.NetworkPassphrase = "Test SDF Network ; September 2015"
 		cfg.HorizonURL = "https://horizon-testnet.stellar.org"
 		cfg.DatabaseName = "sdp_mtn"
 		cfg.DisableMFA = "true"
+		cfg.DisableCAPTCHA = "true"
 	}
 
 	return cfg
