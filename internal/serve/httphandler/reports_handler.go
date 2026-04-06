@@ -96,7 +96,7 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	if _, err := w.Write(pdfBytes); err != nil {
-		httperror.InternalError(ctx, "Cannot write statement PDF", err, nil).Render(w)
+		log.Ctx(ctx).Errorf("writing statement PDF response: %v", err)
 		return
 	}
 }
@@ -190,7 +190,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	if _, err := w.Write(pdfBytes); err != nil {
-		httperror.InternalError(ctx, "Cannot write transaction notice PDF", err, nil).Render(w)
+		log.Ctx(ctx).Errorf("writing transaction notice PDF response: %v", err)
 		return
 	}
 }
