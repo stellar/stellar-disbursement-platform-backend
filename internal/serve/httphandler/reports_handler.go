@@ -158,7 +158,12 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 				log.Ctx(ctx).Warnf("fetching transaction fee from Horizon for %s: %v", payment.StellarTransactionID, hErr)
 			} else {
 				// FeeCharged is in stroops (1 XLM = 10^7 stroops)
-				feeCharged = fmt.Sprintf("%.5f XLM", float64(hTx.FeeCharged)/1e7)
+				whole := hTx.FeeCharged / 1e7
+				frac := hTx.FeeCharged % 1e7
+				if frac < 0 {
+					frac = -frac
+				}
+				feeCharged = fmt.Sprintf("%d.%07d XLM", whole, frac)
 				memoText = hTx.Memo
 			}
 		}
