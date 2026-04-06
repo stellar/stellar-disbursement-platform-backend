@@ -73,20 +73,20 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	}
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf(`
+	fmt.Fprintf(&builder, `
 	ACCOUNTS=%s
 	SIGNING_KEY=%q
 	NETWORK_PASSPHRASE=%q
 	HORIZON_URL=%q
 	WEB_AUTH_ENDPOINT=%q
 	TRANSFER_SERVER_SEP0024=%q
-`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024))
+`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
 
 	if s.Sep45ContractID != "" {
-		builder.WriteString(fmt.Sprintf(`
+		fmt.Fprintf(&builder, `
 WEB_AUTH_CONTRACT_ID=%q
 WEB_AUTH_FOR_CONTRACTS_ENDPOINT=%q
-`, s.Sep45ContractID, webAuthForContractsEndpoint))
+`, s.Sep45ContractID, webAuthForContractsEndpoint)
 	}
 
 	return builder.String()
