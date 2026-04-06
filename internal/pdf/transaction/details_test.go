@@ -39,6 +39,7 @@ func TestTruncateWithEllipsis(t *testing.T) {
 		{"maxChars 3 or less no ellipsis", "abc", 2, "ab"},
 		{"maxChars 4 truncate to 1+ellipsis", "abcde", 4, "a..."},
 		{"empty string", "", 5, ""},
+		{"multi-byte runes not split", "ação中文字", 6, "açã..."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

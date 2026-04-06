@@ -1,6 +1,8 @@
 package transaction
 
 import (
+	"unicode/utf8"
+
 	"github.com/jung-kurt/gofpdf/v2"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -32,15 +34,16 @@ func orDash(s string) string {
 	return s
 }
 
-// truncateWithEllipsis returns s truncated to maxChars with "..." appended if truncated.
+// truncateWithEllipsis returns s truncated to maxChars runes with "..." appended if truncated.
 func truncateWithEllipsis(s string, maxChars int) string {
-	if len(s) <= maxChars {
+	if utf8.RuneCountInString(s) <= maxChars {
 		return s
 	}
+	runes := []rune(s)
 	if maxChars <= 3 {
-		return s[:maxChars]
+		return string(runes[:maxChars])
 	}
-	return s[:maxChars-3] + "..."
+	return string(runes[:maxChars-3]) + "..."
 }
 
 // splitWalletAddressLines splits an address into lines of at most walletAddressBreakChars characters.

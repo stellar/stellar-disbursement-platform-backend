@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -40,18 +41,19 @@ func TruncateString(str string, borderSizeToKeep int) string {
 	return str[:borderSizeToKeep] + "..." + str[len(str)-borderSizeToKeep:]
 }
 
-// TruncateToMaxLength returns s truncated to maxLen characters, with "..." appended if truncated.
+// TruncateToMaxLength returns s truncated to maxLen runes, with "..." appended if truncated.
 func TruncateToMaxLength(s string, maxLen int) string {
 	if maxLen <= 0 {
 		return ""
 	}
-	if len(s) <= maxLen {
+	if utf8.RuneCountInString(s) <= maxLen {
 		return s
 	}
+	runes := []rune(s)
 	if maxLen <= 3 {
-		return s[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
 
 // TrimAndLower trims and lowercases a string.

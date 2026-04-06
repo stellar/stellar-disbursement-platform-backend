@@ -85,6 +85,8 @@ func Test_TruncateToMaxLength(t *testing.T) {
 		{name: "maxLen is 0", s: "hello", maxLen: 0, want: ""},
 		{name: "maxLen is negative", s: "hello", maxLen: -1, want: ""},
 		{name: "empty string", s: "", maxLen: 5, want: ""},
+		{name: "multi-byte runes are not split", s: "ação中文字", maxLen: 6, want: "açã..."},
+		{name: "multi-byte runes equal to maxLen", s: "ação", maxLen: 4, want: "ação"},
 	}
 
 	for _, tc := range testCases {
