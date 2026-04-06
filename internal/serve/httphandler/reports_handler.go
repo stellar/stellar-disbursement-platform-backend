@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -94,6 +95,7 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 		params.FromDate.Format("20060102"),
 		params.ToDate.Format("20060102"))
 	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Length", strconv.Itoa(len(pdfBytes)))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	if _, err := w.Write(pdfBytes); err != nil {
 		log.Ctx(ctx).Errorf("writing statement PDF response: %v", err)
@@ -188,6 +190,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 
 	filename := fmt.Sprintf("transaction_notice_%s.pdf", paymentID)
 	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Length", strconv.Itoa(len(pdfBytes)))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	if _, err := w.Write(pdfBytes); err != nil {
 		log.Ctx(ctx).Errorf("writing transaction notice PDF response: %v", err)
