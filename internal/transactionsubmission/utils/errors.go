@@ -31,6 +31,7 @@ type HorizonSpecificError interface {
 	IsBadSequence() bool
 	IsTxInsufficientFee() bool
 	IsDestinationAccountNotReady() bool
+	IsEntryArchived() bool
 }
 
 // TransactionStatusUpdateError is an error that occurs when failing to update a transaction's status.
@@ -313,6 +314,16 @@ func (e *HorizonErrorWrapper) IsDestinationAccountNotReady() bool {
 		e.IsLineFull())
 }
 
+// IsEntryArchived verifies if the Horizon Error is related to a Soroban ledger
+// entry being archived due to state archival.
+func (e *HorizonErrorWrapper) IsEntryArchived() bool {
+	if !e.HasResultCodes() {
+		return false
+	}
+
+	return slices.Contains(e.ResultCodes.OperationCodes, "entry_archived")
+}
+
 // ShouldMarkAsError determines whether a transaction neeeds to be marked as an error based on the
 // transaction error code or failed op code so that TSS can determine whether it needs
 // to be retried.
@@ -339,6 +350,7 @@ func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
 		"op_line_full",
 		"op_not_authorized",
 		"op_no_issuer",
+		"function_trapped",
 	}
 	for _, opResult := range e.ResultCodes.OperationCodes {
 		if slices.Contains(failedOpCodes, opResult) {
@@ -389,9 +401,11 @@ func (e *HorizonErrorWrapper) GetErrorType() string {
 	return "Horizon"
 }
 
-var _ error = &HorizonErrorWrapper{}
-var _ TransactionError = &HorizonErrorWrapper{}
-var _ HorizonSpecificError = &HorizonErrorWrapper{}
+var (
+	_ error                = &HorizonErrorWrapper{}
+	_ TransactionError     = &HorizonErrorWrapper{}
+	_ HorizonSpecificError = &HorizonErrorWrapper{}
+)
 
 // RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
 type RPCErrorWrapper struct {
@@ -483,5 +497,7 @@ func (e *RPCErrorWrapper) GetErrorType() string {
 	return "RPC"
 }
 
-var _ error = &RPCErrorWrapper{}
-var _ TransactionError = &RPCErrorWrapper{}
+var (
+	_ error            = &RPCErrorWrapper{}
+	_ TransactionError = &RPCErrorWrapper{}
+)

@@ -34,6 +34,8 @@ var EURCAssetPubnet = data.Asset{
 
 const XLMAssetCode = "XLM"
 
+const XLMAssetCodeAlias = "NATIVE"
+
 var XLMAsset = data.Asset{
 	Code:   XLMAssetCode,
 	Issuer: "",
