@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Auto-restore archived Soroban ledger entries in TSS when contract payments fail with `entry_archived`, instead of marking them as terminal errors. [#1099](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1099)
+
 ## [6.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.2.0...6.3.0))
 
 ### Changed
