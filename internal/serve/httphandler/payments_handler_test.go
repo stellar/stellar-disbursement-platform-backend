@@ -2306,4 +2306,3 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 		})
 	}
 }
-
