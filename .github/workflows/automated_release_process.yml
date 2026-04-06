@@ -114,6 +114,15 @@ jobs:
             git add CHANGELOG.md
           fi
 
+      - name: Validate CHANGELOG update
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md does not contain a section for version ${VERSION}."
+            echo "The 'Update CHANGELOG' step may have failed. Check the logs above."
+            exit 1
+          fi
+
       - name: Install Node.js for Helm tooling
         uses: actions/setup-node@v6
         with:
