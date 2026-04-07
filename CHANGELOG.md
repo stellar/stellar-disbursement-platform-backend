@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - Fix `make setup` default tenant login failing due to reCAPTCHA being enabled by passing the `--disable-recaptcha` flag during tenant provisioning. [#1103](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1103)
+- Change SEP-10 `CreateChallenge` validation errors to return 400 instead of 500. Change SEP-24 `/info` to return 400 instead of 500 when tenant context is missing. [#1104](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1104)
 
 ## [6.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.2.0...6.3.0))
 

@@ -53,6 +53,13 @@ type sep10Service struct {
 	nonceStore                NonceStoreInterface
 }
 
+// ChallengeValidationError represents a client input error during challenge creation.
+type ChallengeValidationError struct {
+	Err error
+}
+
+func (e *ChallengeValidationError) Error() string { return e.Err.Error() }
+
 type ChallengeRequest struct {
 	Account      string `json:"account" query:"account"`
 	Memo         string `json:"memo,omitempty" query:"memo"`
@@ -149,22 +156,22 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 	// Only require client_domain if ClientAttributionRequired is true for the backwards compatibility
 	if s.ClientAttributionRequired && strings.TrimSpace(req.ClientDomain) == "" {
-		return nil, fmt.Errorf("client_domain is required")
+		return nil, &ChallengeValidationError{Err: fmt.Errorf("client_domain is required")}
 	}
 
 	if req.HomeDomain == "" {
 		req.HomeDomain = seputil.GetBaseDomain(s.BaseURL)
 		if req.HomeDomain == "" {
-			return nil, fmt.Errorf("home_domain is required")
+			return nil, &ChallengeValidationError{Err: fmt.Errorf("home_domain is required")}
 		}
 	}
 
 	if !seputil.IsValidHomeDomain(s.BaseURL, req.HomeDomain) {
-		return nil, fmt.Errorf("invalid home_domain must match %s", seputil.GetBaseDomain(s.BaseURL))
+		return nil, &ChallengeValidationError{Err: fmt.Errorf("invalid home_domain must match %s", seputil.GetBaseDomain(s.BaseURL))}
 	}
 
 	if _, err := xdr.AddressToAccountId(req.Account); err != nil {
-		return nil, fmt.Errorf("%s is not a valid account id", req.Account)
+		return nil, &ChallengeValidationError{Err: fmt.Errorf("%s is not a valid account id", req.Account)}
 	}
 
 	var clientSigningKey string
@@ -180,10 +187,10 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 	if req.Memo != "" {
 		memo, memoType, parseErr := schema.ParseMemo(req.Memo)
 		if parseErr != nil {
-			return nil, fmt.Errorf("invalid memo: %w", parseErr)
+			return nil, &ChallengeValidationError{Err: fmt.Errorf("invalid memo: %w", parseErr)}
 		}
 		if memoType != schema.MemoTypeID {
-			return nil, fmt.Errorf("invalid memo type: expected ID memo, got %s", memoType)
+			return nil, &ChallengeValidationError{Err: fmt.Errorf("invalid memo type: expected ID memo, got %s", memoType)}
 		}
 		if memoID, ok := memo.(txnbuild.MemoID); ok {
 			memoParam = &memoID
