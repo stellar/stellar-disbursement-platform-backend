@@ -106,7 +106,7 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		mockService.On("CreateChallenge", mock.Anything, services.ChallengeRequest{
 			Account:      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
 			ClientDomain: "",
-		}).Return(nil, &services.ChallengeValidationError{Err: fmt.Errorf("client_domain is required")})
+		}).Return(nil, services.ChallengeValidationError("client_domain is required"))
 
 		r := chi.NewRouter()
 		r.Get("/sep10/auth", handler.GetChallenge)

@@ -34,7 +34,7 @@ func (h SEP10Handler) GetChallenge(w http.ResponseWriter, r *http.Request) {
 
 	challenge, err := h.SEP10Service.CreateChallenge(ctx, req)
 	if err != nil {
-		var validationErr *services.ChallengeValidationError
+		var validationErr services.ChallengeValidationError
 		if errors.As(err, &validationErr) {
 			httperror.BadRequest(err.Error(), err, nil).Render(w)
 			return

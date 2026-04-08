@@ -54,11 +54,9 @@ type sep10Service struct {
 }
 
 // ChallengeValidationError represents a client input error during challenge creation.
-type ChallengeValidationError struct {
-	Err error
-}
+type ChallengeValidationError string
 
-func (e *ChallengeValidationError) Error() string { return e.Err.Error() }
+func (e ChallengeValidationError) Error() string { return string(e) }
 
 type ChallengeRequest struct {
 	Account      string `json:"account" query:"account"`
@@ -82,7 +80,7 @@ func (req *ChallengeRequest) Validate() error {
 			return fmt.Errorf("invalid memo: %w", err)
 		}
 		if memoType != schema.MemoTypeID {
-			return fmt.Errorf("invalid memo type: expected ID memo, got %s", memoType)
+			return fmt.Errorf("invalid memo type - expected ID memo, got %s", memoType)
 		}
 	}
 
@@ -156,22 +154,22 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 	// Only require client_domain if ClientAttributionRequired is true for the backwards compatibility
 	if s.ClientAttributionRequired && strings.TrimSpace(req.ClientDomain) == "" {
-		return nil, &ChallengeValidationError{Err: fmt.Errorf("client_domain is required")}
+		return nil, ChallengeValidationError("client_domain is required")
 	}
 
 	if req.HomeDomain == "" {
 		req.HomeDomain = seputil.GetBaseDomain(s.BaseURL)
 		if req.HomeDomain == "" {
-			return nil, &ChallengeValidationError{Err: fmt.Errorf("home_domain is required")}
+			return nil, ChallengeValidationError("home_domain is required")
 		}
 	}
 
 	if !seputil.IsValidHomeDomain(s.BaseURL, req.HomeDomain) {
-		return nil, &ChallengeValidationError{Err: fmt.Errorf("invalid home_domain must match %s", seputil.GetBaseDomain(s.BaseURL))}
+		return nil, ChallengeValidationError(fmt.Sprintf("invalid home_domain must match %s", seputil.GetBaseDomain(s.BaseURL)))
 	}
 
 	if _, err := xdr.AddressToAccountId(req.Account); err != nil {
-		return nil, &ChallengeValidationError{Err: fmt.Errorf("%s is not a valid account id", req.Account)}
+		return nil, ChallengeValidationError(fmt.Sprintf("%s is not a valid account id", req.Account))
 	}
 
 	var clientSigningKey string
@@ -187,10 +185,10 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 	if req.Memo != "" {
 		memo, memoType, parseErr := schema.ParseMemo(req.Memo)
 		if parseErr != nil {
-			return nil, &ChallengeValidationError{Err: fmt.Errorf("invalid memo: %w", parseErr)}
+			return nil, ChallengeValidationError(fmt.Sprintf("invalid memo: %s", parseErr))
 		}
 		if memoType != schema.MemoTypeID {
-			return nil, &ChallengeValidationError{Err: fmt.Errorf("invalid memo type: expected ID memo, got %s", memoType)}
+			return nil, ChallengeValidationError(fmt.Sprintf("invalid memo type - expected ID memo, got %s", memoType))
 		}
 		if memoID, ok := memo.(txnbuild.MemoID); ok {
 			memoParam = &memoID
