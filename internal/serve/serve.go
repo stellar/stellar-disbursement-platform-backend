@@ -852,7 +852,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				SEP24JWTManager:    o.sep24JWTManager,
 				InteractiveBaseURL: o.BaseURL,
 			}
-			r.Get("/info", sep24Handler.GetInfo)
+			r.With(middleware.EnsureTenantMiddleware).Get("/info", sep24Handler.GetInfo)
 			// Protect transaction lookup with SEP-10 or SEP-45 auth to ensure only authorized clients can access details
 			r.With(sepauth.WebAuthHeaderTokenAuthenticateMiddleware(o.sep24JWTManager)).Get("/transaction", sep24Handler.GetTransaction)
 

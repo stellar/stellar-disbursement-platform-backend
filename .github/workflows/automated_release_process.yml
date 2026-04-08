@@ -49,14 +49,6 @@ jobs:
         run: |
           git checkout -b release/${{ inputs.version }} origin/${{ github.ref_name }}
 
-      - name: Install Node.js for tooling
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Install Copilot CLI
-        run: npm install -g @github/copilot@0.0.410
-
       - name: Bump all version references
         run: |
           VERSION="${{ inputs.version }}"
@@ -67,59 +59,74 @@ jobs:
           sed -i "s|fullName: stellar/stellar-disbursement-platform-frontend:.*|fullName: stellar/stellar-disbursement-platform-frontend:$VERSION|" helmchart/sdp/values.yaml
           git add main.go helmchart/sdp/Chart.yaml helmchart/sdp/values.yaml
 
-      - name: Generate CHANGELOG entry
-        env:
-          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+      - name: Collect release metadata
+        id: release-meta
         run: |
-          set -euo pipefail
-
-          VERSION="${{ inputs.version }}"
-          REPO="${{ github.repository }}"
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
           BASE="${LAST_TAG:-$(git rev-list --max-parents=0 HEAD)}"
+          echo "base=$BASE" >> $GITHUB_OUTPUT
+          git log "$BASE"..HEAD --pretty=format:"%h %s%n%b---" > /tmp/commits.txt
 
-          git log "$BASE"..HEAD --pretty=format:"%h %s" --no-merges > /tmp/commits.txt
-          awk '
-            /^## \[Unreleased\]/ { in_section=1; next }
-            /^## \[/ { if (in_section) exit }
-            in_section { print }
-          ' CHANGELOG.md > /tmp/unreleased-body.md
+      - name: Update CHANGELOG
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Update CHANGELOG.md for release ${{ inputs.version }} of ${{ github.repository }}.
 
-          : > /tmp/new-entries.md
-          if [ -s /tmp/commits.txt ] && [ -n "${GH_TOKEN:-}" ]; then
-            copilot -sp "$(cat <<PROMPT
-          You are a CHANGELOG generator for ${REPO}.
+            Read /tmp/commits.txt for the git commits since the last release (${{ steps.release-meta.outputs.base }}).
+            Read CHANGELOG.md.
 
-          Below are git commits since the last release (${BASE}):
-          $(cat /tmp/commits.txt)
+            Follow the Keep a Changelog v1.1.0 specification (https://keepachangelog.com/en/1.1.0/).
 
-          The current Unreleased section of CHANGELOG.md is:
-          $(cat /tmp/unreleased-body.md)
+            STEP 1 — Add new entries to the Unreleased section:
+            1. Find the `## [Unreleased]` section in CHANGELOG.md.
+            2. Examine each commit in /tmp/commits.txt. ONLY consider commits that contain a PR number (e.g. (#123)). Skip all commits without a PR reference.
+            3. Skip "chore: automated release preparation" commits.
+            4. For each uncovered commit, create a changelog entry:
+               - Dependency bumps (chore(deps)) → ### Security and Dependencies
+               - CI/CD and automation changes → ### Added or ### Changed
+               - Bug fixes → ### Fixed
+               - New features → ### Added
+               - Format: `- Description. [#PR](https://github.com/${{ github.repository }}/pull/NUMBER)`
+               - Extract PR numbers from commit subjects, e.g. (#123) → 123.
+            5. CRITICAL: If a category section (e.g. ### Added) already exists under [Unreleased], append new entries to that existing section. Do NOT create duplicate ### headers.
 
-          Your job:
-          1. Identify commits NOT already covered in the Unreleased section above.
-          2. For each missing commit, categorize it: Added, Changed, Fixed, or Security and Dependencies.
-          3. Format: - Description [#PR](https://github.com/${REPO}/pull/PR)
-          4. Extract PR numbers from subjects (e.g. (#1049) -> 1049).
-          5. Skip merge commits and chore-only commits that don't add functionality.
-          6. Output ONLY the new entries grouped by category (### Added, ### Changed, etc). No header, no explanation, no code blocks.
-          7. If all commits are already covered, output nothing.
-          PROMPT
-          )" > /tmp/new-entries.md 2>/dev/null || true
-          else
-            echo "Skipping Copilot changelog gap fill (no commits or missing COPILOT_GITHUB_TOKEN)"
-          fi
+            STEP 2 — Promote to versioned release:
+            1. Collect the full merged content from under [Unreleased] (existing entries + any new ones from Step 1).
+            2. Clear the body under `## [Unreleased]` so it becomes empty.
+            3. Insert a new version section immediately after `## [Unreleased]` with a blank line between them:
 
-          python3 scripts/release/update_changelog.py \
-            --changelog CHANGELOG.md \
-            --version "$VERSION" \
-            --repo "$REPO" \
-            --base "$BASE" \
-            --new-entries-file /tmp/new-entries.md
+               ## [${{ inputs.version }}](https://github.com/${{ github.repository }}/releases/tag/${{ inputs.version }}) ([diff](https://github.com/${{ github.repository }}/compare/${{ steps.release-meta.outputs.base }}...${{ inputs.version }}))
 
+            4. Place all the collected entries under this new version header.
+
+            If the [Unreleased] section is empty AND there are no uncovered commits, use `- Release ${{ inputs.version }}` as the body.
+
+            Use the Edit tool to modify CHANGELOG.md. Do not create or modify any other files.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: --max-turns 10 --allowedTools Read,Edit
+
+      - name: Stage CHANGELOG
+        run: |
           if ! git diff --quiet CHANGELOG.md 2>/dev/null; then
             git add CHANGELOG.md
           fi
+
+      - name: Validate CHANGELOG update
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md does not contain a section for version ${VERSION}."
+            echo "The 'Update CHANGELOG' step may have failed. Check the logs above."
+            exit 1
+          fi
+
+      - name: Install Node.js for Helm tooling
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
 
       - name: Regenerate Helm README
         run: |
@@ -148,14 +155,46 @@ jobs:
             echo "Unable to determine contract changes. Manual verification required."
           fi
 
-      - name: Commit automated changes
+      - name: Commit and push automated changes
+        id: commit_changes
         run: |
           if ! git diff --cached --quiet; then
             git commit -m "chore: automated release preparation for ${{ inputs.version }}"
+            echo "committed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No changes to commit"
+            echo "committed=false" >> "$GITHUB_OUTPUT"
           fi
           git push origin release/${{ inputs.version }}
+
+      - name: Verify release commit via GitHub API
+        if: steps.commit_changes.outputs.committed == 'true'
+        run: |
+          set -euo pipefail
+
+          REPO="${{ github.repository }}"
+          BRANCH="release/${{ inputs.version }}"
+          UNSIGNED_SHA=$(git rev-parse HEAD)
+
+          TREE_SHA=$(gh api "repos/${REPO}/git/commits/${UNSIGNED_SHA}" --jq '.tree.sha')
+          PARENT_SHA=$(gh api "repos/${REPO}/git/commits/${UNSIGNED_SHA}" --jq '.parents[0].sha')
+
+          SIGNED_SHA=$(gh api "repos/${REPO}/git/commits" \
+            --method POST \
+            -f "message=chore: automated release preparation for ${{ inputs.version }}" \
+            -f "tree=${TREE_SHA}" \
+            -f "parents[]=${PARENT_SHA}" \
+            --jq '.sha')
+
+          gh api "repos/${REPO}/git/refs/heads/${BRANCH}" \
+            --method PATCH \
+            -f "sha=${SIGNED_SHA}" \
+            -F "force=true"
+
+          git fetch origin "${BRANCH}"
+          git reset --hard FETCH_HEAD
+
+          echo "Replaced unsigned commit ${UNSIGNED_SHA:0:7} with verified ${SIGNED_SHA:0:7}"
 
       - name: Create main PR
         id: create_main_pr

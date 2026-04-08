@@ -76,6 +76,7 @@ func (s *Service) initializeSingleTenantEnvironment(ctx context.Context) error {
 		"--distribution-account-encryption-passphrase", s.cfg.DistributionSeed,
 		"--channel-account-encryption-passphrase", s.cfg.DistributionSeed,
 		"--disable-mfa", s.cfg.DisableMFA,
+		"--disable-recaptcha", s.cfg.DisableCAPTCHA,
 	}
 
 	cmd := exec.CommandContext(ctx, "go", args...)
