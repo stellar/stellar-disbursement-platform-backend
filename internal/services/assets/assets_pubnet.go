@@ -52,8 +52,8 @@ var SWAGAssetPubnet = data.Asset{
 
 // / Meridian Pay:
 const (
-	STICKERAssetCode = "STICKER"
-	POSTERAssetCode = "POSTER"
+	STICKERAssetCode       = "STICKER"
+	POSTERAssetCode        = "POSTER"
 	MerchAssetIssuerPubnet = "GAVAILXQC6PM7MVP2DUDHWSQBZRG7JRPVF754YHCHFS3SLY3FKYZU7DT"
 )
 
@@ -66,5 +66,3 @@ var POSTERAssetPubnet = data.Asset{
 	Code:   POSTERAssetCode,
 	Issuer: MerchAssetIssuerPubnet,
 }
-
-
