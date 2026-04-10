@@ -178,21 +178,25 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 
 		allAssets, err = models.Assets.GetAll(ctx)
 		require.NoError(t, err)
-		assert.Len(t, allAssets, 5)
+		assert.Len(t, allAssets, 7)
 		assert.Equal(t, arstAssetCode, allAssets[0].Code)
 		assert.Equal(t, pubnetARSTIssuer, allAssets[0].Issuer)
 		assert.Equal(t, assets.EURCAssetCode, allAssets[1].Code)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, allAssets[1].Issuer)
-		assert.Equal(t, assets.SWAGAssetCode, allAssets[2].Code)
-		assert.Equal(t, assets.SWAGAssetIssuerPubnet, allAssets[2].Issuer)
-		assert.Equal(t, assets.USDCAssetCode, allAssets[3].Code)
-		assert.Equal(t, assets.USDCAssetIssuerPubnet, allAssets[3].Issuer)
-		assert.Equal(t, assets.XLMAssetCode, allAssets[4].Code)
-		assert.Empty(t, allAssets[4].Issuer)
+		assert.Equal(t, assets.POSTERAssetCode, allAssets[2].Code)
+		assert.Equal(t, assets.MerchAssetIssuerPubnet, allAssets[2].Issuer)
+		assert.Equal(t, assets.STICKERAssetCode, allAssets[3].Code)
+		assert.Equal(t, assets.MerchAssetIssuerPubnet, allAssets[3].Issuer)
+		assert.Equal(t, assets.SWAGAssetCode, allAssets[4].Code)
+		assert.Equal(t, assets.SWAGAssetIssuerPubnet, allAssets[4].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, allAssets[5].Code)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, allAssets[5].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, allAssets[6].Code)
+		assert.Empty(t, allAssets[6].Issuer)
 
 		expectedLogs := []string{
 			"updating/inserting assets for the 'pubnet' network",
-			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode, assets.XLMAssetCode, assets.SWAGAssetCode}),
+			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode, assets.XLMAssetCode, assets.SWAGAssetCode, assets.STICKERAssetCode, assets.POSTERAssetCode}),
 			fmt.Sprintf("* %s - %s", arstAssetCode, pubnetARSTIssuer),
 			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
 			fmt.Sprintf("* %s - %s", assets.SWAGAssetCode, assets.SWAGAssetIssuerPubnet),
