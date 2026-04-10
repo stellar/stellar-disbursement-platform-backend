@@ -18,7 +18,7 @@ import (
 type AssetsNetworkMapType map[utils.NetworkType][]data.Asset
 
 var StellarAssetsNetworkMap = AssetsNetworkMapType{
-	utils.PubnetNetworkType:    []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet, assets.XLMAsset, assets.SWAGAssetPubnet},
+	utils.PubnetNetworkType:    []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet, assets.XLMAsset, assets.SWAGAssetPubnet, assets.STICKERAssetPubnet, assets.POSTERAssetPubnet},
 	utils.TestnetNetworkType:   []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet, assets.XLMAsset},
 	utils.FuturenetNetworkType: []data.Asset{assets.XLMAsset},
 }

@@ -41,6 +41,8 @@ var PubnetWallets = []data.Wallet{
 			assets.USDCAssetPubnet,
 			assets.XLMAsset,
 			assets.SWAGAssetPubnet,
+			assets.STICKERAssetPubnet,
+			assets.POSTERAssetPubnet,
 		},
 	},
 	{
@@ -54,6 +56,8 @@ var PubnetWallets = []data.Wallet{
 		Assets: []data.Asset{
 			assets.SWAGAssetPubnet,
 			assets.XLMAsset,
+			assets.STICKERAssetPubnet,
+			assets.POSTERAssetPubnet,
 		},
 	},
 	// {
