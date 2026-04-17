@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stellar/go/strkey"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -79,7 +80,10 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 		}
 	} else if strkey.IsValidContractAddress(txJob.Transaction.Destination) {
 		if txJob.Transaction.Memo != "" {
-			return nil, fmt.Errorf("memo is not supported for contract destination (%s)", txJob.Transaction.Destination)
+			// TODO: Meridian Pay  specific fix. This issue may pop because someone enables `Memo Tracing` by mistake and blocks the whole flow.
+			// Given that this branch is specific to meridian pay, it's safe to ignore this error.
+			log.Ctx(ctx).Warnf("memo is not supported for contract destination (%s), stripping memo", txJob.Transaction.Destination)
+			txJob.Transaction.Memo = ""
 		}
 		params := txnbuild.PaymentToContractParams{
 			NetworkPassphrase: h.engine.SignatureService.NetworkPassphrase(),
