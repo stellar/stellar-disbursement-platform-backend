@@ -172,13 +172,13 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 			wantErrorContains: "invalid asset issuer: FOOBAR",
 		},
 		{
-			name:               "returns an error if memo is present for C destination",
+			name:               "🎉 strips memo and successfully builds SAC transfer for C destination",
 			assetCode:          "USDC",
 			assetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 			destinationAddress: "CAMAMZUOULVWFAB3KRROW5ELPUFHSEKPUALORCFBLFX7XBWWUCUJLR53",
 			memoType:           schema.MemoTypeText,
 			memoValue:          "HelloWorld!",
-			wantErrorContains:  "memo is not supported for contract destination",
+			wantMemo:           nil,
 		},
 		{
 			name:               "🎉 successfully build a payment transaction for G destination",
