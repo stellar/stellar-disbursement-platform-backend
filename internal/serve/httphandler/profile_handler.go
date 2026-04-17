@@ -61,6 +61,7 @@ type PatchOrganizationProfileRequest struct {
 	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
 	MFADisabled                         *bool   `json:"mfa_disabled"`
 	CAPTCHADisabled                     *bool   `json:"captcha_disabled"`
+	ReportingEnabled                    *bool   `json:"reporting_enabled"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
@@ -193,6 +194,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
 		MFADisabled:                          reqBody.MFADisabled,
 		CAPTCHADisabled:                      reqBody.CAPTCHADisabled,
+		ReportingEnabled:                     reqBody.ReportingEnabled,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -378,6 +380,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"message_channel_priority":                 org.MessageChannelPriority,
 		"mfa_disabled":                             org.MFADisabled,
 		"captcha_disabled":                         org.CAPTCHADisabled,
+		"reporting_enabled":                        org.ReportingEnabled,
 	}
 
 	if org.ReceiverRegistrationMessageTemplate != data.DefaultReceiverRegistrationMessageTemplate {
