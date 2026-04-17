@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
@@ -121,8 +122,8 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 	}
 
 	internalNotes := strings.TrimSpace(r.URL.Query().Get("internal_notes"))
-	if len(internalNotes) > internalNotesMaxLength {
-		internalNotes = internalNotes[:internalNotesMaxLength]
+	if utf8.RuneCountInString(internalNotes) > internalNotesMaxLength {
+		internalNotes = string([]rune(internalNotes)[:internalNotesMaxLength])
 	}
 	var internalNotesPtr *string
 	if internalNotes != "" {
