@@ -291,7 +291,6 @@ func Test_StellarPaymentDispatcher_DispatchPayments_precision(t *testing.T) {
 	for _, amount := range precisionAmounts {
 		t.Run("preserves full 7dp precision for "+amount, func(t *testing.T) {
 			defer data.DeleteAllTransactionsFixtures(t, ctx, dbConnectionPool)
-			defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 			payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rw,
