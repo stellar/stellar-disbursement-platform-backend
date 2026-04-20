@@ -94,14 +94,14 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		update := data.ReceiverWalletUpdate{
 			SEP24TransactionID: "test-transaction-id",
 			StellarAddress:     "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
-			StellarMemo:        &[]string{"memo123"}[0],
+			StellarMemo:        &[]string{"12345"}[0],
 			StellarMemoType:    &[]schema.MemoType{schema.MemoTypeID}[0],
 		}
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
 		webAuthClaims := &sepauth.WebAuthClaims{
-			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU:memo123",
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU:12345",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
 			TokenType:    sepauth.WebAuthTokenTypeSEP10,
@@ -124,7 +124,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, false, transaction["refunded"])
 		assert.Equal(t, "completed", transaction["status"])
 		assert.Equal(t, "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU", transaction["to"])
-		assert.Equal(t, "memo123", transaction["deposit_memo"])
+		assert.Equal(t, "12345", transaction["deposit_memo"])
 		assert.Equal(t, "id", transaction["deposit_memo_type"])
 		assert.Equal(t, "", transaction["stellar_transaction_id"])
 		assert.NotEmpty(t, transaction["completed_at"])
@@ -139,14 +139,14 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 
 		update := data.ReceiverWalletUpdate{
 			SEP24TransactionID: "test-transaction-id-owned",
-			StellarAddress:     "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			StellarAddress:     "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		}
 		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
 		require.NoError(t, err)
 
 		// Authenticate as a different account
 		webAuthClaims := &sepauth.WebAuthClaims{
-			Subject:      "GDKIJJKFAOGCBXD7FCMHBFLCIGSMAFQTSXE3LBHFZWOJAF4GVMQMIGAX",
+			Subject:      "GCECPFQBQS2ESW6XSLBMXNXM3A45XIVRPG4IO3CFD5HN6FZM5BMFSW5Y",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
 			TokenType:    sepauth.WebAuthTokenTypeSEP10,
@@ -154,6 +154,42 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=test-transaction-id-owned", nil, webAuthClaims)
+		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var errResp httperror.HTTPError
+		err = json.Unmarshal(rr.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Equal(t, "transaction not found", errResp.Message)
+	})
+
+	t.Run("returns 404 when account matches but memo differs", func(t *testing.T) {
+		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Orbit", "https://orbit.com", "orbit.com", "orbit://")
+		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
+
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		update := data.ReceiverWalletUpdate{
+			SEP24TransactionID: "test-transaction-id-memo-mismatch",
+			StellarAddress:     "GCECPFQBQS2ESW6XSLBMXNXM3A45XIVRPG4IO3CFD5HN6FZM5BMFSW5Y",
+			StellarMemo:        &[]string{"99999"}[0],
+			StellarMemoType:    &[]schema.MemoType{schema.MemoTypeID}[0],
+		}
+		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
+		require.NoError(t, err)
+
+		// Same account but different memo
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GCECPFQBQS2ESW6XSLBMXNXM3A45XIVRPG4IO3CFD5HN6FZM5BMFSW5Y:11111",
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=test-transaction-id-memo-mismatch", nil, webAuthClaims)
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
