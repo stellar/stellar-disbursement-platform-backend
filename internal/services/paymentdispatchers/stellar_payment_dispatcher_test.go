@@ -78,7 +78,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_failure(t *testing.T) {
 			paymentsToDispatch: []*data.Payment{
 				{ID: "123", Amount: "invalid-amount"},
 			},
-			wantErr: fmt.Errorf("parsing payment amount invalid-amount for payment ID 123: strconv.ParseFloat: parsing \"invalid-amount\": invalid syntax"),
+			wantErr: fmt.Errorf("parsing payment amount invalid-amount for payment ID 123: can't convert invalid-amount to decimal"),
 			fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
 				mDistAccountResolver.On("DistributionAccountFromContext", ctx).
 					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
@@ -239,6 +239,73 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 
 			// Assert the memo is correct according with the ReceiverWallet and Organization settings
 			tc.fnAssertMemo(t, p, tx)
+		})
+	}
+}
+
+func Test_StellarPaymentDispatcher_DispatchPayments_precision(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	tenantID := "tenant-id"
+	tnt := schema.Tenant{
+		ID:      tenantID,
+		BaseURL: utils.Ptr("https://example.com"),
+	}
+
+	ctx := context.Background()
+	ctx = sdpcontext.SetTenantInContext(ctx, &tnt)
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "precisionWallet", "https://www.precision.com", "www.precision.com", "precision://")
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{Wallet: wallet})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	// Amounts that would lose precision through float64 round-trip
+	precisionAmounts := []string{
+		"1.1234567",
+		"0.0000001",
+		"999999.9999999",
+		"123456.7890123",
+	}
+
+	for _, amount := range precisionAmounts {
+		t.Run("preserves full 7dp precision for "+amount, func(t *testing.T) {
+			defer data.DeleteAllTransactionsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+			payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+				ReceiverWallet: rw,
+				Disbursement:   disbursement,
+				Asset:          *disbursement.Asset,
+				Amount:         amount,
+				Status:         data.ReadyPaymentStatus,
+			})
+
+			outerErr = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsMemoTracingEnabled: utils.Ptr(false)})
+			require.NoError(t, outerErr)
+
+			mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
+			mDistAccountResolver.On("DistributionAccountFromContext", ctx).
+				Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+				Once()
+
+			tssTx := testutils.BeginTxWithRollback(t, ctx, tssModel.DBConnectionPool)
+			dispatcher := NewStellarPaymentDispatcher(models, tssModel, mDistAccountResolver)
+			err := dispatcher.DispatchPayments(ctx, tssTx, tenantID, []*data.Payment{payment})
+			require.NoError(t, err)
+
+			transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
+			require.NoError(t, err)
+			require.Len(t, transactions, 1)
+			assert.Equal(t, amount, transactions[0].Amount.StringFixed(7), "amount precision must be preserved through dispatch")
 		})
 	}
 }

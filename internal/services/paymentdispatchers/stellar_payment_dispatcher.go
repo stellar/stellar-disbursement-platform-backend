@@ -3,7 +3,6 @@ package paymentdispatchers
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -59,8 +58,7 @@ var _ PaymentDispatcherInterface = (*StellarPaymentDispatcher)(nil)
 func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
 	var transactions []txSubStore.Transaction
 	for _, payment := range pendingPayments {
-		// TODO: change TSS to use string amount [SDP-483]
-		amount, err := strconv.ParseFloat(payment.Amount, 64)
+		amount, err := decimal.NewFromString(payment.Amount)
 		if err != nil {
 			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
 		}
@@ -76,7 +74,7 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			Payment: txSubStore.Payment{
 				AssetCode:   payment.Asset.Code,
 				AssetIssuer: payment.Asset.Issuer,
-				Amount:      decimal.NewFromFloat(amount),
+				Amount:      amount,
 				Destination: payment.ReceiverWallet.StellarAddress,
 				Memo:        memo.Value,
 				MemoType:    memo.Type,
