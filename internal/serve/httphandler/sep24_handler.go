@@ -153,6 +153,15 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
+		// Ownership check: verify the authenticated account matches the receiver wallet
+		if receiverWallet.StellarAddress != "" {
+			account, memo := sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
+			if receiverWallet.StellarAddress != account || receiverWallet.StellarMemo != memo {
+				httperror.NotFound("transaction not found", nil, nil).Render(w)
+				return
+			}
+		}
+
 		switch receiverWallet.Status {
 		case data.RegisteredReceiversWalletStatus:
 			transaction["status"] = SEP24StatusCompleted

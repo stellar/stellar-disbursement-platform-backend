@@ -101,7 +101,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		require.NoError(t, err)
 
 		webAuthClaims := &sepauth.WebAuthClaims{
-			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			Subject:      "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU:memo123",
 			ClientDomain: "example.com",
 			HomeDomain:   "example.com",
 			TokenType:    sepauth.WebAuthTokenTypeSEP10,
@@ -129,6 +129,40 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.Equal(t, "", transaction["stellar_transaction_id"])
 		assert.NotEmpty(t, transaction["completed_at"])
 		assert.NotEmpty(t, transaction["started_at"])
+	})
+
+	t.Run("returns 404 when authenticated account does not own the transaction", func(t *testing.T) {
+		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Aurora", "https://aurora.com", "aurora.com", "aurora://")
+		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
+
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, models.DBConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		update := data.ReceiverWalletUpdate{
+			SEP24TransactionID: "test-transaction-id-owned",
+			StellarAddress:     "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+		}
+		err := models.ReceiverWallet.Update(ctx, receiverWallet.ID, update, models.DBConnectionPool)
+		require.NoError(t, err)
+
+		// Authenticate as a different account
+		webAuthClaims := &sepauth.WebAuthClaims{
+			Subject:      "GDKIJJKFAOGCBXD7FCMHBFLCIGSMAFQTSXE3LBHFZWOJAF4GVMQMIGAX",
+			ClientDomain: "example.com",
+			HomeDomain:   "example.com",
+			TokenType:    sepauth.WebAuthTokenTypeSEP10,
+		}
+
+		rr := httptest.NewRecorder()
+		req := setupRequestWithWebAuthClaims("GET", "/transaction?id=test-transaction-id-owned", nil, webAuthClaims)
+		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		var errResp httperror.HTTPError
+		err = json.Unmarshal(rr.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Equal(t, "transaction not found", errResp.Message)
 	})
 
 	t.Run("ready receiver wallet returns pending status", func(t *testing.T) {
