@@ -85,6 +85,18 @@ func Test_StellarPaymentDispatcher_DispatchPayments_failure(t *testing.T) {
 					Once()
 			},
 		},
+		{
+			name: "payment amount exceeds 7 decimal places",
+			paymentsToDispatch: []*data.Payment{
+				{ID: "456", Amount: "1.12345678"},
+			},
+			wantErr: fmt.Errorf("payment amount 1.12345678 for payment ID 456 exceeds Stellar's 7 decimal place precision"),
+			fnSetup: func(t *testing.T, mDistAccountResolver *mocks.MockDistributionAccountResolver) {
+				mDistAccountResolver.On("DistributionAccountFromContext", ctx).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+					Once()
+			},
+		},
 	}
 
 	for _, tc := range testCases {
