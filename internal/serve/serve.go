@@ -462,6 +462,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					o.DistributionAccountService,
 					o.SubmitterEngine,
 				),
+				HorizonClient: o.SubmitterEngine.HorizonClient,
 			}
 
 			// Read operations
@@ -669,6 +670,28 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			CircleService:               o.CircleService,
 			NetworkType:                 o.NetworkType,
 		}.Get)
+
+		reportsService := services.NewReportsService(
+			o.SubmitterEngine.HorizonClient,
+			o.DistributionAccountService,
+			o.Models,
+		)
+		reportsHandler := httphandler.ReportsHandler{
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			ReportsService:              reportsService,
+			Models:                      o.Models,
+			DBConnectionPool:            o.MtnDBConnectionPool,
+			HorizonClient:               o.SubmitterEngine.HorizonClient,
+			AuthManager:                 authManager,
+		}
+		r.With(middleware.RequirePermission(
+			data.ReadAll,
+			middleware.AnyRoleMiddleware(authManager),
+		)).Get("/reports/statement", reportsHandler.GetStatementExport)
+		r.With(middleware.RequirePermission(
+			data.ReadPayments,
+			middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...),
+		)).Get("/reports/payment/{id}", reportsHandler.GetPaymentExport)
 
 		exportHandler := httphandler.ExportHandler{
 			Models: o.Models,

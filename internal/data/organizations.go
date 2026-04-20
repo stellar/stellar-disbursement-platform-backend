@@ -54,6 +54,7 @@ type Organization struct {
 	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
 	MFADisabled            *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
 	CAPTCHADisabled        *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
+	ReportingEnabled       *bool                  `json:"reporting_enabled" db:"reporting_enabled"`
 	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
 }
@@ -76,6 +77,9 @@ type OrganizationUpdate struct {
 	// MFA and CAPTCHA settings
 	MFADisabled     *bool `json:",omitempty"`
 	CAPTCHADisabled *bool `json:",omitempty"`
+
+	// Reporting
+	ReportingEnabled *bool `json:",omitempty"`
 }
 
 type LogoType string
@@ -270,6 +274,11 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.CAPTCHADisabled != nil {
 		fields = append(fields, "captcha_disabled = ?")
 		args = append(args, *ou.CAPTCHADisabled)
+	}
+
+	if ou.ReportingEnabled != nil {
+		fields = append(fields, "reporting_enabled = ?")
+		args = append(args, *ou.ReportingEnabled)
 	}
 
 	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))

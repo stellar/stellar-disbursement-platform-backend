@@ -46,7 +46,8 @@ func Test_AppConfigHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, `{
 			"captcha_type": "GOOGLE_RECAPTCHA_V2",
 			"captcha_site_key": "test-site-key",
-			"captcha_disabled": false
+			"captcha_disabled": false,
+			"reporting_enabled": false
 		}`, rr.Body.String())
 	})
 
@@ -66,7 +67,8 @@ func Test_AppConfigHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, `{
 			"captcha_type": "GOOGLE_RECAPTCHA_V3",
 			"captcha_site_key": "test-site-key",
-			"captcha_disabled": true
+			"captcha_disabled": true,
+			"reporting_enabled": false
 		}`, rr.Body.String())
 	})
 
@@ -93,7 +95,35 @@ func Test_AppConfigHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, `{
 			"captcha_type": "GOOGLE_RECAPTCHA_V2",
 			"captcha_site_key": "test-site-key",
-			"captcha_disabled": false
+			"captcha_disabled": false,
+			"reporting_enabled": false
+		}`, rr.Body.String())
+	})
+
+	t.Run("returns reporting_enabled=true when org has it enabled", func(t *testing.T) {
+		reportingEnabled := true
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReportingEnabled: &reportingEnabled,
+		})
+		require.NoError(t, err)
+
+		handler := AppConfigHandler{
+			Models:            models,
+			CAPTCHAType:       validators.GoogleReCAPTCHAV2,
+			ReCAPTCHASiteKey:  "test-site-key",
+			ReCAPTCHADisabled: false,
+		}
+
+		r := chi.NewRouter()
+		r.Get("/app-config", handler.ServeHTTP)
+
+		rr := testutils.Request(t, ctx, r, "/app-config", http.MethodGet, nil)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.JSONEq(t, `{
+			"captcha_type": "GOOGLE_RECAPTCHA_V2",
+			"captcha_site_key": "test-site-key",
+			"captcha_disabled": false,
+			"reporting_enabled": true
 		}`, rr.Body.String())
 	})
 }
