@@ -261,7 +261,7 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 				}
 
 				var operation txnbuild.Operation
-				amount := txJob.Transaction.Amount.StringFixed(6)
+				amount := txJob.Transaction.Amount.StringFixed(7)
 				if strkey.IsValidEd25519PublicKey(tc.destinationAddress) {
 					operation = &txnbuild.Payment{
 						SourceAccount: distributionKP.Address(),
