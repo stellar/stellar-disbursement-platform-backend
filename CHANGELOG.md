@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 
 - Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)
+- Add ownership check to SEP-24 GET /transaction endpoint. [#1115](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1115)
+- Fix payment amount precision loss in dispatch and transaction builder. [#1114](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1114)
 
 ## [6.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.3.0...6.4.0))
 
