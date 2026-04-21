@@ -280,23 +280,28 @@ func Test_StellarPaymentDispatcher_DispatchPayments_precision(t *testing.T) {
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
 
-	// Amounts that would lose precision through float64 round-trip
-	precisionAmounts := []string{
-		"1.1234567",
-		"0.0000001",
-		"999999.9999999",
-		"123456.7890123",
+	// Amounts that would lose precision through float64 round-trip,
+	// plus a padded amount to verify value-based truncation check accepts it.
+	precisionAmounts := []struct {
+		input    string
+		expected string
+	}{
+		{"1.1234567", "1.1234567"},
+		{"0.0000001", "0.0000001"},
+		{"999999.9999999", "999999.9999999"},
+		{"123456.7890123", "123456.7890123"},
+		{"1.00000000", "1.0000000"},
 	}
 
-	for _, amount := range precisionAmounts {
-		t.Run("preserves full 7dp precision for "+amount, func(t *testing.T) {
+	for _, tc := range precisionAmounts {
+		t.Run("preserves full 7dp precision for "+tc.input, func(t *testing.T) {
 			defer data.DeleteAllTransactionsFixtures(t, ctx, dbConnectionPool)
 
 			payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 				ReceiverWallet: rw,
 				Disbursement:   disbursement,
 				Asset:          *disbursement.Asset,
-				Amount:         amount,
+				Amount:         tc.input,
 				Status:         data.ReadyPaymentStatus,
 			})
 
@@ -316,7 +321,7 @@ func Test_StellarPaymentDispatcher_DispatchPayments_precision(t *testing.T) {
 			transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 			require.NoError(t, err)
 			require.Len(t, transactions, 1)
-			assert.Equal(t, amount, transactions[0].Amount.StringFixed(7), "amount precision must be preserved through dispatch")
+			assert.Equal(t, tc.expected, transactions[0].Amount.StringFixed(7), "amount precision must be preserved through dispatch")
 		})
 	}
 }

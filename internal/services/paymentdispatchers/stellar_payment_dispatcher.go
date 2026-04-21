@@ -63,8 +63,9 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
 		}
 
-		if amount.Exponent() < -7 {
-			return fmt.Errorf("payment amount %s for payment ID %s exceeds Stellar's 7 decimal place precision", payment.Amount, payment.ID)
+		const stellarMaxDecimalPlaces = 7
+		if !amount.Equal(amount.Truncate(stellarMaxDecimalPlaces)) {
+			return fmt.Errorf("payment amount %s for payment ID %s exceeds Stellar's %d decimal place precision", payment.Amount, payment.ID, stellarMaxDecimalPlaces)
 		}
 
 		memo, err := s.memoResolver.GetMemo(ctx, *payment.ReceiverWallet)
