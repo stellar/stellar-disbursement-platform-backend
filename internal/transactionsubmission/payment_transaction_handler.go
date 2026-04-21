@@ -57,7 +57,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
-	amount := txJob.Transaction.Amount.StringFixed(6)
+	amount := txJob.Transaction.Amount.StringFixed(7)
 
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()
