@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)
+
 ## [6.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.3.0...6.4.0))
 
 ### Added

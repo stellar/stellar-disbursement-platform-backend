@@ -6,13 +6,13 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
+	"github.com/stellar/go-stellar-sdk/amount"
 	"golang.org/x/net/html"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -58,17 +58,25 @@ func ValidatePhoneNumber(phoneNumberStr string) error {
 	return nil
 }
 
-func ValidateAmount(amount string) error {
-	if amount == "" {
+// ValidateAmount checks that s is a positive Stellar classic-asset amount.
+func ValidateAmount(s string) error {
+	if s == "" {
 		return fmt.Errorf("amount cannot be empty")
 	}
 
-	value, err := strconv.ParseFloat(amount, 64)
+	parsed, err := amount.ParseInt64(s)
 	if err != nil {
-		return fmt.Errorf("the provided amount is not a valid number")
+		switch {
+		case strings.Contains(err.Error(), "more than 7 significant digits"):
+			return fmt.Errorf("the provided amount exceeds the maximum supported precision of 7 decimal places")
+		case strings.Contains(err.Error(), "outside bounds of int64"):
+			return fmt.Errorf("the provided amount exceeds the maximum supported value")
+		default:
+			return fmt.Errorf("the provided amount is not a valid number")
+		}
 	}
 
-	if value <= 0 {
+	if parsed <= 0 {
 		return fmt.Errorf("the provided amount must be greater than zero")
 	}
 
