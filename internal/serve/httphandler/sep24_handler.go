@@ -136,7 +136,8 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 		"refunded": false, // Always false for registration
 	}
 
-	receiverWallet, err := h.Models.ReceiverWallet.GetBySEP24TransactionID(ctx, transactionID)
+	account, memo := sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
+	receiverWallet, err := h.Models.ReceiverWallet.GetBySEP24TransactionIDAndAccount(ctx, transactionID, account, memo)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			transaction["status"] = SEP24StatusIncomplete
@@ -153,15 +154,6 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Ownership check: verify the authenticated account matches the receiver wallet
-		if receiverWallet.StellarAddress != "" {
-			account, memo := sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
-			if receiverWallet.StellarAddress != account || receiverWallet.StellarMemo != memo {
-				httperror.NotFound("transaction not found", nil, nil).Render(w)
-				return
-			}
-		}
-
 		switch receiverWallet.Status {
 		case data.RegisteredReceiversWalletStatus:
 			transaction["status"] = SEP24StatusCompleted

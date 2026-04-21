@@ -131,7 +131,7 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		assert.NotEmpty(t, transaction["started_at"])
 	})
 
-	t.Run("returns 404 when authenticated account does not own the transaction", func(t *testing.T) {
+	t.Run("non-owner gets incomplete status instead of transaction details", func(t *testing.T) {
 		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Aurora", "https://aurora.com", "aurora.com", "aurora://")
 		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
 
@@ -157,15 +157,19 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var errResp httperror.HTTPError
-		err = json.Unmarshal(rr.Body.Bytes(), &errResp)
+		var response map[string]any
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
 		require.NoError(t, err)
-		assert.Equal(t, "transaction not found", errResp.Message)
+
+		transaction := response["transaction"].(map[string]any)
+		assert.Equal(t, "incomplete", transaction["status"])
+		assert.Nil(t, transaction["to"], "should not leak victim's stellar address")
+		assert.Nil(t, transaction["deposit_memo"], "should not leak victim's memo")
 	})
 
-	t.Run("returns 404 when account matches but memo differs", func(t *testing.T) {
+	t.Run("matching account but different memo gets incomplete status", func(t *testing.T) {
 		wallet := data.CreateWalletFixture(t, ctx, models.DBConnectionPool, "Orbit", "https://orbit.com", "orbit.com", "orbit://")
 		receiver := data.CreateReceiverFixture(t, ctx, models.DBConnectionPool, &data.Receiver{})
 
@@ -193,12 +197,16 @@ func Test_SEP24Handler_GetTransaction(t *testing.T) {
 		http.HandlerFunc(handler.GetTransaction).ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var errResp httperror.HTTPError
-		err = json.Unmarshal(rr.Body.Bytes(), &errResp)
+		var response map[string]any
+		err = json.Unmarshal(rr.Body.Bytes(), &response)
 		require.NoError(t, err)
-		assert.Equal(t, "transaction not found", errResp.Message)
+
+		transaction := response["transaction"].(map[string]any)
+		assert.Equal(t, "incomplete", transaction["status"])
+		assert.Nil(t, transaction["to"], "should not leak victim's stellar address")
+		assert.Nil(t, transaction["deposit_memo"], "should not leak victim's memo")
 	})
 
 	t.Run("ready receiver wallet returns pending status", func(t *testing.T) {
