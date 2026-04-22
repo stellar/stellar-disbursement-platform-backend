@@ -312,7 +312,7 @@ func (rw *ReceiverWalletModel) GetBySEP24TransactionIDAndAccount(ctx context.Con
 			receiver_wallets rw
 		WHERE
 			rw.sep24_transaction_id = $1
-			AND (rw.stellar_address = '' OR (rw.stellar_address = $2 AND rw.stellar_memo = $3))
+			AND (COALESCE(rw.stellar_address, '') = '' OR (rw.stellar_address = $2 AND COALESCE(rw.stellar_memo, '') = $3))
 		LIMIT 1
 	`
 
