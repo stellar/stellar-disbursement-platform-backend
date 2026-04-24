@@ -529,6 +529,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"payment_cancellation_period_days": 2,
 					"receiver_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 					"receiver_invitation_resend_interval_days": 2,
+					"receiver_invitations_disabled": true,
 					"timezone_utc_offset": "-03:00",
 					"is_memo_tracing_enabled": false,
 					"is_link_shortener_enabled": true,
@@ -544,12 +545,13 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"PaymentCancellationPeriodDays":        int64(2),
 				"ReceiverRegistrationMessageTemplate":  "My custom receiver wallet registration invite. MyOrg 👋",
 				"ReceiverInvitationResendIntervalDays": int64(2),
+				"ReceiverInvitationsDisabled":          true,
 				"TimezoneUTCOffset":                    "-03:00",
 				"IsMemoTracingEnabled":                 false,
 				"IsLinkShortenerEnabled":               true,
 				"PrivacyPolicyLink":                    "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverInvitationsDisabled='true', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -1304,7 +1306,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
-				"captcha_disabled": null
+				"captcha_disabled": null,
+				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1346,7 +1349,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
-				"captcha_disabled": null
+				"captcha_disabled": null,
+				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1387,7 +1391,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
-				"captcha_disabled": null
+				"captcha_disabled": null,
+				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1430,7 +1435,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
-				"captcha_disabled": null
+				"captcha_disabled": null,
+				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1473,7 +1479,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": null,
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
-				"captcha_disabled": null
+				"captcha_disabled": null,
+				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
@@ -1516,7 +1523,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"privacy_policy_link": "https://example.com/privacy-policy",
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
-				"captcha_disabled": null
+				"captcha_disabled": null,
+				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
 
