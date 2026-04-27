@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Add `receiver_invitations_disabled` organization setting that skips the scheduled receiver wallet invitation job when enabled. [#1119](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1119)
+
 ### Fixed
 
 - Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)

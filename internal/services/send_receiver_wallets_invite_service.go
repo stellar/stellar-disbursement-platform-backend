@@ -69,6 +69,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		return fmt.Errorf("getting organization: %w", err)
 	}
 
+	if organization.ReceiverInvitationsDisabled != nil && *organization.ReceiverInvitationsDisabled {
+		log.Ctx(ctx).Debugf(
+			"receiver wallet invitations are disabled for tenant %s; skipping scheduled run",
+			currentTenant.ID,
+		)
+		return nil
+	}
+
 	// Debug purposes
 	if organization.ReceiverInvitationResendIntervalDays == nil {
 		log.Ctx(ctx).Debug("automatic resend invitation is deactivated. Set a valid value to the organization's receiver_invitation_resend_interval_days to activate it.")
