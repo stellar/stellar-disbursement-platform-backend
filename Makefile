@@ -59,7 +59,7 @@ go-lint:
 go-shadow:
 	@echo ""
 	@echo "🌑 Running shadow variable detection..."
-	@output=$$(shadow ./... 2>&1 | grep -v "generated.go" || true); \
+	@output=$$(shadow ./... 2>&1 | grep -v "generated.go" | grep -v "node_modules" || true); \
 	if [ -n "$$output" ]; then \
 		echo "$$output"; \
 		exit 1; \
@@ -75,7 +75,7 @@ go-mod:
 go-deadcode:
 	@echo ""
 	@echo "💀 Running dead code detection..."
-	@output=$$(deadcode -test ./... 2>&1 | grep -v "UnmarshalUInt32" || true); \
+	@output=$$(deadcode -test ./... 2>&1 | grep -v "UnmarshalUInt32" | grep -v "node_modules" || true); \
 	if [ -n "$$output" ]; then \
 		echo "$$output"; \
 		exit 1; \
@@ -85,7 +85,7 @@ go-deadcode:
 go-goimports:
 	@echo ""
 	@echo "📐 Checking goimports compliance..."
-	@non_compliant=$$(find . -type f -name "*.go" ! -path "*mock*" | xargs goimports -local "$(LOCAL_MODULE)" -l) && \
+	@non_compliant=$$(find . -type f -name "*.go" ! -path "*mock*" ! -path "*/node_modules/*" | xargs goimports -local "$(LOCAL_MODULE)" -l) && \
 	if [ -n "$$non_compliant" ]; then \
 		echo "🚨 The following files are not compliant with goimports:"; \
 		echo "$$non_compliant"; \
