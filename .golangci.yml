@@ -45,6 +45,8 @@ linters:
     paths:
       # mocks are ignored
       - ".*.mock.*\\.go$"
+      # third-party Go files vendored inside frontend node_modules
+      - ".*/node_modules/.*"
 
     rules:
       - path: _test\.go
