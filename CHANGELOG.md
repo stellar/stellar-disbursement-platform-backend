@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add ownership check to SEP-24 GET /transaction endpoint. [#1115](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1115)
 - Fix payment amount precision loss in dispatch and transaction builder. [#1114](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1114)
 
+### Security and Dependencies
+
+- Upgrade Go to 1.25.0, bump `gotestsum` to v1.13.0, bump the Go module minor-and-patch group across 1 directory with 14 updates. [#1101](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1101)
+
 ## [6.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.3.0...6.4.0))
 
 ### Added
