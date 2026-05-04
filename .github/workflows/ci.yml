@@ -37,11 +37,6 @@ jobs:
           go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@v0.31.0
           shadow ./... | { grep -v "generated.go" || true; }
 
-      - name: Run `exhaustive@v0.12.0`
-        run: |
-          go install github.com/nishanths/exhaustive/cmd/exhaustive@v0.12.0
-          exhaustive -default-signifies-exhaustive ./...
-
       - name: Run `deadcode@v0.31.0`
         run: |
           go install golang.org/x/tools/cmd/deadcode@v0.31.0

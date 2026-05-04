@@ -14,7 +14,7 @@ export PATH := $(GOPATH_BIN):$(PATH)
 
 # Always run these targets (they don't create files named after the target)
 .PHONY: docker-build docker-push go-install setup go-install-tools \
-	go-test go-lint go-shadow go-mod go-deadcode go-exhaustive go-goimports go-build go-check ci
+	go-test go-lint go-shadow go-mod go-deadcode go-goimports go-build go-check ci
 
 docker-build:
 	$(SUDO) docker build -f Dockerfile.development --pull --label org.opencontainers.image.created="$(BUILD_DATE)" -t $(TAG) --build-arg GIT_COMMIT=$(LABEL) .
@@ -33,7 +33,6 @@ go-install-tools:
 	@echo "🔧 Installing CI tools..."
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.2
 	go install golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow@v0.31.0
-	go install github.com/nishanths/exhaustive/cmd/exhaustive@v0.12.0
 	go install golang.org/x/tools/cmd/deadcode@v0.31.0
 	go install golang.org/x/tools/cmd/goimports@v0.31.0
 	go install gotest.tools/gotestsum@v1.11.0
@@ -83,12 +82,6 @@ go-deadcode:
 	fi
 	@echo "✅ Dead code check completed successfully"
 
-go-exhaustive:
-	@echo ""
-	@echo "🔄 Running exhaustive enum checking..."
-	exhaustive -default-signifies-exhaustive ./...
-	@echo "✅ Exhaustive check completed successfully"
-
 go-goimports:
 	@echo ""
 	@echo "📐 Checking goimports compliance..."
@@ -101,7 +94,7 @@ go-goimports:
 	fi
 	@echo "✅ All files are compliant with goimports"
 
-go-check: go-mod go-lint go-shadow go-exhaustive go-deadcode go-goimports
+go-check: go-mod go-lint go-shadow go-deadcode go-goimports
 	@echo ""
 	@echo "🎉🎉🎉 All Go checks completed successfully! 🎉🎉🎉"
 

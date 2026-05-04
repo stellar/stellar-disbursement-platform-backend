@@ -10,6 +10,7 @@ linters:
     - errcheck
     - errname
     - errorlint
+    - exhaustive
     - govet
     - nilerr
     - nilnesserr
@@ -29,6 +30,10 @@ linters:
     errcheck:
       # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
       check-blank: true
+
+    exhaustive:
+      # Treat a `default` clause as covering all unlisted cases
+      default-signifies-exhaustive: true
 
     wrapcheck:
       extra-ignore-sigs:
