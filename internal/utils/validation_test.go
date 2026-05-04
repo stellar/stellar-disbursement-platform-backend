@@ -74,23 +74,70 @@ func Test_ValidatePathIsNotTraversal(t *testing.T) {
 }
 
 func Test_ValidateAmount(t *testing.T) {
+	const (
+		emptyMsg       = "amount cannot be empty"
+		notPositiveMsg = "the provided amount must be greater than zero"
+		invalidMsg     = "the provided amount is not a valid number"
+		tooPreciseMsg  = "the provided amount exceeds the maximum supported precision of 7 decimal places"
+		tooLargeMsg    = "the provided amount exceeds the maximum supported value"
+	)
+
 	testCases := []struct {
-		amount  string
-		wantErr error
+		name       string
+		amount     string
+		wantErrMsg string // empty means no error expected
 	}{
-		{"", fmt.Errorf("amount cannot be empty")},
-		{"notvalidamount", fmt.Errorf("the provided amount is not a valid number")},
-		{"0", fmt.Errorf("the provided amount must be greater than zero")},
-		{"0.00", fmt.Errorf("the provided amount must be greater than zero")},
-		{"1", nil},
-		{"1.00", nil},
-		{"1.01", nil},
+		// empty / unparseable
+		{name: "empty", amount: "", wantErrMsg: emptyMsg},
+		{name: "whitespace", amount: "   ", wantErrMsg: invalidMsg},
+		{name: "non-numeric", amount: "notvalidamount", wantErrMsg: invalidMsg},
+		{name: "trailing garbage", amount: "1.23abc", wantErrMsg: invalidMsg},
+		{name: "hex", amount: "0xFF", wantErrMsg: invalidMsg},
+		{name: "plus sign prefix", amount: "+1.0", wantErrMsg: invalidMsg},
+		{name: "comma decimal separator", amount: "1,23", wantErrMsg: invalidMsg},
+		{name: "multiple dots", amount: "1.2.3", wantErrMsg: invalidMsg},
+		{name: "scientific notation", amount: "1e-7", wantErrMsg: invalidMsg},
+		{name: "over 20 chars", amount: "0.12345678901234567890", wantErrMsg: invalidMsg},
+
+		// non-positive
+		{name: "zero int", amount: "0", wantErrMsg: notPositiveMsg},
+		{name: "zero decimal", amount: "0.00", wantErrMsg: notPositiveMsg},
+		{name: "zero padded to 7dp", amount: "0.0000000", wantErrMsg: notPositiveMsg},
+		{name: "negative int", amount: "-1", wantErrMsg: notPositiveMsg},
+		{name: "negative fractional", amount: "-0.5", wantErrMsg: notPositiveMsg},
+
+		// valid amounts at various precisions
+		{name: "integer", amount: "1"},
+		{name: "2dp", amount: "1.00"},
+		{name: "2dp non-zero", amount: "1.01"},
+		{name: "7dp max precision", amount: "1.1234567"},
+		{name: "smallest unit", amount: "0.0000001"},
+		{name: "large value at 7dp", amount: "999999.9999999"},
+		{name: "7dp with trailing zeros", amount: "1.1000000"},
+		{name: "leading zero integer part", amount: "0.5"},
+		{name: "max int64 amount", amount: "922337203685.4775807"},
+
+		// exceeding 7 decimal places — SDP-2072 silent-rounding scenarios
+		{name: "8dp non-zero last digit", amount: "1.12345678", wantErrMsg: tooPreciseMsg},
+		{name: "8dp padded zero but numerically valid", amount: "1.00000000"},
+		{name: "8dp trailing zero but numerically 7dp", amount: "1.12345670"},
+		{name: "sub-unit rounded up", amount: "0.00000009", wantErrMsg: tooPreciseMsg},
+		{name: "sub-unit rounded to zero", amount: "0.00000001", wantErrMsg: tooPreciseMsg},
+		{name: "9dp", amount: "1.123456789", wantErrMsg: tooPreciseMsg},
+
+		// beyond int64 range — caught by SDK bounds check
+		{name: "overflow just above int64 max", amount: "922337203685.4775808", wantErrMsg: tooLargeMsg},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.amount, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			gotError := ValidateAmount(tc.amount)
-			assert.Equalf(t, tc.wantErr, gotError, "ValidateAmount(%q) should be %v, but got %v", tc.amount, tc.wantErr, gotError)
+			if tc.wantErrMsg == "" {
+				assert.NoErrorf(t, gotError, "ValidateAmount(%q) should be nil, but got %v", tc.amount, gotError)
+				return
+			}
+			require.Errorf(t, gotError, "ValidateAmount(%q) should error, but got nil", tc.amount)
+			assert.Equalf(t, tc.wantErrMsg, gotError.Error(), "ValidateAmount(%q) error mismatch", tc.amount)
 		})
 	}
 }

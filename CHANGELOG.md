@@ -8,7 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Add `receiver_invitations_disabled` organization setting that skips the scheduled receiver wallet invitation job when enabled. [#1119](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1119)
+
+### Fixed
+
+- Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)
+- Add ownership check to SEP-24 GET /transaction endpoint. [#1115](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1115)
+- Fix payment amount precision loss in dispatch and transaction builder. [#1114](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1114)
+
+## [6.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.3.0...6.4.0))
+
+### Added
+
 - Auto-restore archived Soroban ledger entries in TSS when contract payments fail with `entry_archived`, instead of marking them as terminal errors. [#1099](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1099)
+
+### Changed
+
+- Update automated release to use Claude Code. [#1098](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1098)
+
+### Fixed
+
+- Fix `make setup` default tenant login failing due to reCAPTCHA being enabled by passing the `--disable-recaptcha` flag during tenant provisioning. [#1103](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1103)
+- Change SEP-10 `CreateChallenge` validation errors to return 400 instead of 500. Change SEP-24 `/info` to return 400 instead of 500 when tenant context is missing. [#1104](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1104)
+
+### Security and Dependencies
+
+- Bump docker/login-action from 4.0.0 to 4.1.0 in the all-actions group. [#1100](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1100)
 
 ## [6.3.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.3.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.2.0...6.3.0))
 

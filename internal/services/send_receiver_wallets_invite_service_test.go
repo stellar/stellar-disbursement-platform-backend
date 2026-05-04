@@ -1312,6 +1312,125 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 	messageDispatcherMock.AssertExpectations(t)
 }
 
+func Test_SendReceiverWalletInviteService_SendInvite_DisabledForOrg(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	tenantBaseURL := "http://localhost:8000"
+	tenantUIBaseURL := "http://localhost:3000"
+	tenantInfo := &schema.Tenant{
+		ID:           uuid.NewString(),
+		Name:         "TestTenant",
+		BaseURL:      &tenantBaseURL,
+		SDPUIBaseURL: &tenantUIBaseURL,
+	}
+	ctx := sdpcontext.SetTenantInContext(context.Background(), tenantInfo)
+
+	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet1.com", "wallet1://sdp")
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "FOO1", "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Wallet: wallet,
+		Status: data.ReadyDisbursementStatus,
+		Asset:  asset,
+	})
+
+	setupReadyReceiverWallet := func(t *testing.T) *data.ReceiverWallet {
+		t.Helper()
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw,
+			Amount:         "1",
+		})
+		return rw
+	}
+
+	t.Run("skips scheduled run when receiver_invitations_disabled is true", func(t *testing.T) {
+		var err error
+		rw := setupReadyReceiverWallet(t)
+
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverInvitationsDisabled: utils.Ptr(true),
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			resetErr := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+				ReceiverInvitationsDisabled: utils.Ptr(false),
+			})
+			require.NoError(t, resetErr)
+		})
+
+		// No `.On(...)` registered — mockery with `t` fails the test if SendMessage is called.
+		messageDispatcherMock := message.NewMockMessageDispatcher(t)
+		embeddedWalletServiceMock := mocks.NewMockEmbeddedWalletService(t)
+		mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, wallet.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rw.ID, receivers[0].ID)
+		assert.Nil(t, receivers[0].InvitationSentAt)
+
+		var messageCount int
+		err = dbConnectionPool.GetContext(ctx, &messageCount,
+			`SELECT COUNT(*) FROM messages WHERE receiver_wallet_id = $1`, rw.ID)
+		require.NoError(t, err)
+		assert.Zero(t, messageCount)
+	})
+
+	t.Run("sends invites normally when receiver_invitations_disabled is false", func(t *testing.T) {
+		var err error
+		rw := setupReadyReceiverWallet(t)
+
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			ReceiverInvitationsDisabled: utils.Ptr(false),
+		})
+		require.NoError(t, err)
+
+		messageDispatcherMock := message.NewMockMessageDispatcher(t)
+		messageDispatcherMock.
+			On("SendMessage", mock.Anything, mock.AnythingOfType("message.Message"), mock.Anything).
+			Return(message.MessengerTypeTwilioSMS, nil).
+			Once()
+
+		embeddedWalletServiceMock := mocks.NewMockEmbeddedWalletService(t)
+		mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, embeddedWalletServiceMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, wallet.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rw.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+	})
+}
+
 func Test_SendReceiverWalletInviteService_shouldSendInvitation(t *testing.T) {
 	var maxInvitationResendAttempts int64 = 3
 	s := SendReceiverWalletInviteService{maxInvitationResendAttempts: maxInvitationResendAttempts}

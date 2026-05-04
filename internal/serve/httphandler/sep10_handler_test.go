@@ -99,7 +99,28 @@ func Test_SEP10Handler_GetChallenge(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "invalid memo")
 	})
 
-	t.Run("❌service error", func(t *testing.T) {
+	t.Run("❌service validation error returns bad request", func(t *testing.T) {
+		mockService := services.NewMockSEP10Service(t)
+		handler := SEP10Handler{SEP10Service: mockService}
+
+		mockService.On("CreateChallenge", mock.Anything, services.ChallengeRequest{
+			Account:      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+			ClientDomain: "",
+		}).Return(nil, services.ChallengeValidationError("client_domain is required"))
+
+		r := chi.NewRouter()
+		r.Get("/sep10/auth", handler.GetChallenge)
+
+		req := httptest.NewRequest(http.MethodGet, "/sep10/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", nil)
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "client_domain is required")
+	})
+
+	t.Run("❌service internal error returns internal server error", func(t *testing.T) {
 		mockService := services.NewMockSEP10Service(t)
 		handler := SEP10Handler{SEP10Service: mockService}
 
