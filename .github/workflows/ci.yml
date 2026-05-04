@@ -176,8 +176,8 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Install gotestsum@v1.11.0
-        run: go install gotest.tools/gotestsum@v1.11.0
+      - name: Install gotestsum@v1.13.0
+        run: go install gotest.tools/gotestsum@v1.13.0
 
       - name: Run tests
         run: gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -coverprofile=c.out ./... -timeout 3m -coverpkg ./...
