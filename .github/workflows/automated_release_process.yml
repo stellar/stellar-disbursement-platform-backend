@@ -76,9 +76,16 @@ jobs:
 
       - name: Fetch Anthropic federation JWT
         run: |
-          curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" \
-            | jq -r .value > "$ANTHROPIC_IDENTITY_TOKEN_FILE"
+          set -euo pipefail
+          RESPONSE=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com")
+          JWT=$(echo "$RESPONSE" | jq -r '.value // empty')
+          if [ -z "$JWT" ]; then
+            echo "::error::OIDC token response missing .value: $RESPONSE"
+            exit 1
+          fi
+          echo "$JWT" > "$ANTHROPIC_IDENTITY_TOKEN_FILE"
 
       - name: Exchange JWT for Anthropic access token
         id: anthropic_token
