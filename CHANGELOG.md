@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Replace the standalone `exhaustive` CI check with the `exhaustive` linter in golangci-lint. [#1121](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1121)
+- Authenticate the automated release workflow with Anthropic Workload Identity Federation, replacing the long-lived `CLAUDE_CODE_OAUTH_TOKEN` secret with short-lived OIDC-issued tokens. [#1122](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1122)
 
 ### Fixed
 
