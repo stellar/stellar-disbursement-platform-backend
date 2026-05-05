@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.0.0-rc.11](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/0.0.0-rc.11) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.4.0...0.0.0-rc.11))
+
 ### Added
 
 - Add `receiver_invitations_disabled` organization setting that skips the scheduled receiver wallet invitation job when enabled. [#1119](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1119)
@@ -20,10 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)
 - Add ownership check to SEP-24 GET /transaction endpoint. [#1115](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1115)
 - Fix payment amount precision loss in dispatch and transaction builder. [#1114](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1114)
+- Fix NULL handling in SEP-24 transaction ownership query. [#1117](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1117)
 
 ### Security and Dependencies
 
 - Upgrade Go to 1.25.0, bump `gotestsum` to v1.13.0, bump the Go module minor-and-patch group across 1 directory with 14 updates. [#1101](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1101)
+- Bump rand from 0.8.5 to 0.8.6 in /contracts in the cargo group. [#1118](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1118)
+- Bump lodash from 4.17.23 to 4.18.1 and postcss from 8.5.6 to 8.5.14 in the npm_and_yarn group. [#1120](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1120)
+- Bump the all-actions group across 1 directory with 3 updates (actions/github-script from 8 to 9, stellar/stellar-cli from 25.2.0 to 26.0.0, docker/build-push-action from 7.0.0 to 7.1.0). [#1113](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1113)
+- Bump vite from 7.1.12 to 7.3.2 in the npm_and_yarn group. [#1102](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1102)
 
 ## [6.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.3.0...6.4.0))
 
