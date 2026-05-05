@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_Organizations_DatabaseTriggers(t *testing.T) {
@@ -294,6 +295,30 @@ func Test_Organizations_Update(t *testing.T) {
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
 		require.True(t, o.IsApprovalRequired)
+	})
+
+	t.Run("updates only organization's receiver_invitations_disabled successfully", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.ReceiverInvitationsDisabled)
+
+		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationsDisabled: utils.Ptr(true)})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, o.ReceiverInvitationsDisabled)
+		assert.True(t, *o.ReceiverInvitationsDisabled)
+
+		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationsDisabled: utils.Ptr(false)})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, o.ReceiverInvitationsDisabled)
+		assert.False(t, *o.ReceiverInvitationsDisabled)
 	})
 
 	t.Run("updates organization's name, timezone UTC offset and logo successfully", func(t *testing.T) {

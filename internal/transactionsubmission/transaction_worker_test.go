@@ -1921,7 +1921,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
 					SourceAccount: distributionKP.Address(),
-					Amount:        txJob.Transaction.Amount.StringFixed(6),
+					Amount:        txJob.Transaction.Amount.StringFixed(7),
 					Destination:   txJob.Transaction.Destination,
 					Asset:         &txnbuild.CreditAsset{Code: txJob.Transaction.AssetCode, Issuer: txJob.Transaction.AssetIssuer},
 				},

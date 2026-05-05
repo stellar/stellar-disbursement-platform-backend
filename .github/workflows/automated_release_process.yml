@@ -4,6 +4,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  id-token: write
 
 on:
   workflow_dispatch:
@@ -21,6 +22,12 @@ env:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+      ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+      ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+      ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+      ANTHROPIC_IDENTITY_TOKEN_FILE: /tmp/anthropic-gha-jwt
     steps:
       - name: Validate version format
         run: |
@@ -67,6 +74,42 @@ jobs:
           echo "base=$BASE" >> $GITHUB_OUTPUT
           git log "$BASE"..HEAD --pretty=format:"%h %s%n%b---" > /tmp/commits.txt
 
+      - name: Fetch Anthropic federation JWT
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com")
+          JWT=$(echo "$RESPONSE" | jq -r '.value // empty')
+          if [ -z "$JWT" ]; then
+            echo "::error::OIDC token response missing .value: $RESPONSE"
+            exit 1
+          fi
+          echo "$JWT" > "$ANTHROPIC_IDENTITY_TOKEN_FILE"
+
+      - name: Exchange JWT for Anthropic access token
+        id: anthropic_token
+        run: |
+          set -euo pipefail
+          JWT=$(cat "$ANTHROPIC_IDENTITY_TOKEN_FILE")
+          RESPONSE=$(jq -nc \
+            --arg assertion "$JWT" \
+            --arg rule "$ANTHROPIC_FEDERATION_RULE_ID" \
+            --arg org "$ANTHROPIC_ORGANIZATION_ID" \
+            --arg sa "$ANTHROPIC_SERVICE_ACCOUNT_ID" \
+            --arg workspace "$ANTHROPIC_WORKSPACE_ID" \
+            '{grant_type:"urn:ietf:params:oauth:grant-type:jwt-bearer",assertion:$assertion,federation_rule_id:$rule,organization_id:$org,service_account_id:$sa,workspace_id:$workspace}' \
+            | curl -sS -X POST https://api.anthropic.com/v1/oauth/token \
+              -H "content-type: application/json" \
+              --data-binary @-)
+          ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty')
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "::error::JWT exchange failed: $RESPONSE"
+            exit 1
+          fi
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Update CHANGELOG
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
@@ -104,7 +147,7 @@ jobs:
             If the [Unreleased] section is empty AND there are no uncovered commits, use `- Release ${{ inputs.version }}` as the body.
 
             Use the Edit tool to modify CHANGELOG.md. Do not create or modify any other files.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ steps.anthropic_token.outputs.access_token }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: --max-turns 10 --allowedTools Read,Edit
 

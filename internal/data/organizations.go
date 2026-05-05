@@ -45,17 +45,18 @@ type Organization struct {
 	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
 	// Example:
 	//	{{.OTP}} OTPMessageTemplate
-	OTPMessageTemplate     string                 `json:"otp_message_template" db:"otp_message_template"`
-	PrivacyPolicyLink      *string                `json:"privacy_policy_link" db:"privacy_policy_link"`
-	Logo                   []byte                 `db:"logo"`
-	IsApprovalRequired     bool                   `json:"is_approval_required" db:"is_approval_required"`
-	IsLinkShortenerEnabled bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
-	IsMemoTracingEnabled   bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
-	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
-	MFADisabled            *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
-	CAPTCHADisabled        *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
-	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
-	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
+	OTPMessageTemplate          string                 `json:"otp_message_template" db:"otp_message_template"`
+	PrivacyPolicyLink           *string                `json:"privacy_policy_link" db:"privacy_policy_link"`
+	Logo                        []byte                 `db:"logo"`
+	IsApprovalRequired          bool                   `json:"is_approval_required" db:"is_approval_required"`
+	IsLinkShortenerEnabled      bool                   `json:"is_link_shortener_enabled" db:"is_link_shortener_enabled"`
+	IsMemoTracingEnabled        bool                   `json:"is_memo_tracing_enabled" db:"is_memo_tracing_enabled"`
+	MessageChannelPriority      MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
+	MFADisabled                 *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
+	CAPTCHADisabled             *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
+	ReceiverInvitationsDisabled *bool                  `json:"receiver_invitations_disabled" db:"receiver_invitations_disabled"`
+	CreatedAt                   time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt                   time.Time              `json:"updated_at" db:"updated_at"`
 }
 
 type OrganizationUpdate struct {
@@ -76,6 +77,8 @@ type OrganizationUpdate struct {
 	// MFA and CAPTCHA settings
 	MFADisabled     *bool `json:",omitempty"`
 	CAPTCHADisabled *bool `json:",omitempty"`
+
+	ReceiverInvitationsDisabled *bool `json:",omitempty"`
 }
 
 type LogoType string
@@ -270,6 +273,11 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.CAPTCHADisabled != nil {
 		fields = append(fields, "captcha_disabled = ?")
 		args = append(args, *ou.CAPTCHADisabled)
+	}
+
+	if ou.ReceiverInvitationsDisabled != nil {
+		fields = append(fields, "receiver_invitations_disabled = ?")
+		args = append(args, *ou.ReceiverInvitationsDisabled)
 	}
 
 	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))

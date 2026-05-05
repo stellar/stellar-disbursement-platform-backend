@@ -302,7 +302,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	return receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) GetBySEP24TransactionID(ctx context.Context, transactionID string) (*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetBySEP24TransactionIDAndAccount(ctx context.Context, transactionID, stellarAccount, stellarMemo string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
 
 	query := `
@@ -312,10 +312,11 @@ func (rw *ReceiverWalletModel) GetBySEP24TransactionID(ctx context.Context, tran
 			receiver_wallets rw
 		WHERE
 			rw.sep24_transaction_id = $1
+			AND (COALESCE(rw.stellar_address, '') = '' OR (rw.stellar_address = $2 AND COALESCE(rw.stellar_memo, '') = $3))
 		LIMIT 1
 	`
 
-	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, transactionID)
+	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, transactionID, stellarAccount, stellarMemo)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound

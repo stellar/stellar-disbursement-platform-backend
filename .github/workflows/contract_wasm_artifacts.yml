@@ -29,9 +29,9 @@ jobs:
         uses: stellar/actions/rust-cache@main
 
       - name: Install stellar-cli
-        uses: stellar/stellar-cli@v25.2.0
+        uses: stellar/stellar-cli@v26.0.0
         with:
-          version: 25.0.0
+          version: 26.0.0
 
       - name: Build contracts
         shell: bash
