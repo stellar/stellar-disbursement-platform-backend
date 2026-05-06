@@ -63,7 +63,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
-	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32)
+	amount := strconv.FormatFloat(txJob.Transaction.Amount, 'f', 7, 64)
 
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()

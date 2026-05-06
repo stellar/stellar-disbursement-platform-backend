@@ -3,8 +3,8 @@ package paymentdispatchers
 import (
 	"context"
 	"fmt"
-	"strconv"
 
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -58,11 +58,20 @@ var _ PaymentDispatcherInterface = (*StellarPaymentDispatcher)(nil)
 func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
 	var transactions []txSubStore.Transaction
 	for _, payment := range pendingPayments {
-		// TODO: change TSS to use string amount [SDP-483]
-		amount, err := strconv.ParseFloat(payment.Amount, 64)
+		// Parse via decimal first to canonically validate the amount string
+		// (rejects over-precision values before any float64 round-trip).
+		amountDec, err := decimal.NewFromString(payment.Amount)
 		if err != nil {
 			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
 		}
+
+		const stellarMaxDecimalPlaces = 7
+		if !amountDec.Equal(amountDec.Truncate(stellarMaxDecimalPlaces)) {
+			return fmt.Errorf("payment amount %s for payment ID %s exceeds Stellar's %d decimal place precision", payment.Amount, payment.ID, stellarMaxDecimalPlaces)
+		}
+
+		// TODO: change TSS to use string amount [SDP-483]
+		amount, _ := amountDec.Float64()
 
 		memo, err := s.memoResolver.GetMemo(ctx, *payment.ReceiverWallet)
 		if err != nil {
