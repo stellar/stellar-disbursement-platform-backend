@@ -17,7 +17,7 @@ global:
     url: ""
     ## @param global.rpc.requestAuthHeaderKey The name of the HTTP header to include when authenticating requests to a protected RPC server.
     requestAuthHeaderKey: ""
-    ## @param global.rpc.requestAuthHeaderValue he value of the HTTP header used for authenticating requests to a protected RPC server.
+    ## @param global.rpc.requestAuthHeaderValue The value of the HTTP header used for authenticating requests to a protected RPC server.
     requestAuthHeaderValue: ""
 
   ## @param global.replicaCount Number of replicas for the application.
