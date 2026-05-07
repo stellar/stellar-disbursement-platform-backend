@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [UNRELEASED]
 
+### Security
+
+- Add global `MaxBodySize` middleware (10 MB) to all routes on both the SDP and admin servers to prevent unbounded request body sizes (CWE-770). [#1066](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1066)
+
+### Fixed
+
+- Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)
+- Fix unbounded CSV upload size and pagination `page_limit` allowing resource exhaustion. [#1064](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1064)
+
 ### Added
 
 - Added Bridge Integration API endpoints to the backend:
