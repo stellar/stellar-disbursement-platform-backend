@@ -1,8 +1,8 @@
 name: Automated Release Process
 
 # Revoke all default GITHUB_TOKEN permissions at the workflow level. Each job
-# below opts in to what it needs. Defense in depth: a future job added without
-# its own `permissions:` block inherits nothing.
+# below opts in to what it needs, so a future job added without its own
+# `permissions:` block inherits nothing.
 permissions: {}
 
 on:
@@ -118,7 +118,6 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: false
           prompt: |
             Update CHANGELOG.md for release ${{ inputs.version }} of ${{ github.repository }}.
 
