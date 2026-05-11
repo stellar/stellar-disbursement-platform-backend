@@ -26,6 +26,17 @@ Contributions that appear to be made solely for gaining credits or building fake
 * Label issues with `bug` if they're clearly a bug.
 * Label issues with `feature request` if they're a feature request.
 
+### Branches
+
+* Branches follow these naming conventions:
+    * `feat/SDP-123-description` for features. `SDP-123` is the jira ticket number.
+
+    * `bugfix/SDP-123-description` for bugs/fixes.  
+
+    * `chore/SDP-123-description` for general cleanups, continuous improvements, documentation, etc.
+
+    * `release/x.x.x` for releases (usually created automatically by CI), e.g. `release/6.4.0` 
+
 ### Pull Requests
 
 * **Title:** PR titles start with feat, fix, refactor, ci, or doc, followed by a short description of the change.
