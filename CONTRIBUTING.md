@@ -29,7 +29,7 @@ Contributions that appear to be made solely for gaining credits or building fake
 ### Branches
 
 * Branches follow these naming conventions:
-    * `feat/SDP-123-description` for features. `SDP-123` is the Jira ticket number.
+    * `feat/SDP-123-description` for features. `SDP-123` is the ticket/issue number.
 
     * `bugfix/SDP-123-description` for bugs/fixes.
 
@@ -39,7 +39,7 @@ Contributions that appear to be made solely for gaining credits or building fake
 
 ### Pull Requests
 
-* **Title:** PR titles start with Jira ticket number (if applicable), feat, fix, refactor, ci, or doc, followed by a short description of the change.
+* **Title:** PR titles start with ticket/issue number (if applicable), feat, fix, refactor, ci, or doc, followed by a short description of the change.
 * **Branching:** PRs must be opened against the `develop` branch.
 * **Scope:** PRs must be focused and not contain unrelated commits.
 * **Refactoring:** Explicitly differentiate refactoring PRs and feature PRs. Refactoring PRs don’t change functionality. They usually touch a lot more code, and are reviewed in less detail. Avoid refactoring in feature PRs.
