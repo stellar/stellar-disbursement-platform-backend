@@ -1,10 +1,9 @@
 name: Automated Release Process
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
+# Revoke all default GITHUB_TOKEN permissions at the workflow level. Each job
+# below opts in to what it needs, so a future job added without its own
+# `permissions:` block inherits nothing.
+permissions: {}
 
 on:
   workflow_dispatch:
@@ -22,6 +21,11 @@ env:
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
     env:
       ANTHROPIC_FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
       ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
