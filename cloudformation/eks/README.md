@@ -71,6 +71,11 @@ aws cloudformation create-stack \
 ## 2. Database Stack Deployment
 Deploy the RDS database. Review custom parameters if needed.
 
+Recommended custom parameter(s) to override:
+| ParameterKey | Default Value | Description |
+| --- | --- | --- |
+| `DBPassword` | `postgres` | Database admin password. Be sure to change this for production deployments. |
+
 ```bash
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME_PREFIX}-database \
@@ -78,7 +83,8 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region ${AWS_REGION} \
   --parameters \
-    ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network
+    ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT}
 ```
 
 ## 3. Keys Stack Deployment
