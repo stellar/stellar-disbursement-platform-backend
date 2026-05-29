@@ -59,19 +59,23 @@ aws sts get-caller-identity
 ```
 
 ## 1. Network Stack Deployment
-Deploy the networking infrastructure. Review custom parameters if needed.
+Deploy the networking infrastructure. 
+
+Review custom parameters if needed, such as if your deployment will use an existing VPC. By default, a new one will be created.
 
 ```bash
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME_PREFIX}-network \
   --template-body file://sdp-network-eks.yaml \
-  --region ${AWS_REGION}
+  --region ${AWS_REGION} \
+  --parameters \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT}
 ```
 
 ## 2. Database Stack Deployment
-Deploy the RDS database. Review custom parameters if needed.
+Deploy the RDS database. 
 
-Recommended custom parameter(s) to override:
+Review custom parameters if needed. Recommended custom parameter(s) to override:
 | ParameterKey | Default Value | Description |
 | --- | --- | --- |
 | `DBPassword` | `postgres` | Database admin password. Be sure to change this for production deployments. |
