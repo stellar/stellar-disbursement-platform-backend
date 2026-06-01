@@ -214,7 +214,6 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				COALESCE(SUM(p.amount) FILTER(WHERE p.asset_id = a.id AND p.status = 'SUCCESS'), '0') as received_amount
 			FROM receivers r
 			JOIN payments p ON r.id = p.receiver_id
-			JOIN disbursements d ON p.disbursement_id = d.id
 			JOIN assets a ON a.id = p.asset_id
 			GROUP BY (r.id, a.code, a.issuer)
 		), receiver_stats_aggregate AS (
