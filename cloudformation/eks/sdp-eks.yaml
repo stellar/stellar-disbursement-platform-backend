@@ -9,6 +9,12 @@ Parameters:
       - dev
       - staging
       - prod
+    Description: Environment name
+
+  namespace:
+    Type: String
+    Description: "Environment variable: namespace - Kubernetes namespace where SDP will be deployed"
+    Default: "sdp"
 
   NetworkStackName:
     Type: String
@@ -28,7 +34,7 @@ Resources:
     Type: AWS::EKS::Cluster
     Properties:
       Name: !Sub "${env}-sdp-cluster"
-      Version: "1.27"
+      Version: "1.32"
       RoleArn: !GetAtt EKSClusterRole.Arn
       ResourcesVpcConfig:
         SecurityGroupIds: 
@@ -57,7 +63,7 @@ Resources:
   # NodeGroup
   ########################################################################
   
-  EKSNodeGroup:    # Changed from EKSNodeGroup
+  EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
     Properties:
       ClusterName: !Ref EKSCluster
@@ -147,16 +153,6 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-      Policies:
-        - PolicyName: SecretsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: 
-                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
 
   ExternalDNSPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -223,36 +219,6 @@ Resources:
           CidrIp: 
             Fn::ImportValue: !Sub ${NetworkStackName}-vpc-cidr
   
-  RDSIngressRule:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: 
-        Fn::ImportValue: !Sub ${DatabaseStackName}-db-sg  # This imports the RDS security group ID
-      IpProtocol: tcp
-      FromPort: 5432
-      ToPort: 5432
-      SourceSecurityGroupId: !Ref EKSClusterSecurityGroup  # This references the EKS cluster security group
-
-  NodeToRDSIngressRule:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: 
-        Fn::ImportValue: !Sub ${DatabaseStackName}-db-sg
-      IpProtocol: tcp
-      FromPort: 5432
-      ToPort: 5432
-      SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
-
-  EKSNodeSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for EKS worker nodes
-      VpcId: 
-        Fn::ImportValue: !Sub ${NetworkStackName}-vpc-id
-      Tags:
-        - Key: Name
-          Value: !Sub "${env}-sdp-cluster-node-sg"
-
   EKSCreatedSGToRDSIngressRule:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -263,32 +229,6 @@ Resources:
       ToPort: 5432
       SourceSecurityGroupId: !GetAtt EKSCluster.ClusterSecurityGroupId
 
-  NodeGroupSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EKSNodeSecurityGroup
-      SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
-      IpProtocol: '-1'
-      FromPort: -1
-      ToPort: -1
-
-  NodeToClusterIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EKSClusterSecurityGroup
-      SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
-      IpProtocol: '-1'
-      FromPort: -1
-      ToPort: -1
-
-  ClusterToNodeIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EKSNodeSecurityGroup
-      SourceSecurityGroupId: !Ref EKSClusterSecurityGroup
-      IpProtocol: '-1'
-      FromPort: -1
-      ToPort: -1
   ########################################################################
   # Service Account Role for SDP
   ########################################################################
@@ -329,45 +269,7 @@ Resources:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
                 Resource:
-                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
-
-  SDPServiceAccountRole:
-    Type: AWS::IAM::Role
-    DependsOn: [OIDCProvider, ClusterOIDCId]
-    Properties:
-      RoleName: !Sub "${env}-sdp-service-account"
-      AssumeRolePolicyDocument:
-        Fn::Sub:
-          - |
-            {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Principal": {
-                    "Federated": "arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}"
-                  },
-                  "Action": "sts:AssumeRoleWithWebIdentity",
-                  "Condition": {
-                    "StringEquals": {
-                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com",
-                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:external-secrets:external-secrets"
-                    }
-                  }
-                }
-              ]
-            }
-          - OIDCId: !GetAtt ClusterOIDCId.OIDCId
-      Policies:
-        - PolicyName: SecretsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: 
-                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${namespace}/*
 
   ClusterOIDCIdFunction:
     Type: AWS::Lambda::Function
@@ -398,7 +300,7 @@ Resources:
               except Exception as e:
                   print(e)
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
-      Runtime: python3.9
+      Runtime: python3.12
       Timeout: 30
 
   LambdaExecutionRole:
@@ -447,7 +349,7 @@ Resources:
                   "Action": "sts:AssumeRoleWithWebIdentity",
                   "Condition": {
                     "StringEquals": {
-                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:sdp:external-secrets-sa",
+                      "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:sub": "system:serviceaccount:${namespace}:external-secrets-sa",
                       "oidc.eks.${AWS::Region}.amazonaws.com/id/${OIDCId}:aud": "sts.amazonaws.com"
                     }
                   }
@@ -465,7 +367,7 @@ Resources:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
                 Resource:
-                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/sdp/*
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${namespace}/*
 
 Outputs:
   ClusterName:
@@ -497,12 +399,6 @@ Outputs:
     Value: !GetAtt ExternalSecretsOperatorRole.Arn
     Export:
       Name: !Sub "${AWS::StackName}-eso-role-arn"
-
-  ServiceAccountRoleArn:
-    Description: IAM Role ARN for SDP Service Account
-    Value: !GetAtt SDPServiceAccountRole.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-service-account-role-arn"
 
   ExternalDNSRoleArn:
     Description: IAM Role ARN for external-dns
