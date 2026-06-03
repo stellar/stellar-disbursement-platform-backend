@@ -5,6 +5,8 @@ global:
     type: "NONE"
 
 sdp:
+  image:
+    tag: "6.5.0"
   route:
     domain: sdp-backend.example.org
     mtnDomain: "*.sdp-backend.example.org"
@@ -18,38 +20,32 @@ sdp:
       rollingUpdate:
         maxUnavailable: 1
         maxSurge: 1
-  serviceAccount:
-    create: true
-    name: sdp-service-account
-    annotations:
-      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
   # =========================== START sdp.kubeSecrets ===========================
   kubeSecrets:
     secretName: sdp-secrets
     create: false
     data:
       EC256_PRIVATE_KEY: "/sdp/dev/EC256_PRIVATE_KEY"
-      EC256_PUBLIC_KEY: "/sdp/dev/EC256_PUBLIC_KEY"
       SEP10_SIGNING_PRIVATE_KEY: "/sdp/dev/SEP10_SIGNING_PRIVATE_KEY"
       SEP10_SIGNING_PUBLIC_KEY: "/sdp/dev/SEP10_SIGNING_PUBLIC_KEY"
       SEP24_JWT_SECRET: "/sdp/dev/SEP24_JWT_SECRET"
       DISTRIBUTION_SEED: "/sdp/dev/DISTRIBUTION_SEED"
       DISTRIBUTION_PUBLIC_KEY: "/sdp/dev/DISTRIBUTION_PUBLIC_KEY"
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/channel-encryption-passphrase"
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
       DATABASE_URL: "/sdp/dev/DATABASE_URL"
-      RECAPTCHA_SITE_KEY: "/sdp/dev/RECAPTCHA_SITE_KEY"
       RECAPTCHA_SITE_SECRET_KEY: "/sdp/dev/RECAPTCHA_SITE_SECRET_KEY"
+      ADMIN_API_KEY: "/sdp/dev/ADMIN_API_KEY"
+      ADMIN_ACCOUNT: "/sdp/dev/ADMIN_ACCOUNT"
   # =========================== START sdp.configMap ===========================
   configMap:
     data:
       INSTANCE_NAME: "SDP-dev"
-      ADMIN_ACCOUNT: "admin@mystellarsdpdomain.com"
       ENVIRONMENT: "dev"
-      ENABLE_SCHEDULER: "true"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
       SDP_UI_BASE_URL: "https://dashboard.example.org"
+      RECAPTCHA_SITE_KEY: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
   # =========================== START sdp.ingress ===========================
   ingress:
     enabled: true
@@ -83,17 +79,15 @@ tss:
       DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/dev/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
       DATABASE_URL: "/sdp/dev/DATABASE_URL"
-  serviceAccount:
-    create: true
-    name: tss-service-account
-    annotations:
-      eks.amazonaws.com/role-arn: ${SERVICE_ACCOUNT_ROLE_ARN}
   configMap:
     data:
       NUM_CHANNEL_ACCOUNTS: "3"
       MAX_BASE_FEE: "100"
+      ENVIRONMENT: "dev"
 # ============================= dashboard ===================================
 dashboard:
+  image:
+    fullName: stellar/stellar-disbursement-platform-frontend:6.5.0
   enabled: true
   route:
     domain: "dashboard.example.org"
@@ -104,12 +98,6 @@ dashboard:
       rollingUpdate:
         maxUnavailable: 0
         maxSurge: 1
-    env:
-      - name: RECAPTCHA_SITE_KEY
-        valueFrom:
-          secretKeyRef:
-            name: sdp-secrets
-            key: RECAPTCHA_SITE_KEY
   configMap:
     data:
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
