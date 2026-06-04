@@ -388,6 +388,67 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		commitErr := dbTx.Commit()
 		require.NoError(t, commitErr)
 	})
+
+	t.Run("counts payments of all types in receiver stats", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
+		// Successful DISBURSEMENT payment of 100.
+		disbursement.Name = "disbursement 1"
+		disbursement.Asset = asset
+		d := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
+
+		payment.Status = SuccessPaymentStatus
+		payment.Disbursement = d
+		payment.Asset = *asset
+		payment.Amount = "100"
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		// Successful DIRECT payment of 200.
+		payment.Status = SuccessPaymentStatus
+		payment.Type = PaymentTypeDirect
+		payment.Disbursement = nil
+		payment.Amount = "200"
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		// Defer a rollback in case anything fails.
+		defer func() {
+			err = dbTx.Rollback()
+			require.Error(t, err, "not in transaction")
+		}()
+
+		actual, err := receiverModel.Get(ctx, dbTx, receiver.ID)
+		require.NoError(t, err)
+		expected := Receiver{
+			ID:          receiver.ID,
+			ExternalID:  receiver.ExternalID,
+			Email:       receiver.Email,
+			PhoneNumber: receiver.PhoneNumber,
+			CreatedAt:   receiver.CreatedAt,
+			UpdatedAt:   receiver.UpdatedAt,
+			ReceiverStats: ReceiverStats{
+				TotalPayments:      "2",
+				SuccessfulPayments: "2",
+				FailedPayments:     "0",
+				CanceledPayments:   "0",
+				RemainingPayments:  "0",
+				RegisteredWallets:  "0",
+				ReceivedAmounts: []Amount{
+					{
+						AssetCode:      "USDC",
+						AssetIssuer:    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+						ReceivedAmount: "300.0000000",
+					},
+				},
+			},
+		}
+		assert.Equal(t, expected, *actual)
+
+		err = dbTx.Commit()
+		require.NoError(t, err)
+	})
 }
 
 func Test_ReceiversModel_Count(t *testing.T) {

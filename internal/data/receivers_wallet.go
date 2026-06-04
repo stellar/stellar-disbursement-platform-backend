@@ -141,8 +141,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 			a.issuer as asset_issuer,
 			COALESCE(SUM(p.amount) FILTER(WHERE p.asset_id = a.id AND p.status = 'SUCCESS'), '0') as received_amount
 		FROM receiver_wallets_cte rwc
-		JOIN payments p ON rwc.receiver_id = p.receiver_id
-		JOIN disbursements d ON p.disbursement_id = d.id AND rwc.wallet_id = d.wallet_id
+		JOIN payments p ON rwc.id = p.receiver_wallet_id
 		JOIN assets a ON a.id = p.asset_id
 		GROUP BY (rwc.id, a.code, a.issuer)
 	), receiver_wallets_stats_aggregate AS (
