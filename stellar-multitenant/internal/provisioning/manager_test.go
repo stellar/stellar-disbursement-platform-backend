@@ -470,6 +470,8 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"circle_recipients",
 		"circle_transfer_requests",
 		"disbursements",
+		"distribution_wallets",
+		"distribution_wallets_audit",
 		"embedded_wallets",
 		"messages",
 		"organizations",

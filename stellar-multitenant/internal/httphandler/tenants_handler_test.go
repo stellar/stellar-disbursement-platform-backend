@@ -380,6 +380,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"circle_recipients",
 			"circle_transfer_requests",
 			"disbursements",
+			"distribution_wallets",
+			"distribution_wallets_audit",
 			"embedded_wallets",
 			"messages",
 			"organizations",
