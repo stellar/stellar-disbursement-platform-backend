@@ -44,14 +44,14 @@ func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
 
 func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*data.APIKey, error) {
 	cacheKey := ""
-	if tenant, err := sdpcontext.GetTenantFromContext(ctx); err == nil {
+	if tenant, err := sdpcontext.GetTenantFromContext(ctx); err == nil && tenant != nil && tenant.ID != "" {
 		cacheKey = tenant.ID + ":" + rawKey
 	}
 
 	if a.cache == nil || cacheKey == "" {
 		apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 		if err != nil {
-			return nil, fmt.Errorf("validating API key (cacheless) %w", err)
+			return nil, fmt.Errorf("validating API key (cacheless): %w", err)
 		}
 		return apiKey, nil
 	}
@@ -65,7 +65,7 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 
 	apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 	if err != nil {
-		return nil, fmt.Errorf("validating API key %w", err)
+		return nil, fmt.Errorf("validating API key: %w", err)
 	}
 
 	if !apiKey.IsExpired() {
