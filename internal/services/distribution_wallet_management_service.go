@@ -41,6 +41,9 @@ type DistributionWalletManagementServiceInterface interface {
 	ListWallets(ctx context.Context, includeArchived bool) ([]data.DistributionWallet, error)
 	ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error)
 	PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error)
+	ListMemberships(ctx context.Context, walletID string) ([]data.WalletMembership, error)
+	GrantMembership(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error)
+	RevokeMembership(ctx context.Context, walletID, membershipID, revokedBy string) error
 }
 
 type DistributionWalletManagementService struct {
@@ -252,6 +255,69 @@ func (s *DistributionWalletManagementService) syncTenantDefaultAccount(ctx conte
 	if _, err := res.RowsAffected(); err != nil {
 		return fmt.Errorf("reading rows affected: %w", err)
 	}
+
+	return nil
+}
+
+// ListMemberships returns a wallet's memberships. Archived wallets remain queryable: their
+// memberships persist for historical authorization ("who could approve on Wallet A").
+func (s *DistributionWalletManagementService) ListMemberships(ctx context.Context, walletID string) ([]data.WalletMembership, error) {
+	dbPool := s.Models.DBConnectionPool
+
+	if _, err := s.Models.DistributionWallets.Get(ctx, dbPool, walletID); err != nil {
+		return nil, fmt.Errorf("loading distribution wallet %q: %w", walletID, err)
+	}
+
+	memberships, err := s.Models.WalletMemberships.ListByWallet(ctx, dbPool, walletID)
+	if err != nil {
+		return nil, fmt.Errorf("listing memberships for wallet %q: %w", walletID, err)
+	}
+	return memberships, nil
+}
+
+// GrantMembership grants a wallet-scoped role to a user, recording the grantor. Grants on
+// archived wallets fail (the API maps it to 409) — inert grants are audit-log noise.
+func (s *DistributionWalletManagementService) GrantMembership(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error) {
+	dbPool := s.Models.DBConnectionPool
+
+	if _, err := s.Models.DistributionWallets.Get(ctx, dbPool, walletID); err != nil {
+		return nil, fmt.Errorf("loading distribution wallet %q: %w", walletID, err)
+	}
+
+	var grantedByPtr *string
+	if grantedBy != "" {
+		grantedByPtr = &grantedBy
+	}
+
+	membership, err := s.Models.WalletMemberships.Insert(ctx, dbPool, userID, walletID, role, grantedByPtr)
+	if err != nil {
+		return nil, fmt.Errorf("granting membership on wallet %q: %w", walletID, err)
+	}
+
+	return membership, nil
+}
+
+// RevokeMembership revokes one membership on the given wallet. The append-only audit table
+// retains the full grant/revoke history; the revoker is recorded in the structured log until
+// event emission lands in Workstream 3.
+func (s *DistributionWalletManagementService) RevokeMembership(ctx context.Context, walletID, membershipID, revokedBy string) error {
+	dbPool := s.Models.DBConnectionPool
+
+	membership, err := s.Models.WalletMemberships.Get(ctx, dbPool, membershipID)
+	if err != nil {
+		return fmt.Errorf("loading membership %q: %w", membershipID, err)
+	}
+	if membership.WalletID != walletID {
+		// Per the read-leakage rules, do not disclose that the membership exists elsewhere.
+		return fmt.Errorf("loading membership %q: %w", membershipID, data.ErrRecordNotFound)
+	}
+
+	if err := s.Models.WalletMemberships.Delete(ctx, dbPool, membershipID); err != nil {
+		return fmt.Errorf("revoking membership %q: %w", membershipID, err)
+	}
+
+	log.Ctx(ctx).Infof("wallet membership revoked: membership=%s wallet=%s user=%s role=%s revoked_by=%s",
+		membershipID, membership.WalletID, membership.UserID, membership.Role, revokedBy)
 
 	return nil
 }

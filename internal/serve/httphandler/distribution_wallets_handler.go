@@ -9,14 +9,105 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // DistributionWalletsHandler exposes Owner-only CRUD for the tenant's distribution wallets
 // (the sending accounts — not the recipient wallet providers served by WalletsHandler).
 type DistributionWalletsHandler struct {
-	Service services.DistributionWalletManagementServiceInterface
+	Service     services.DistributionWalletManagementServiceInterface
+	AuthManager auth.AuthManager
+}
+
+// WalletMembershipRequest is the request body to grant a wallet-scoped role.
+type WalletMembershipRequest struct {
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
+}
+
+// GetDistributionWalletMemberships lists a wallet's memberships (admin/audit surface —
+// archived wallets remain queryable).
+func (h DistributionWalletsHandler) GetDistributionWalletMemberships(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	walletID := chi.URLParam(req, "id")
+
+	memberships, err := h.Service.ListMemberships(ctx, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("distribution wallet not found", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot list wallet memberships", err, nil).Render(rw)
+		return
+	}
+
+	httpjson.Render(rw, memberships, httpjson.JSON)
+}
+
+// PostDistributionWalletMembership grants a wallet-scoped role. Grants on archived wallets
+// return 409 Conflict per the spec — an inert grant would only add audit-log noise.
+func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	walletID := chi.URLParam(req, "id")
+
+	var reqBody WalletMembershipRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		httperror.BadRequest("invalid request body", err, nil).Render(rw)
+		return
+	}
+
+	grantor, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
+		return
+	}
+
+	membership, err := h.Service.GrantMembership(ctx, walletID, reqBody.UserID, data.UserRole(reqBody.Role), grantor.ID)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrWalletArchivedForMembership):
+			httperror.Conflict("cannot grant membership on an archived wallet", err, nil).Render(rw)
+		case errors.Is(err, data.ErrRecordAlreadyExists):
+			httperror.Conflict("the user already holds this role on the wallet", err, nil).Render(rw)
+		case errors.Is(err, data.ErrRecordNotFound):
+			httperror.NotFound("distribution wallet not found", err, nil).Render(rw)
+		case errors.Is(err, data.ErrMissingInput):
+			httperror.BadRequest("user_id and a wallet-scopable role are required", err, nil).Render(rw)
+		default:
+			httperror.InternalError(ctx, "Cannot grant wallet membership", err, nil).Render(rw)
+		}
+		return
+	}
+
+	httpjson.RenderStatus(rw, http.StatusCreated, membership, httpjson.JSON)
+}
+
+// DeleteDistributionWalletMembership revokes a membership; the append-only audit table keeps
+// the full history.
+func (h DistributionWalletsHandler) DeleteDistributionWalletMembership(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	walletID := chi.URLParam(req, "id")
+	membershipID := chi.URLParam(req, "membershipID")
+
+	revoker, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
+		return
+	}
+
+	if err := h.Service.RevokeMembership(ctx, walletID, membershipID, revoker.ID); err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("membership not found", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot revoke wallet membership", err, nil).Render(rw)
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }
 
 // DistributionWalletRequest is the request body to create a distribution wallet. The account

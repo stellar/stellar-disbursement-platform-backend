@@ -611,7 +611,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		// Distribution wallets (the tenant's sending accounts) — Owner-only per the spec.
 		if o.distributionWalletService != nil {
 			r.Route("/distribution-wallets", func(r chi.Router) {
-				distributionWalletsHandler := httphandler.DistributionWalletsHandler{Service: o.distributionWalletService}
+				distributionWalletsHandler := httphandler.DistributionWalletsHandler{Service: o.distributionWalletService, AuthManager: authManager}
 
 				// Read operations
 				r.With(middleware.RequirePermission(
@@ -620,6 +620,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				)).Group(func(r chi.Router) {
 					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
 					r.Get("/{id}", distributionWalletsHandler.GetDistributionWallet)
+					r.Get("/{id}/memberships", distributionWalletsHandler.GetDistributionWalletMemberships)
 				})
 
 				// Write operations
@@ -630,6 +631,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Post("/", distributionWalletsHandler.PostDistributionWallet)
 					r.Post("/{id}/archive", distributionWalletsHandler.PostArchiveDistributionWallet)
 					r.Post("/{id}/promote-to-default", distributionWalletsHandler.PostPromoteDistributionWalletToDefault)
+					r.Post("/{id}/memberships", distributionWalletsHandler.PostDistributionWalletMembership)
+					r.Delete("/{id}/memberships/{membershipID}", distributionWalletsHandler.DeleteDistributionWalletMembership)
 				})
 			})
 		}
