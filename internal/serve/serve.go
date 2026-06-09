@@ -626,7 +626,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				r.With(middleware.RequirePermission(
 					data.WriteDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
-				)).Post("/", distributionWalletsHandler.PostDistributionWallet)
+				)).Group(func(r chi.Router) {
+					r.Post("/", distributionWalletsHandler.PostDistributionWallet)
+					r.Post("/{id}/archive", distributionWalletsHandler.PostArchiveDistributionWallet)
+					r.Post("/{id}/promote-to-default", distributionWalletsHandler.PostPromoteDistributionWalletToDefault)
+				})
 			})
 		}
 

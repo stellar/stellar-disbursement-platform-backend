@@ -203,6 +203,56 @@ func (m *DistributionWalletModel) UpdateAddress(ctx context.Context, sqlExec db.
 	return &wallet, nil
 }
 
+// Archive marks a wallet ARCHIVED (no new disbursements; history intact). The DB layer
+// independently rejects archiving the default wallet (CHECK) and archiving the last active
+// wallet (trigger); callers should pre-check both for friendly errors.
+func (m *DistributionWalletModel) Archive(ctx context.Context, sqlExec db.SQLExecuter, id string) (*DistributionWallet, error) {
+	query := fmt.Sprintf(`
+		UPDATE distribution_wallets
+		SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE id = $1 AND status = 'ACTIVE'
+		RETURNING %s
+	`, distributionWalletColumns)
+
+	var wallet DistributionWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("archiving distribution wallet %q (missing or already archived): %w", id, ErrRecordNotFound)
+		}
+		return nil, fmt.Errorf("archiving distribution wallet %q: %w", id, err)
+	}
+
+	return &wallet, nil
+}
+
+// PromoteToDefault atomically makes the given ACTIVE wallet the tenant's default: it demotes
+// the current default and promotes the new one. It MUST run inside a transaction together
+// with any default-bound association reassignment — all-or-nothing per the spec.
+func (m *DistributionWalletModel) PromoteToDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*DistributionWallet, error) {
+	if _, err := sqlExec.ExecContext(ctx, `UPDATE distribution_wallets SET is_default = FALSE WHERE is_default`); err != nil {
+		return nil, fmt.Errorf("demoting current default distribution wallet: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE distribution_wallets
+		SET is_default = TRUE
+		WHERE id = $1 AND status = 'ACTIVE'
+		RETURNING %s
+	`, distributionWalletColumns)
+
+	var wallet DistributionWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("promoting distribution wallet %q (missing or not active): %w", id, ErrRecordNotFound)
+		}
+		return nil, fmt.Errorf("promoting distribution wallet %q: %w", id, err)
+	}
+
+	return &wallet, nil
+}
+
 // Delete hard-deletes a distribution wallet row. It exists ONLY for cleanup of freshly created
 // wallets whose provisioning failed (no disbursements can reference them yet). Wallets that
 // have submitted transactions are protected by the ON DELETE RESTRICT FK and must be archived

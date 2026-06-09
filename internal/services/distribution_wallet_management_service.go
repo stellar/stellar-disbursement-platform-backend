@@ -8,7 +8,9 @@ import (
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -21,6 +23,14 @@ var (
 	// ErrUnsupportedDistributionWalletType is returned for account types that cannot be
 	// provisioned per-wallet in v1.
 	ErrUnsupportedDistributionWalletType = errors.New("only DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT wallets can be created in v1")
+	// ErrCannotArchiveDefaultWallet is returned when archiving the default wallet without
+	// promoting another active wallet first.
+	ErrCannotArchiveDefaultWallet = errors.New("the default wallet cannot be archived: promote another active wallet to default first")
+	// ErrCannotArchiveLastActiveWallet is returned when archival would leave the tenant with
+	// zero active wallets.
+	ErrCannotArchiveLastActiveWallet = errors.New("cannot archive the last active distribution wallet")
+	// ErrCannotPromoteWallet is returned when promoting a wallet that is missing or archived.
+	ErrCannotPromoteWallet = errors.New("only an existing, active wallet can be promoted to default")
 )
 
 // DistributionWalletManagementServiceInterface manages the lifecycle of a tenant's
@@ -29,6 +39,8 @@ type DistributionWalletManagementServiceInterface interface {
 	CreateWallet(ctx context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error)
 	GetWallet(ctx context.Context, id string) (*data.DistributionWallet, error)
 	ListWallets(ctx context.Context, includeArchived bool) ([]data.DistributionWallet, error)
+	ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error)
+	PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error)
 }
 
 type DistributionWalletManagementService struct {
@@ -140,6 +152,108 @@ func (s *DistributionWalletManagementService) ListWallets(ctx context.Context, i
 		return nil, fmt.Errorf("listing distribution wallets: %w", err)
 	}
 	return wallets, nil
+}
+
+// ArchiveWallet marks a wallet ARCHIVED: it accepts no new disbursements but its history and
+// key material are preserved permanently for audit, dispute, and compliance lookups. The
+// default wallet cannot be archived (promote another wallet first), and archival never leaves
+// the tenant with zero active wallets. Both rules are independently enforced by the DB.
+func (s *DistributionWalletManagementService) ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error) {
+	dbPool := s.Models.DBConnectionPool
+
+	wallet, err := s.Models.DistributionWallets.Get(ctx, dbPool, id)
+	if err != nil {
+		return nil, fmt.Errorf("loading distribution wallet %q: %w", id, err)
+	}
+	if wallet.IsDefault {
+		return nil, ErrCannotArchiveDefaultWallet
+	}
+
+	activeWallets, err := s.Models.DistributionWallets.GetAll(ctx, dbPool, false)
+	if err != nil {
+		return nil, fmt.Errorf("listing active distribution wallets: %w", err)
+	}
+	remaining := 0
+	for _, w := range activeWallets {
+		if w.ID != id {
+			remaining++
+		}
+	}
+	if remaining == 0 {
+		return nil, ErrCannotArchiveLastActiveWallet
+	}
+
+	archived, err := s.Models.DistributionWallets.Archive(ctx, dbPool, id)
+	if err != nil {
+		return nil, fmt.Errorf("archiving distribution wallet %q: %w", id, err)
+	}
+
+	return archived, nil
+}
+
+// PromoteToDefault atomically promotes an active wallet to be the tenant's default: in a
+// single transaction it demotes the old default, promotes the new one, and reassigns the
+// default-bound association — the tenant's distribution-account fields in the admin schema,
+// which legacy single-wallet resolution reads. All-or-nothing: any failure rolls back both
+// the default pointer and the association reassignment.
+func (s *DistributionWalletManagementService) PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error) {
+	promoted, err := db.RunInTransactionWithResult(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
+		wallet, txErr := s.Models.DistributionWallets.PromoteToDefault(ctx, dbTx, id)
+		if txErr != nil {
+			if errors.Is(txErr, data.ErrRecordNotFound) {
+				return nil, fmt.Errorf("%w: %w", ErrCannotPromoteWallet, txErr)
+			}
+			return nil, fmt.Errorf("promoting distribution wallet %q: %w", id, txErr)
+		}
+
+		if syncErr := s.syncTenantDefaultAccount(ctx, dbTx, wallet); syncErr != nil {
+			return nil, fmt.Errorf("reassigning default-bound associations for wallet %q: %w", id, syncErr)
+		}
+
+		return wallet, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return promoted, nil
+}
+
+// syncTenantDefaultAccount points the tenant row's distribution-account fields (admin schema)
+// at the new default wallet's account, inside the caller's transaction. Pre-multi-wallet code
+// paths resolve "the tenant's account" through those fields, so they must always mirror the
+// default wallet. No-op in layouts without the admin schema (flat test databases) or without
+// a tenant in context.
+func (s *DistributionWalletManagementService) syncTenantDefaultAccount(ctx context.Context, dbTx db.DBTransaction, wallet *data.DistributionWallet) error {
+	var adminTenantsExists bool
+	if err := dbTx.GetContext(ctx, &adminTenantsExists, `SELECT to_regclass('admin.tenants') IS NOT NULL`); err != nil {
+		return fmt.Errorf("checking for admin.tenants: %w", err)
+	}
+	if !adminTenantsExists {
+		return nil
+	}
+
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil || tnt == nil {
+		//nolint:nilerr // a missing tenant in context (single-schema/test layouts) is the documented no-op condition.
+		return nil
+	}
+
+	res, err := dbTx.ExecContext(ctx, `
+		UPDATE admin.tenants
+		SET distribution_account_address = $2,
+		    distribution_account_type = $3::admin.distribution_account_type,
+		    distribution_account_status = $4::admin.distribution_account_status
+		WHERE id = $1`,
+		tnt.ID, wallet.Address, wallet.AccountType, wallet.AccountStatus)
+	if err != nil {
+		return fmt.Errorf("updating tenant %q distribution account: %w", tnt.ID, err)
+	}
+	if _, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("reading rows affected: %w", err)
+	}
+
+	return nil
 }
 
 // cleanupWallet removes a freshly created wallet row (and its stored key, when one exists)

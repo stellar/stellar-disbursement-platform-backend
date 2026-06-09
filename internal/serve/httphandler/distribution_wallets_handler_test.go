@@ -18,9 +18,19 @@ import (
 )
 
 type mockDistributionWalletService struct {
-	createFn func(ctx context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error)
-	getFn    func(ctx context.Context, id string) (*data.DistributionWallet, error)
-	listFn   func(ctx context.Context, includeArchived bool) ([]data.DistributionWallet, error)
+	createFn  func(ctx context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error)
+	getFn     func(ctx context.Context, id string) (*data.DistributionWallet, error)
+	listFn    func(ctx context.Context, includeArchived bool) ([]data.DistributionWallet, error)
+	archiveFn func(ctx context.Context, id string) (*data.DistributionWallet, error)
+	promoteFn func(ctx context.Context, id string) (*data.DistributionWallet, error)
+}
+
+func (m *mockDistributionWalletService) ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error) {
+	return m.archiveFn(ctx, id)
+}
+
+func (m *mockDistributionWalletService) PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error) {
+	return m.promoteFn(ctx, id)
 }
 
 func (m *mockDistributionWalletService) CreateWallet(ctx context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error) {
@@ -188,4 +198,72 @@ func Test_DistributionWalletsHandler_GetDistributionWallet(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
+}
+
+func Test_DistributionWalletsHandler_lifecycleEndpoints(t *testing.T) {
+	newRouter := func(handler DistributionWalletsHandler) *chi.Mux {
+		r := chi.NewRouter()
+		r.Post("/distribution-wallets/{id}/archive", handler.PostArchiveDistributionWallet)
+		r.Post("/distribution-wallets/{id}/promote-to-default", handler.PostPromoteDistributionWalletToDefault)
+		return r
+	}
+	do := func(handler DistributionWalletsHandler, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		rr := httptest.NewRecorder()
+		newRouter(handler).ServeHTTP(rr, req)
+		return rr
+	}
+
+	archiveCases := []struct {
+		name           string
+		serviceErr     error
+		wantStatusCode int
+	}{
+		{"🎉 archived", nil, http.StatusOK},
+		{"missing wallet returns 404", fmt.Errorf("x: %w", data.ErrRecordNotFound), http.StatusNotFound},
+		{"default wallet returns 400", services.ErrCannotArchiveDefaultWallet, http.StatusBadRequest},
+		{"last active returns 400", services.ErrCannotArchiveLastActiveWallet, http.StatusBadRequest},
+		{"unexpected error returns 500", errors.New("boom"), http.StatusInternalServerError},
+	}
+	for _, tc := range archiveCases {
+		t.Run("archive: "+tc.name, func(t *testing.T) {
+			handler := DistributionWalletsHandler{Service: &mockDistributionWalletService{
+				archiveFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+					assert.Equal(t, "dw-1", id)
+					if tc.serviceErr != nil {
+						return nil, tc.serviceErr
+					}
+					return &data.DistributionWallet{ID: "dw-1", Status: data.ArchivedDistributionWalletStatus}, nil
+				},
+			}}
+			rr := do(handler, "/distribution-wallets/dw-1/archive")
+			assert.Equal(t, tc.wantStatusCode, rr.Code)
+		})
+	}
+
+	promoteCases := []struct {
+		name           string
+		serviceErr     error
+		wantStatusCode int
+	}{
+		{"🎉 promoted", nil, http.StatusOK},
+		{"archived/missing candidate returns 400", fmt.Errorf("x: %w", services.ErrCannotPromoteWallet), http.StatusBadRequest},
+		{"not found returns 404", fmt.Errorf("x: %w", data.ErrRecordNotFound), http.StatusNotFound},
+		{"unexpected error returns 500", errors.New("boom"), http.StatusInternalServerError},
+	}
+	for _, tc := range promoteCases {
+		t.Run("promote: "+tc.name, func(t *testing.T) {
+			handler := DistributionWalletsHandler{Service: &mockDistributionWalletService{
+				promoteFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+					assert.Equal(t, "dw-2", id)
+					if tc.serviceErr != nil {
+						return nil, tc.serviceErr
+					}
+					return &data.DistributionWallet{ID: "dw-2", IsDefault: true}, nil
+				},
+			}}
+			rr := do(handler, "/distribution-wallets/dw-2/promote-to-default")
+			assert.Equal(t, tc.wantStatusCode, rr.Code)
+		})
+	}
 }
