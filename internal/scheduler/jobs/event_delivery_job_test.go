@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -65,8 +66,11 @@ func Test_EventDeliveryJob(t *testing.T) {
 		var received atomic.Int32
 		var lastBody []byte
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body := make([]byte, r.ContentLength)
-			_, _ = r.Body.Read(body)
+			body, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			lastBody = body
 			received.Add(1)
 			w.WriteHeader(http.StatusOK)

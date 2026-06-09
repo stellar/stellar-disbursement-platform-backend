@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -91,7 +92,7 @@ func (j eventDeliveryJob) deliver(ctx context.Context, webhookURL string, payloa
 	if err != nil {
 		return fmt.Errorf("posting webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer utils.DeferredClose(ctx, resp.Body, "closing webhook response body")
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook responded %d", resp.StatusCode)
