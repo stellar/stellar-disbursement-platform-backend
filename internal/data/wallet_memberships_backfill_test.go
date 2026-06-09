@@ -88,16 +88,14 @@ func Test_WalletMemberships_backfill(t *testing.T) {
 		SELECT user_id, wallet_id, role FROM wallet_memberships ORDER BY user_id, role`))
 
 	// Initiator: 1 row. Multi-role: 2 rows. Owner: none. All on the DEFAULT wallet only.
+	// (Assertions are order-independent: user IDs are random UUIDs, so sort order varies.)
 	require.Len(t, rows, 3)
+	rolesByUser := map[string][]string{}
 	for _, r := range rows {
 		assert.Equal(t, defaultWalletID, r.WalletID, "backfill must target only the default wallet")
 		assert.NotEqual(t, ownerID, r.UserID, "owners are tenant-wide and get no membership rows")
+		rolesByUser[r.UserID] = append(rolesByUser[r.UserID], r.Role)
 	}
-	assert.Equal(t, initiatorID, rows[0].UserID)
-	assert.Equal(t, "initiator", rows[0].Role)
-	assert.ElementsMatch(t,
-		[]string{"approver", "financial_controller"},
-		[]string{rows[1].Role, rows[2].Role})
-	assert.Equal(t, multiRoleID, rows[1].UserID)
-	assert.Equal(t, multiRoleID, rows[2].UserID)
+	assert.ElementsMatch(t, []string{"initiator"}, rolesByUser[initiatorID])
+	assert.ElementsMatch(t, []string{"approver", "financial_controller"}, rolesByUser[multiRoleID])
 }
