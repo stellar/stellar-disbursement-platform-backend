@@ -35,6 +35,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	tssservices "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -99,6 +100,9 @@ type ServeOptions struct {
 	tenantManager               tenant.ManagerInterface
 	DistributionAccountService  services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase string
+	NativeAssetBootstrapAmount  int
+
+	distributionWalletService services.DistributionWalletManagementServiceInterface
 
 	MaxInvitationResendAttempts int
 	SingleTenantMode            bool
@@ -214,6 +218,24 @@ func (opts *ServeOptions) SetupDependencies() error {
 		}
 
 		opts.Sep45Service = sep45Service
+	}
+
+	// Setup the distribution wallet management service (multi-wallet support) when the
+	// secret-management dependencies are configured (always true in production; some test
+	// harnesses omit them, in which case the /distribution-wallets routes are not mounted).
+	if opts.DistAccEncryptionPassphrase != "" && opts.TSSDBConnectionPool != nil {
+		walletKeyService, wkErr := tssservices.NewDistributionWalletKeyService(opts.TSSDBConnectionPool, opts.DistAccEncryptionPassphrase)
+		if wkErr != nil {
+			return fmt.Errorf("creating distribution wallet key service: %w", wkErr)
+		}
+		bootstrapAmount := opts.NativeAssetBootstrapAmount
+		if bootstrapAmount <= 0 {
+			bootstrapAmount = tenant.MinTenantDistributionAccountAmount
+		}
+		opts.distributionWalletService, err = services.NewDistributionWalletManagementService(opts.Models, opts.SubmitterEngine, walletKeyService, bootstrapAmount)
+		if err != nil {
+			return fmt.Errorf("creating distribution wallet management service: %w", err)
+		}
 	}
 
 	return nil
@@ -585,6 +607,28 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
+
+		// Distribution wallets (the tenant's sending accounts) — Owner-only per the spec.
+		if o.distributionWalletService != nil {
+			r.Route("/distribution-wallets", func(r chi.Router) {
+				distributionWalletsHandler := httphandler.DistributionWalletsHandler{Service: o.distributionWalletService}
+
+				// Read operations
+				r.With(middleware.RequirePermission(
+					data.ReadDistributionWallets,
+					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				)).Group(func(r chi.Router) {
+					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
+					r.Get("/{id}", distributionWalletsHandler.GetDistributionWallet)
+				})
+
+				// Write operations
+				r.With(middleware.RequirePermission(
+					data.WriteDistributionWallets,
+					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				)).Post("/", distributionWalletsHandler.PostDistributionWallet)
+			})
+		}
 
 		profileHandler := httphandler.ProfileHandler{
 			Models:                      o.Models,

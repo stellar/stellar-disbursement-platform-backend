@@ -61,6 +61,10 @@ const (
 	ReadWallets  APIKeyPermission = "read:wallets"
 	WriteWallets APIKeyPermission = "write:wallets"
 
+	// Distribution wallet permissions (the tenant's sending accounts)
+	ReadDistributionWallets  APIKeyPermission = "read:distribution_wallets"
+	WriteDistributionWallets APIKeyPermission = "write:distribution_wallets"
+
 	// Statistics
 	ReadStatistics APIKeyPermission = "read:statistics"
 
@@ -70,22 +74,24 @@ const (
 
 // validPermissionsMap is the set of all valid permissions for the validation purposes
 var validPermissionsMap = map[APIKeyPermission]struct{}{
-	ReadAll:            {},
-	WriteAll:           {},
-	ReadDisbursements:  {},
-	WriteDisbursements: {},
-	ReadReceivers:      {},
-	WriteReceivers:     {},
-	ReadPayments:       {},
-	WritePayments:      {},
-	ReadOrganization:   {},
-	WriteOrganization:  {},
-	ReadUsers:          {},
-	WriteUsers:         {},
-	ReadWallets:        {},
-	WriteWallets:       {},
-	ReadStatistics:     {},
-	ReadExports:        {},
+	ReadAll:                  {},
+	WriteAll:                 {},
+	ReadDisbursements:        {},
+	WriteDisbursements:       {},
+	ReadReceivers:            {},
+	WriteReceivers:           {},
+	ReadPayments:             {},
+	WritePayments:            {},
+	ReadOrganization:         {},
+	WriteOrganization:        {},
+	ReadUsers:                {},
+	WriteUsers:               {},
+	ReadWallets:              {},
+	WriteWallets:             {},
+	ReadDistributionWallets:  {},
+	WriteDistributionWallets: {},
+	ReadStatistics:           {},
+	ReadExports:              {},
 }
 
 type APIKeyPermissions []APIKeyPermission
