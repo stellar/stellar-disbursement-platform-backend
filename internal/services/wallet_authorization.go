@@ -16,6 +16,25 @@ import (
 // the public error message must not disclose wallet existence or details.
 var ErrWalletActionForbidden = errors.New("user is not authorized to act on this wallet")
 
+// ResolveWalletReadScope returns the caller's read-visibility scope for membership-filtered
+// endpoints (W2 taxonomy): nil for Owners (tenant-wide — no filter applied), otherwise the
+// exact set of wallet IDs the user holds membership on. An empty non-nil slice means the user
+// sees no per-wallet rows.
+func ResolveWalletReadScope(ctx context.Context, sqlExec db.SQLExecuter, memberships *data.WalletMembershipModel, user *auth.User) ([]string, error) {
+	if user == nil {
+		return nil, fmt.Errorf("user is required to resolve wallet read scope")
+	}
+	if user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+		return nil, nil
+	}
+
+	walletIDs, err := memberships.GetWalletIDsForUser(ctx, sqlExec, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving wallet read scope for user %q: %w", user.ID, err)
+	}
+	return walletIDs, nil
+}
+
 // EnsureUserCanActOnWallet enforces wallet-scoped action authorization (Workstream 2):
 // Owners are always tenant-wide; every other caller must hold at least one of requiredRoles
 // ON the target wallet via wallet_memberships. Role semantics are unchanged — this adds the

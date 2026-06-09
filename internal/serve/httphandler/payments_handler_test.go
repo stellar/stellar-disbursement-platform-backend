@@ -37,6 +37,21 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
+// newWalletScopeOwnerMock returns an AuthManager mock resolving every user as an owner —
+// wallet read-visibility has its own dedicated suite (Test_WalletReadVisibility).
+func newWalletScopeOwnerMock() *auth.AuthManagerMock {
+	m := &auth.AuthManagerMock{}
+	m.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&auth.User{ID: "payments-test-owner", IsOwner: true}, nil).Maybe()
+	return m
+}
+
+func withTestUserCtx(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		next(w, r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "payments-test-owner")))
+	}
+}
+
 func Test_PaymentsHandlerGet(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
@@ -49,6 +64,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Models:                      models,
 		DBConnectionPool:            dbConnectionPool,
 		DistributionAccountResolver: mDistributionAccountResolver,
+		AuthManager:                 newWalletScopeOwnerMock(),
 	}
 
 	mDistributionAccountResolver.
@@ -57,7 +73,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Maybe()
 
 	r := chi.NewRouter()
-	r.Get("/payments/{id}", handler.GetPayment)
+	r.Get("/payments/{id}", withTestUserCtx(handler.GetPayment))
 
 	ctx := context.Background()
 
@@ -321,12 +337,13 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 				Models:                      models,
 				DBConnectionPool:            dbConnectionPool,
 				DistributionAccountResolver: mDistributionAccountResolver,
+				AuthManager:                 newWalletScopeOwnerMock(),
 			}
 
 			rr := httptest.NewRecorder()
 			req, err := http.NewRequest(http.MethodGet, "/payments", nil)
 			require.NoError(t, err)
-			http.HandlerFunc(h.GetPayments).ServeHTTP(rr, req)
+			withTestUserCtx(h.GetPayments).ServeHTTP(rr, req)
 			resp := rr.Result()
 			defer resp.Body.Close()
 			respBody, err := io.ReadAll(resp.Body)
@@ -346,9 +363,10 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 	handler := &PaymentsHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
+	ts := httptest.NewServer(withTestUserCtx(handler.GetPayments))
 	defer ts.Close()
 
 	tests := []struct {
@@ -470,9 +488,10 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 		Models:                      models,
 		DBConnectionPool:            dbConnectionPool,
 		DistributionAccountResolver: mDistributionAccountResolver,
+		AuthManager:                 newWalletScopeOwnerMock(),
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
+	ts := httptest.NewServer(withTestUserCtx(handler.GetPayments))
 	defer ts.Close()
 
 	ctx := context.Background()

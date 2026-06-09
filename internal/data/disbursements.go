@@ -347,6 +347,10 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("d.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
+	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
+		// Membership-filtered visibility (W2): empty scope yields zero rows by design.
+		qb.AddCondition("d.source_wallet_id = ANY(?)", pq.Array(walletIDs))
+	}
 
 	switch queryType {
 	case QueryTypeSelectPaginated:

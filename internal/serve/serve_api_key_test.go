@@ -34,6 +34,15 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
+	// The API keys' creator must exist as a real (owner) user: read/write paths resolve the
+	// acting user for wallet-scoped visibility and authorization.
+	data.EnsureDefaultDistributionWalletFixture(t, context.Background(), dbConnectionPool)
+	_, seedErr := dbConnectionPool.ExecContext(context.Background(), `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles)
+		VALUES ($1, 'x', 'api-key-auth-owner@test.com', 'API', 'Key', TRUE, ARRAY['owner'])
+		ON CONFLICT (id) DO NOTHING`, "00000000-0000-0000-0000-000000000000")
+	require.NoError(t, seedErr)
+
 	handlerMux := handleHTTP(serveOptions)
 
 	testUserID := "00000000-0000-0000-0000-000000000000"

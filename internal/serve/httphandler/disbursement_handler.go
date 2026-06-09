@@ -303,6 +303,17 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
+
+	// Membership-filtered visibility (W2): non-owners see only their wallets' disbursements.
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+	}
+
 	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
@@ -481,6 +492,18 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Membership-filtered visibility (W2): respond 404 outside the caller's scope —
+	// existence is never disclosed (read-leakage rules).
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if !walletInReadScope(scope, disbursement.SourceWalletID) {
+		httperror.NotFound("disbursement not found", nil, nil).Render(w)
+		return
+	}
+
 	response, err := d.DisbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
 	if err != nil {
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
@@ -503,6 +526,12 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 
 	if validator.HasErrors() {
 		httperror.BadRequest("request invalid", nil, validator.Errors).Render(w)
+		return
+	}
+
+	// Membership-filtered visibility (W2): 404 outside the caller's scope.
+	if httpErr := d.ensureDisbursementInReadScope(ctx, disbursementID); httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
@@ -534,6 +563,27 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 
 type UpdateDisbursementStatusResponseBody struct {
 	Message string `json:"message"`
+}
+
+// ensureDisbursementInReadScope loads the disbursement and verifies the caller's wallet
+// scope covers its source wallet, returning 404 (never 403) outside the scope.
+func (d DisbursementHandler) ensureDisbursementInReadScope(ctx context.Context, disbursementID string) *httperror.HTTPError {
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return httperror.NotFound("disbursement not found", err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot load disbursement", err, nil)
+	}
+
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		return scopeErr
+	}
+	if !walletInReadScope(scope, disbursement.SourceWalletID) {
+		return httperror.NotFound("disbursement not found", nil, nil)
+	}
+	return nil
 }
 
 // PatchDisbursementStatus updates the status of a disbursement
@@ -618,6 +668,17 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.NotFound("disbursement not found", err, nil).Render(w)
+		return
+	}
+
+	// Membership-filtered visibility (W2): 404 outside the caller's scope.
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if !walletInReadScope(scope, disbursement.SourceWalletID) {
+		httperror.NotFound("disbursement not found", nil, nil).Render(w)
 		return
 	}
 

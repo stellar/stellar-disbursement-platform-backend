@@ -590,12 +590,21 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	getDisbAuthMock := &auth.AuthManagerMock{}
+	getDisbAuthMock.On("GetUserByID", mock.Anything, "get-disb-owner").
+		Return(&auth.User{ID: "get-disb-owner", IsOwner: true}, nil).Maybe()
+	getDisbAuthMock.On("GetUsersByID", mock.Anything, mock.Anything, mock.Anything).
+		Return([]*auth.User{}, nil).Maybe()
 	handler := &DisbursementHandler{
 		Models:                        models,
-		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
+		AuthManager:                   getDisbAuthMock,
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models, AuthManager: getDisbAuthMock},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "get-disb-owner"))
+		handler.GetDisbursements(w, r)
+	}))
 	defer ts.Close()
 
 	tests := []struct {
@@ -722,7 +731,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
+	authManagerMock.On("GetUserByID", mock.Anything, "get-disb-success-owner").
+		Return(&auth.User{ID: "get-disb-success-owner", IsOwner: true}, nil).Maybe()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "get-disb-success-owner"))
+		handler.GetDisbursements(w, r)
+	}))
 	defer ts.Close()
 
 	ctx := context.Background()
@@ -1525,6 +1539,8 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, "get-disb-viewer").
+		Return(&auth.User{ID: "get-disb-viewer", IsOwner: true}, nil).Maybe()
 	createdByUser := auth.User{
 		ID:        "User1",
 		FirstName: "User",
@@ -1558,6 +1574,11 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "get-disb-viewer")))
+		})
+	})
 	r.Get("/disbursements/{id}", handler.GetDisbursement)
 
 	// create disbursements
@@ -1643,12 +1664,21 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	receiversAuthMock := &auth.AuthManagerMock{}
+	receiversAuthMock.On("GetUserByID", mock.Anything, "get-disb-recv-viewer").
+		Return(&auth.User{ID: "get-disb-recv-viewer", IsOwner: true}, nil).Maybe()
 	handler := &DisbursementHandler{
 		Models:                        models,
+		AuthManager:                   receiversAuthMock,
 		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
 	}
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "get-disb-recv-viewer")))
+		})
+	})
 	r.Get("/disbursements/{id}/receivers", handler.GetDisbursementReceivers)
 
 	// create fixtures
@@ -2171,8 +2201,16 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	handler := &DisbursementHandler{Models: models}
+	instrAuthMock := &auth.AuthManagerMock{}
+	instrAuthMock.On("GetUserByID", mock.Anything, "get-disb-instr-viewer").
+		Return(&auth.User{ID: "get-disb-instr-viewer", IsOwner: true}, nil).Maybe()
+	handler := &DisbursementHandler{Models: models, AuthManager: instrAuthMock}
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "get-disb-instr-viewer")))
+		})
+	})
 	r.Get("/disbursements/{id}/instructions", handler.GetDisbursementInstructions)
 
 	disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{

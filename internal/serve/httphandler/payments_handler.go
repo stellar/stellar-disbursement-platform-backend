@@ -87,6 +87,33 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err == nil {
+		// Membership-filtered visibility (W2): 404 outside the caller's scope — existence
+		// is never disclosed. Direct payments inherit default-wallet visibility until W3.
+		scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
+		if scopeErr != nil {
+			scopeErr.Render(w)
+			return
+		}
+		if scope != nil {
+			sourceWalletID := ""
+			if payment.Disbursement != nil {
+				sourceWalletID = payment.Disbursement.SourceWalletID
+			}
+			if sourceWalletID == "" {
+				defaultWallet, dwErr := p.Models.DistributionWallets.GetDefault(ctx, p.DBConnectionPool)
+				if dwErr != nil {
+					httperror.InternalError(ctx, "Cannot resolve wallet visibility", dwErr, nil).Render(w)
+					return
+				}
+				sourceWalletID = defaultWallet.ID
+			}
+			if !walletInReadScope(scope, sourceWalletID) {
+				httperror.NotFound("payment not found", nil, nil).Render(w)
+				return
+			}
+		}
+	}
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
@@ -125,6 +152,16 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// Membership-filtered visibility (W2): non-owners see only their wallets' payments.
+	scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+	}
 
 	response, err := p.getPaymentsWithCount(ctx, queryParams)
 	if err != nil {
