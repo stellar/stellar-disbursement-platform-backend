@@ -32,17 +32,17 @@ const MaxDistributionWalletsPerTenant = 20
 // DistributionWallet is the tenant's SENDING account entity ("distribution wallet"). It is
 // unrelated to Wallet, which models recipient wallet providers.
 type DistributionWallet struct {
-	ID            string                   `db:"id"`
-	Name          string                   `db:"name"`
-	Description   *string                  `db:"description"`
-	Address       *string                  `db:"distribution_account_address"`
-	AccountType   schema.AccountType       `db:"distribution_account_type"`
-	AccountStatus schema.AccountStatus     `db:"distribution_account_status"`
-	Status        DistributionWalletStatus `db:"status"`
-	IsDefault     bool                     `db:"is_default"`
-	CreatedAt     time.Time                `db:"created_at"`
-	UpdatedAt     time.Time                `db:"updated_at"`
-	ArchivedAt    *time.Time               `db:"archived_at"`
+	ID            string                   `json:"id" db:"id"`
+	Name          string                   `json:"name" db:"name"`
+	Description   *string                  `json:"description,omitempty" db:"description"`
+	Address       *string                  `json:"distribution_account_address,omitempty" db:"distribution_account_address"`
+	AccountType   schema.AccountType       `json:"distribution_account_type" db:"distribution_account_type"`
+	AccountStatus schema.AccountStatus     `json:"distribution_account_status" db:"distribution_account_status"`
+	Status        DistributionWalletStatus `json:"status" db:"status"`
+	IsDefault     bool                     `json:"is_default" db:"is_default"`
+	CreatedAt     time.Time                `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time                `json:"updated_at" db:"updated_at"`
+	ArchivedAt    *time.Time               `json:"archived_at,omitempty" db:"archived_at"`
 }
 
 // DistributionWalletInsert is the payload to create a new distribution wallet. The account
@@ -201,6 +201,25 @@ func (m *DistributionWalletModel) UpdateAddress(ctx context.Context, sqlExec db.
 	}
 
 	return &wallet, nil
+}
+
+// Delete hard-deletes a distribution wallet row. It exists ONLY for cleanup of freshly created
+// wallets whose provisioning failed (no disbursements can reference them yet). Wallets that
+// have submitted transactions are protected by the ON DELETE RESTRICT FK and must be archived
+// instead, per the spec's archive-don't-delete rule.
+func (m *DistributionWalletModel) Delete(ctx context.Context, sqlExec db.SQLExecuter, id string) error {
+	res, err := sqlExec.ExecContext(ctx, `DELETE FROM distribution_wallets WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("deleting distribution wallet %q: %w", id, err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("reading rows affected when deleting distribution wallet %q: %w", id, err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("deleting distribution wallet %q: %w", id, ErrRecordNotFound)
+	}
+	return nil
 }
 
 // EnsureDefaultWallet makes the tenant's default distribution wallet reflect the given account
