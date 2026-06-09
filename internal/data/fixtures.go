@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/csv"
 	"fmt"
 	"image"
@@ -572,6 +573,27 @@ func DeleteAllTransactionsFixtures(t *testing.T, ctx context.Context, sqlExec db
 	require.NoError(t, err)
 }
 
+// EnsureDefaultDistributionWalletFixture returns the tenant's default distribution wallet,
+// creating a minimal one when none exists (test schemas migrated without the admin-layout
+// backfill have no seeded default).
+func EnsureDefaultDistributionWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) *DistributionWallet {
+	t.Helper()
+
+	var wallet DistributionWallet
+	err := sqlExec.GetContext(ctx, &wallet, fmt.Sprintf(`SELECT %s FROM distribution_wallets WHERE is_default`, distributionWalletColumns))
+	if err == nil {
+		return &wallet
+	}
+	require.ErrorIs(t, err, sql.ErrNoRows)
+
+	err = sqlExec.GetContext(ctx, &wallet, fmt.Sprintf(`
+		INSERT INTO distribution_wallets (name, distribution_account_type, is_default)
+		VALUES ('default', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', TRUE)
+		RETURNING %s`, distributionWalletColumns))
+	require.NoError(t, err)
+	return &wallet
+}
+
 func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, model *DisbursementModel, d *Disbursement) *Disbursement {
 	if d == nil {
 		d = &Disbursement{}
@@ -607,6 +629,10 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 		d.UpdatedAt = &now
 	}
 
+	if d.SourceWalletID == "" {
+		d.SourceWalletID = EnsureDefaultDistributionWalletFixture(t, ctx, sqlExec).ID
+	}
+
 	// insert disbursement
 	if d.StatusHistory == nil {
 		d.StatusHistory = []DisbursementStatusHistoryEntry{{
@@ -617,9 +643,9 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type, created_at)
+		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type, created_at, source_wallet_id)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id
 	`
 	var newID string
@@ -633,6 +659,7 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 		d.ReceiverRegistrationMessageTemplate,
 		d.RegistrationContactType,
 		d.CreatedAt,
+		d.SourceWalletID,
 	)
 	require.NoError(t, err)
 
@@ -696,6 +723,10 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 
 	if utils.IsEmpty(insert.RegistrationContactType) {
 		insert.RegistrationContactType = RegistrationContactTypePhone
+	}
+
+	if insert.SourceWalletID == "" {
+		insert.SourceWalletID = EnsureDefaultDistributionWalletFixture(t, ctx, sqlExec).ID
 	}
 
 	id, err := model.Insert(ctx, sqlExec, &insert)

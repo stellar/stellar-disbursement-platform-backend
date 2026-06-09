@@ -31,6 +31,9 @@ type Disbursement struct {
 	CreatedAt                           *time.Time                `json:"created_at" db:"created_at"`
 	UpdatedAt                           *time.Time                `json:"updated_at" db:"updated_at"`
 	RegistrationContactType             RegistrationContactType   `json:"registration_contact_type,omitempty" db:"registration_contact_type"`
+	// SourceWalletID is the distribution wallet this disbursement is sourced from. Required
+	// at creation and immutable after; enforced NOT NULL + FK ON DELETE RESTRICT at the DB.
+	SourceWalletID string `json:"source_wallet_id" db:"source_wallet_id"`
 	*DisbursementStats
 }
 
@@ -70,11 +73,15 @@ var (
 )
 
 func (d *DisbursementModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, disbursement *Disbursement) (string, error) {
+	if disbursement.SourceWalletID == "" {
+		return "", fmt.Errorf("source wallet ID is required to create a disbursement: %w", ErrMissingInput)
+	}
+
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type)
+		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type, source_wallet_id)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6, $7, $8)
+		    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	var newID string
@@ -87,6 +94,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, 
 		utils.SQLNullString(string(disbursement.VerificationField)),
 		disbursement.ReceiverRegistrationMessageTemplate,
 		disbursement.RegistrationContactType,
+		disbursement.SourceWalletID,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -131,6 +139,7 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 			"verification_field::text",
 			"file_name",
 			"receiver_registration_message_template",
+			"source_wallet_id",
 		},
 	}.Build()
 

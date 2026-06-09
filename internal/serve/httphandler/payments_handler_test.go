@@ -137,7 +137,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"updated_at": "` + disbursement.UpdatedAt.Format(time.RFC3339Nano) + `",
 				"registration_contact_type": "` + disbursement.RegistrationContactType.String() + `",
 				"verification_field": "` + string(disbursement.VerificationField) + `",
-				"receiver_registration_message_template":""
+				"receiver_registration_message_template":"",
+				"source_wallet_id": "` + disbursement.SourceWalletID + `"
 			},
 			"asset": {
 				"id": "` + asset.ID + `",

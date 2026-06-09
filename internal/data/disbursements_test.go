@@ -33,9 +33,11 @@ func Test_DisbursementModelInsert(t *testing.T) {
 
 	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
 
+	sourceWallet := EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 	disbursement := Disbursement{
-		Name:   "disbursement",
-		Status: DraftDisbursementStatus,
+		SourceWalletID: sourceWallet.ID,
+		Name:           "disbursement",
+		Status:         DraftDisbursementStatus,
 		StatusHistory: []DisbursementStatusHistoryEntry{
 			{
 				Status: DraftDisbursementStatus,
@@ -796,6 +798,7 @@ func Test_DisbursementColumnNames(t *testing.T) {
 				`COALESCE(verification_field::text, '') AS "verification_field"`,
 				`COALESCE(file_name, '') AS "file_name"`,
 				`COALESCE(receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
+				`COALESCE(source_wallet_id, '') AS "source_wallet_id"`,
 			}, ",\n"),
 		},
 		{
@@ -813,6 +816,7 @@ func Test_DisbursementColumnNames(t *testing.T) {
 				`COALESCE(d.verification_field::text, '') AS "verification_field"`,
 				`COALESCE(d.file_name, '') AS "file_name"`,
 				`COALESCE(d.receiver_registration_message_template, '') AS "receiver_registration_message_template"`,
+				`COALESCE(d.source_wallet_id, '') AS "source_wallet_id"`,
 			}, ",\n"),
 		},
 		{
@@ -830,6 +834,7 @@ func Test_DisbursementColumnNames(t *testing.T) {
 				`COALESCE(d.verification_field::text, '') AS "disbursement.verification_field"`,
 				`COALESCE(d.file_name, '') AS "disbursement.file_name"`,
 				`COALESCE(d.receiver_registration_message_template, '') AS "disbursement.receiver_registration_message_template"`,
+				`COALESCE(d.source_wallet_id, '') AS "disbursement.source_wallet_id"`,
 			}, ",\n"),
 		},
 	}

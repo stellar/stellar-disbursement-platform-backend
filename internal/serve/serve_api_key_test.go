@@ -531,6 +531,7 @@ func setupAPIKeyTestResources(t *testing.T) *TestResources {
 	ctx := context.Background()
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
 	asset := data.GetAssetFixture(t, ctx, dbPool, data.FixtureAssetUSDC)
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbPool)
 
 	return &TestResources{
 		DBPool:     dbPool,

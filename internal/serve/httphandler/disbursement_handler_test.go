@@ -387,6 +387,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			wantResponseBodyFn: func(d *data.Disbursement) string {
 				respMap := map[string]interface{}{
 					"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+					"source_wallet_id":                       d.SourceWalletID,
 					"id":                                     d.ID,
 					"name":                                   fmt.Sprintf("successful disbursement %d", i),
 					"receiver_registration_message_template": customInviteTemplate,
@@ -486,6 +487,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			assetResp := d.Asset
 			respMap := map[string]interface{}{
 				"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+				"source_wallet_id":                       d.SourceWalletID,
 				"id":                                     d.ID,
 				"name":                                   caseCopy.responseLabel,
 				"receiver_registration_message_template": "",
@@ -2413,6 +2415,7 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
 	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
 	data.CreateWalletAssets(t, ctx, dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	walletNamesByID := map[string]string{
 		enabledWallet.ID:     enabledWallet.Name,

@@ -178,6 +178,32 @@ func Test_DistributionWallets_schema_invariants(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("FK RESTRICT: a wallet referenced by a disbursement cannot be deleted", func(t *testing.T) {
+		models, mErr := NewModels(dbConnectionPool)
+		require.NoError(t, mErr)
+
+		sourceWallet := EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+		disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			SourceWalletID: sourceWallet.ID,
+		})
+		assert.Equal(t, sourceWallet.ID, disbursement.SourceWalletID)
+
+		// DB-level rejection (23503 foreign_key_violation), regardless of API checks.
+		_, dErr := dbConnectionPool.ExecContext(ctx, `DELETE FROM distribution_wallets WHERE id = $1`, sourceWallet.ID)
+		require.Error(t, dErr)
+		assert.ErrorContains(t, dErr, "fk_disbursements_source_wallet_id")
+
+		// Model-level Delete is blocked by the same constraint.
+		dErr = models.DistributionWallets.Delete(ctx, dbConnectionPool, sourceWallet.ID)
+		require.Error(t, dErr)
+		assert.ErrorContains(t, dErr, "fk_disbursements_source_wallet_id")
+
+		// The wallet row is intact and history preserved.
+		got, gErr := models.DistributionWallets.Get(ctx, dbConnectionPool, sourceWallet.ID)
+		require.NoError(t, gErr)
+		assert.Equal(t, sourceWallet.ID, got.ID)
+	})
+
 	t.Run("audit table records changes", func(t *testing.T) {
 		id := insertDistributionWallet(t, ctx, dbConnectionPool, "wallet-audited", nil, false)
 		_, err := dbConnectionPool.ExecContext(ctx,

@@ -167,8 +167,18 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.BadRequest("asset ID could not be retrieved", err, nil)
 	}
 
+	// Resolve the source wallet. TEMPORARY (until Workstream 3): the creation API does not
+	// yet accept X-Wallet-Id, so every request legitimately omits the wallet and routes to
+	// the tenant's default wallet, matching the spec's narrow default semantics for
+	// pre-opt-in tenants. W3 makes the wallet explicit and required.
+	defaultWallet, err := d.Models.DistributionWallets.GetDefault(ctx, sqlExec)
+	if err != nil {
+		return nil, httperror.InternalError(ctx, "Cannot resolve the default distribution wallet", err, nil)
+	}
+
 	// Insert disbursement
 	disbursement := data.Disbursement{
+		SourceWalletID:                      defaultWallet.ID,
 		Asset:                               asset,
 		Name:                                req.Name,
 		ReceiverRegistrationMessageTemplate: req.ReceiverRegistrationMessageTemplate,
