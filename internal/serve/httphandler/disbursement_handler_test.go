@@ -2307,11 +2307,20 @@ func Test_DisbursementHandler_DeleteDisbursement(t *testing.T) {
 	require.NoError(t, outerErr)
 
 	ctx := context.Background()
+	deleteAuthMock := &auth.AuthManagerMock{}
+	deleteAuthMock.On("GetUserByID", mock.Anything, "delete-owner").
+		Return(&auth.User{ID: "delete-owner", IsOwner: true}, nil).Maybe()
 	handler := &DisbursementHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: deleteAuthMock,
 	}
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "delete-owner")))
+		})
+	})
 	r.Delete("/disbursements/{id}", handler.DeleteDisbursement)
 
 	// Create test fixtures

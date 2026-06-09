@@ -928,6 +928,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	tnt := schema.Tenant{ID: "tenant-id"}
 
 	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "retry-owner")
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -973,6 +974,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(nil, errors.New("unexpected error")).
@@ -1005,6 +1008,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1037,6 +1042,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1115,6 +1122,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1205,6 +1214,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1280,7 +1291,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		})
 
 		circleTnt := schema.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
-		circleCtx := sdpcontext.SetTenantInContext(context.Background(), &circleTnt)
+		circleCtx := sdpcontext.SetUserIDInContext(sdpcontext.SetTenantInContext(context.Background(), &circleTnt), "retry-owner")
 		circleCtx = sdpcontext.SetTokenInContext(circleCtx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] } `, failedPayment.ID))
@@ -1289,6 +1300,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", circleCtx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1349,7 +1362,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctxWithoutTenant := sdpcontext.SetTokenInContext(context.Background(), "mytoken")
+		ctxWithoutTenant := sdpcontext.SetTokenInContext(sdpcontext.SetUserIDInContext(context.Background(), "retry-owner"), "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1361,6 +1374,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctxWithoutTenant, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1490,6 +1505,8 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&auth.User{ID: "patch-owner", IsOwner: true}, nil).Maybe()
 
 	handler := &PaymentsHandler{
 		Models:           models,
@@ -1497,7 +1514,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		AuthManager:      authManagerMock,
 	}
 
-	ctx := context.Background()
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "patch-owner")
 
 	r := chi.NewRouter()
 	r.Patch("/payments/{id}/status", handler.PatchPaymentStatus)
@@ -1577,7 +1594,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "CANCELED"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", draftPayment.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", draftPayment.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1591,7 +1608,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "READY"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1605,7 +1622,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
