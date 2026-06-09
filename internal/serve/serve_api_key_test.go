@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -135,7 +136,7 @@ func Test_handleHTTP_APIKeyReadAllPermissions(t *testing.T) {
 	res := setupAPIKeyTestResources(t)
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "inquisitor@ordohereticus.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "inquisitor@ordohereticus.gov", IsOwner: true} // wallet authz covered by Test_WalletScopedAuthorization
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -212,7 +213,7 @@ func Test_handleHTTP_APIKeyWriteAllPermissions(t *testing.T) {
 	receiverID := receiver.ID
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "chapter.master@ultramar.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "chapter.master@ultramar.gov", IsOwner: true} // wallet authz covered by Test_WalletScopedAuthorization
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -281,6 +282,11 @@ func Test_handleHTTP_APIKeyWriteAllPermissions(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			resp := executeRequest(t, mux, tc.method, tc.path, tc.body, writeAllKey.Key)
+			if resp.StatusCode != tc.expectedStatus {
+				b, readErr := io.ReadAll(resp.Body)
+				require.NoError(t, readErr)
+				t.Logf("unexpected status %d body: %s", resp.StatusCode, string(b))
+			}
 			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 		})
 	}
@@ -294,7 +300,7 @@ func Test_handleHTTP_APIKeyFullAccessPermissions(t *testing.T) {
 	receiverID := receiver.ID
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "roboute.guilliman@imperium.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "roboute.guilliman@imperium.gov", IsOwner: true}
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -383,7 +389,7 @@ func Test_handleHTTP_APIKeySpecificPermissions(t *testing.T) {
 	receiverID := receiver.ID
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "logistics@munitorum.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "logistics@munitorum.gov", IsOwner: true}
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -532,6 +538,14 @@ func setupAPIKeyTestResources(t *testing.T) *TestResources {
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
 	asset := data.GetAssetFixture(t, ctx, dbPool, data.FixtureAssetUSDC)
 	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbPool)
+
+	// The API key's creator must exist as a real (owner) user: the disbursement-creation
+	// path resolves the acting user for wallet-scoped authorization.
+	_, err = dbPool.ExecContext(ctx, `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles)
+		VALUES ($1, 'x', 'api-key-owner@test.com', 'API', 'Key', TRUE, ARRAY['owner'])
+		ON CONFLICT (id) DO NOTHING`, testUserID)
+	require.NoError(t, err)
 
 	return &TestResources{
 		DBPool:     dbPool,

@@ -206,6 +206,13 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 		}
 
+		// 0. Wallet-scoped authorization (W2): an Approver/FC on wallet A cannot start a
+		// disbursement sourced from wallet B. Owners are tenant-wide.
+		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
+			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
+			return err
+		}
+
 		// 1. Verify Wallet is Enabled
 		if !disbursement.Wallet.Enabled {
 			return ErrDisbursementWalletDisabled
@@ -355,6 +362,13 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 			} else {
 				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
 			}
+		}
+
+		// 0. Wallet-scoped authorization (W2): pausing requires a qualifying role on the
+		// disbursement's source wallet. Owners are tenant-wide.
+		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
+			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
+			return err
 		}
 
 		// 1. Verify Transition is Possible

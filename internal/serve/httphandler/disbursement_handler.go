@@ -176,6 +176,20 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.InternalError(ctx, "Cannot resolve the default distribution wallet", err, nil)
 	}
 
+	// Wallet-scoped authorization (W2): creating a disbursement requires a qualifying role on
+	// the source wallet. Owners are tenant-wide.
+	creatingUser, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
+	if err != nil {
+		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+	}
+	if err = services.EnsureUserCanActOnWallet(ctx, sqlExec, d.Models.WalletMemberships, creatingUser, defaultWallet.ID,
+		data.FinancialControllerUserRole, data.InitiatorUserRole); err != nil {
+		if errors.Is(err, services.ErrWalletActionForbidden) {
+			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil)
+		}
+		return nil, httperror.InternalError(ctx, "Cannot authorize wallet action", err, nil)
+	}
+
 	// Insert disbursement
 	disbursement := data.Disbursement{
 		SourceWalletID:                      defaultWallet.ID,
@@ -580,6 +594,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
+		case errors.Is(err, services.ErrWalletActionForbidden):
+			httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		case errors.As(err, &insufficientBalanceErr):

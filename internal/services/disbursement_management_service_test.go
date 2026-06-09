@@ -225,8 +225,10 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 		Status:         schema.AccountStatusActive,
 	}
 
-	ownerUser := &auth.User{ID: "owner-user", Email: "owner@test.com"}
-	financialUser := &auth.User{ID: "financial-user", Email: "financial@test.com"}
+	// IsOwner: these tests exercise transition mechanics; wallet-scoped authorization has its
+	// own dedicated suite (Test_WalletScopedAuthorization).
+	ownerUser := &auth.User{ID: "owner-user", Email: "owner@test.com", IsOwner: true}
+	financialUser := &auth.User{ID: "financial-user", Email: "financial@test.com", IsOwner: true}
 
 	// Shared mocks preparation
 	prepareHorizonMockFn := func(mHorizonClient *horizonclient.MockClient) {
@@ -459,6 +461,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 
+	// Failure-path actor: owner bypasses wallet-scoped authorization, so each subtest reaches
+	// its intended failure (authz itself is covered by Test_WalletScopedAuthorization).
+	failureUser := &auth.User{ID: "failure-user", Email: "failure@test.com", IsOwner: true}
+
 	// Create fixtures: disbursements
 	draftDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:   "draft disbursement",
@@ -485,14 +491,14 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
 		defer data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, &distributionAcc)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, failureUser, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
 	})
 
 	t.Run("returns an error if the disbursement status is not READY", func(t *testing.T) {
 		service := DisbursementManagementService{Models: models}
 
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, &distributionAcc)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, failureUser, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
@@ -518,8 +524,9 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		})
 
 		user := &auth.User{
-			ID:    userID,
-			Email: "email@email.com",
+			ID:      userID,
+			Email:   "email@email.com",
+			IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 		}
 
 		// Enable approval workflow for org.
@@ -615,7 +622,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, &distributionAcc)
+		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, failureUser, &distributionAcc)
 		expectedErr := InsufficientBalanceError{
 			DisbursementAsset:   *usdt,
 			DistributionAddress: distributionAcc.ID(),
@@ -653,8 +660,9 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
+		ID:      "user-id",
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 	}
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)

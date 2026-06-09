@@ -52,11 +52,13 @@ type defaultAuthenticator struct {
 }
 
 type authUser struct {
-	ID                string `db:"id"`
-	FirstName         string `db:"first_name"`
-	LastName          string `db:"last_name"`
-	Email             string `db:"email"`
-	EncryptedPassword string `db:"encrypted_password"`
+	ID                string         `db:"id"`
+	FirstName         string         `db:"first_name"`
+	LastName          string         `db:"last_name"`
+	Email             string         `db:"email"`
+	EncryptedPassword string         `db:"encrypted_password"`
+	IsOwner           bool           `db:"is_owner"`
+	Roles             pq.StringArray `db:"roles"`
 }
 
 func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, password string) (*User, error) {
@@ -459,7 +461,9 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		SELECT
 			first_name,
 			last_name,
-			email
+			email,
+			is_owner,
+			COALESCE(roles, '{}') AS roles
 		FROM
 			auth_users
 		WHERE
@@ -480,6 +484,8 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Email:     u.Email,
+		IsOwner:   u.IsOwner,
+		Roles:     u.Roles,
 	}, nil
 }
 

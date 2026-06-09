@@ -236,8 +236,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
+		ID:      "user-id",
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 	}
 
 	// setup fixtures
@@ -1087,8 +1088,9 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
 		Return(&auth.User{
-			ID:    "user-id",
-			Email: "email@email.com",
+			ID:      "user-id",
+			Email:   "email@email.com",
+			IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
@@ -1810,8 +1812,9 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	userID := "valid-user-id"
 	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 	user := &auth.User{
-		ID:    userID,
-		Email: "email@email.com",
+		ID:      userID,
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 	}
 	require.NotNil(t, user)
 
@@ -1988,7 +1991,14 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		approverUser := &auth.User{
 			ID:    "valid-approver-user-id",
 			Email: "approver@mail.org",
+			Roles: []string{string(data.ApproverUserRole)},
 		}
+
+		// Wallet-scoped authorization (W2): the approver needs membership on the
+		// disbursement's source wallet.
+		_, mErr := handler.Models.WalletMemberships.Insert(ctx, dbConnectionPool,
+			approverUser.ID, readyDisbursement.SourceWalletID, data.ApproverUserRole, nil)
+		require.NoError(t, mErr)
 
 		// Create a context with the approver's userID for this test
 		approverCtx := sdpcontext.SetUserIDInContext(ctx, approverUser.ID)
@@ -2429,8 +2439,9 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
 		Return(&auth.User{
-			ID:    "user-id",
-			Email: "email@email.com",
+			ID:      "user-id",
+			Email:   "email@email.com",
+			IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
