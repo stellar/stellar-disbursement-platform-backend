@@ -189,7 +189,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"created_at": "` + payment.CreatedAt.Format(time.RFC3339Nano) + `",
 			"updated_at": "` + payment.UpdatedAt.Format(time.RFC3339Nano) + `",
 			"external_payment_id": "` + payment.ExternalPaymentID + `",
-			"sender_address": "` + payment.SenderAddress + `"
+			"sender_address": "` + payment.SenderAddress + `",
+			"source_wallet_id": "` + payment.SourceWalletID + `"
 		}`
 
 		assert.JSONEq(t, wantJSON, rr.Body.String())
@@ -1629,6 +1630,14 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	// Shared test DB: normalize to exactly one ACTIVE (default) distribution wallet so the
+	// X-Wallet-Id single-wallet fallback applies (W3 routing covered by its own suite).
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+
 	t.Run("successful direct payment creation", func(t *testing.T) {
 		t.Cleanup(func() {
 			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
@@ -1636,6 +1645,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CERAMITE", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 		_, err = dbConnectionPool.ExecContext(ctx,
 			"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
@@ -1667,8 +1677,9 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID:    "user-dante",
-			Email: "commander.dante@baal.imperium",
+			ID:      "user-dante",
+			Email:   "commander.dante@baal.imperium",
+			IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
@@ -1736,6 +1747,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ADAMANT", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 			Email: "dante.invalid.asset@baal.imperium",
 		})
@@ -1752,7 +1764,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
@@ -1801,7 +1814,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
@@ -1866,7 +1880,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
@@ -1930,6 +1945,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "STEEL", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 			Email: "dante.wallet.disabled@baal.imperium",
 		})
@@ -1950,7 +1966,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
@@ -2020,8 +2037,9 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID:    "user-test",
-			Email: "test@imperium.gov",
+			ID:      "user-test",
+			Email:   "test@imperium.gov",
+			IsOwner: true,
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
@@ -2089,6 +2107,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "AURUM", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 			Email: "dante.not.registered@baal.imperium",
 		})
@@ -2105,7 +2124,8 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
 
 		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
@@ -2143,6 +2163,13 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	// Shared test DB: normalize to one ACTIVE (default) wallet for the single-wallet fallback.
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+
 	t.Cleanup(func() {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 	})
@@ -2159,6 +2186,7 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 
 	authMock.On("GetUserByID", mock.Anything, "user-horus").Return(&auth.User{
 		ID: "user-horus", Email: "horus@warmaster.imperium",
+		IsOwner: true,
 	}, nil)
 
 	distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(

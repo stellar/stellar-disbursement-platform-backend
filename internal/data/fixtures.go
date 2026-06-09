@@ -527,12 +527,18 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		disbursementID = nil
 	}
 
+	// Direct payments must state their source wallet explicitly (W3); disbursement payments
+	// inherit it at the DB layer. NULLIF lets the derive trigger handle the inherit case.
+	if p.SourceWalletID == "" && disbursementID == nil {
+		p.SourceWalletID = EnsureDefaultDistributionWalletFixture(t, ctx, sqlExec).ID
+	}
+
 	const query = `
 		INSERT INTO payments
 			(receiver_id, disbursement_id, receiver_wallet_id, asset_id, amount, status, status_history,
-			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type, sender_address)
+			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id, type, sender_address, source_wallet_id)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NULLIF($15, ''))
 		RETURNING
 			id
 	`
@@ -552,6 +558,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.ExternalPaymentID,
 		p.Type,
 		p.SenderAddress,
+		p.SourceWalletID,
 	)
 	require.NoError(t, err)
 

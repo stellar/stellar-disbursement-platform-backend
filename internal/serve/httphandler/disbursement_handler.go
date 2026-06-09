@@ -122,7 +122,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			httperror.BadRequest(err.Error(), err, nil).Render(w)
 			return
 		}
-		disbursement, httpErr = d.postDisbursementOnly(ctx, req, user)
+		disbursement, httpErr = d.postDisbursementOnly(ctx, r, req, user)
 	}
 
 	if httpErr != nil {
@@ -133,7 +133,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	httpjson.RenderStatus(w, http.StatusCreated, disbursement, httpjson.JSON)
 }
 
-func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
+func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq *http.Request, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
 	var wallet *data.Wallet
 	var err error
 
@@ -167,32 +167,18 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.BadRequest("asset ID could not be retrieved", err, nil)
 	}
 
-	// Resolve the source wallet. TEMPORARY (until Workstream 3): the creation API does not
-	// yet accept X-Wallet-Id, so every request legitimately omits the wallet and routes to
-	// the tenant's default wallet, matching the spec's narrow default semantics for
-	// pre-opt-in tenants. W3 makes the wallet explicit and required.
-	defaultWallet, err := d.Models.DistributionWallets.GetDefault(ctx, sqlExec)
-	if err != nil {
-		return nil, httperror.InternalError(ctx, "Cannot resolve the default distribution wallet", err, nil)
-	}
-
-	// Wallet-scoped authorization (W2): creating a disbursement requires a qualifying role on
-	// the source wallet. Owners are tenant-wide.
-	creatingUser, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
-	if err != nil {
-		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
-	}
-	if err = services.EnsureUserCanActOnWallet(ctx, sqlExec, d.Models.WalletMemberships, creatingUser, defaultWallet.ID,
-		data.FinancialControllerUserRole, data.InitiatorUserRole); err != nil {
-		if errors.Is(err, services.ErrWalletActionForbidden) {
-			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil)
-		}
-		return nil, httperror.InternalError(ctx, "Cannot authorize wallet action", err, nil)
+	// W3 routing: the source wallet is explicit via X-Wallet-Id (400 absent on multi-wallet
+	// tenants, 403 unentitled); single-wallet tenants legitimately omit it and use their
+	// default wallet. Entitlement (W2) and archived-status checks happen inside.
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, httpReq, d.AuthManager, d.Models,
+		data.FinancialControllerUserRole, data.InitiatorUserRole)
+	if walletErr != nil {
+		return nil, walletErr
 	}
 
 	// Insert disbursement
 	disbursement := data.Disbursement{
-		SourceWalletID:                      defaultWallet.ID,
+		SourceWalletID:                      sourceWallet.ID,
 		Asset:                               asset,
 		Name:                                req.Name,
 		ReceiverRegistrationMessageTemplate: req.ReceiverRegistrationMessageTemplate,
@@ -712,7 +698,7 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 
 	disbursement, err := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(tx db.DBTransaction) (*data.Disbursement, error) {
 		// 1. Create the Disbursement
-		disbursement, httpErr := d.createNewDisbursement(ctx, tx, user.ID, req)
+		disbursement, httpErr := d.createNewDisbursement(ctx, r, tx, user.ID, req)
 		if httpErr != nil {
 			return nil, httpErr
 		}
@@ -735,13 +721,13 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 	return disbursement, nil
 }
 
-func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
+func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, r *http.Request, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
 	v := d.validateRequest(ctx, req)
 	if v.HasErrors() {
 		return nil, httperror.BadRequest("", nil, v.Errors)
 	}
 
-	return d.createNewDisbursement(ctx, d.Models.DBConnectionPool, user.ID, req)
+	return d.createNewDisbursement(ctx, r, d.Models.DBConnectionPool, user.ID, req)
 }
 
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions

@@ -25,6 +25,7 @@ type Payment struct {
 	Status                  PaymentStatus        `json:"status" db:"status"`
 	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
 	Type                    PaymentType          `json:"type" db:"type"`
+	SourceWalletID          string               `json:"source_wallet_id" db:"source_wallet_id"`
 	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
 	Asset                   Asset                `json:"asset"`
 	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
@@ -69,8 +70,11 @@ var (
 )
 
 type PaymentInsert struct {
-	ReceiverID        string      `db:"receiver_id"`
-	DisbursementID    *string     `db:"disbursement_id"`
+	ReceiverID     string  `db:"receiver_id"`
+	DisbursementID *string `db:"disbursement_id"`
+	// SourceWalletID is REQUIRED for direct payments (no disbursement); disbursement
+	// payments inherit their disbursement's wallet at the DB layer.
+	SourceWalletID    string      `db:"source_wallet_id"`
 	PaymentType       PaymentType `db:"type"`
 	Amount            string      `db:"amount"`
 	AssetID           string      `db:"asset_id"`
@@ -177,6 +181,7 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"status",
 			"status_history",
 			"type",
+			"source_wallet_id",
 			"created_at",
 			"updated_at",
 		},
@@ -785,6 +790,9 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 	if err := insert.Validate(); err != nil {
 		return "", fmt.Errorf("validating payment: %w", err)
 	}
+	if insert.SourceWalletID == "" {
+		return "", fmt.Errorf("direct payments must state their source distribution wallet explicitly: %w", ErrMissingInput)
+	}
 
 	query := `
         INSERT INTO payments (
@@ -794,11 +802,12 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             receiver_wallet_id,
             external_payment_id,
             type,
+            source_wallet_id,
             status,
             status_history
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7,
-            ARRAY[create_payment_status_history(NOW(), $7::payment_status, $8)]
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            ARRAY[create_payment_status_history(NOW(), $8::payment_status, $9)]
         )
         RETURNING id
     `
@@ -812,6 +821,7 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 		insert.ReceiverWalletID,
 		insert.ExternalPaymentID,
 		insert.PaymentType,
+		insert.SourceWalletID,
 		ReadyPaymentStatus,
 		statusMessage,
 	); err != nil {

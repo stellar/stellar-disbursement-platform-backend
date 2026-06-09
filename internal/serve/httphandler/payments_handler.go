@@ -356,6 +356,15 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// W3 routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, p.AuthManager, p.Models,
+		data.FinancialControllerUserRole, data.BusinessUserRole)
+	if walletErr != nil {
+		walletErr.Render(w)
+		return
+	}
+	serviceReq.SourceWalletID = sourceWallet.ID
+
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, serviceReq, user, &distAccount)
 	if err != nil {
 		var (
