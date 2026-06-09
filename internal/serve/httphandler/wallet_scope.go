@@ -37,6 +37,23 @@ func walletInReadScope(scope []string, walletID string) bool {
 	return scope == nil || slices.Contains(scope, walletID)
 }
 
+// ensureWalletActionAllowed gates a state transition on the caller's wallet membership
+// (W2/W3): Owners pass; everyone else needs a qualifying role on the wallet. Returns a 403
+// that discloses no wallet details.
+func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, walletID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
+	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
+	if err != nil {
+		return httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+	}
+	if err := services.EnsureUserCanActOnWallet(ctx, models.DBConnectionPool, models.WalletMemberships, user, walletID, requiredRoles...); err != nil {
+		if errors.Is(err, services.ErrWalletActionForbidden) {
+			return httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot authorize wallet action", err, nil)
+	}
+	return nil
+}
+
 // XWalletIDHeader carries the explicit source distribution wallet on write requests (W3).
 const XWalletIDHeader = "X-Wallet-Id"
 

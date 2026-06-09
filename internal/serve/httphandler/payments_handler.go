@@ -206,6 +206,24 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
+	// W3: retrying is a state transition — gate each payment on its source wallet.
+	for _, retryPaymentID := range reqBody.PaymentIDs {
+		retryPayment, getErr := p.Models.Payment.Get(ctx, retryPaymentID, p.DBConnectionPool)
+		if getErr != nil {
+			if errors.Is(getErr, data.ErrRecordNotFound) {
+				httperror.NotFound("payment not found", getErr, nil).Render(rw)
+			} else {
+				httperror.InternalError(ctx, "Cannot load payment", getErr, nil).Render(rw)
+			}
+			return
+		}
+		if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, retryPayment.SourceWalletID,
+			data.FinancialControllerUserRole, data.BusinessUserRole); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
+	}
+
 	err = db.RunInTransaction(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
 		if err != nil {
@@ -288,6 +306,22 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 
 	ctx := r.Context()
 	paymentID := chi.URLParam(r, "id")
+
+	// W3: every state transition is gated on the payment's source wallet.
+	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound(services.ErrPaymentNotFound.Error(), err, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Cannot load payment", err, nil).Render(w)
+		}
+		return
+	}
+	if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, payment.SourceWalletID,
+		data.FinancialControllerUserRole); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
 
 	switch toStatus {
 	case data.CanceledPaymentStatus:

@@ -243,6 +243,12 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 			return nil, ErrDisbursementStarted
 		}
 
+		// W3: deletion is a state transition — gate on the disbursement's source wallet.
+		if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
+			data.FinancialControllerUserRole, data.InitiatorUserRole); httpErr != nil {
+			return nil, httpErr
+		}
+
 		// Delete associated payments
 		err = d.Models.Payment.DeleteAllDraftForDisbursement(ctx, tx, disbursementID)
 		if err != nil {
@@ -264,6 +270,11 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 		case errors.Is(err, ErrDisbursementStarted):
 			httperror.BadRequest("Cannot delete a disbursement that has started", err, nil).Render(w)
 		default:
+			var httpErr *httperror.HTTPError
+			if errors.As(err, &httpErr) {
+				httpErr.Render(w)
+				return
+			}
 			httperror.InternalError(ctx, "Cannot delete disbursement", err, nil).Render(w)
 		}
 		return
@@ -338,6 +349,13 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	if err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if getErr == nil {
+			// W3: instruction upload routes funds from the disbursement's wallet — gate it.
+			if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
+				data.FinancialControllerUserRole, data.InitiatorUserRole); httpErr != nil {
+				return httpErr
+			}
+		}
 		if getErr != nil {
 			return httperror.BadRequest("disbursement ID is invalid", getErr, nil)
 		}
