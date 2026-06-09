@@ -70,6 +70,7 @@ func Test_NewSignatureClient(t *testing.T) {
 			},
 			wantResult: &DistributionAccountDBVaultSignatureClient{
 				dbVault:              store.NewDBVaultModel(dbConnectionPool),
+				walletKeys:           store.NewDistributionWalletKeyModel(dbConnectionPool),
 				encrypter:            &sdpUtils.PrivateKeyEncrypterMock{},
 				encryptionPassphrase: encryptionPassphrase,
 				networkPassphrase:    network.TestNetworkPassphrase,
