@@ -376,7 +376,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						TenantName: "default-tenant",
 					},
 				}
-				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, mock.MatchedBy(func(m map[string]string) bool {
+					return m["asset"] == labels.Asset && m["wallet"] == labels.Wallet && m["wallet_id"] != ""
+				})).Return(nil).Once()
 			},
 			reqBody: map[string]interface{}{
 				"name":                                   fmt.Sprintf("successful disbursement %d", i),
@@ -468,7 +470,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					TenantName: "default-tenant",
 				},
 			}
-			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, mock.MatchedBy(func(m map[string]string) bool {
+				return m["asset"] == labels.Asset && m["wallet"] == labels.Wallet && m["wallet_id"] != ""
+			})).Return(nil).Once()
 		}
 
 		reqBody := map[string]interface{}{
@@ -2642,7 +2646,9 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 			}
 
 			mMonitorService.
-				On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).
+				On("MonitorCounters", monitor.DisbursementsCounterTag, mock.MatchedBy(func(m map[string]string) bool {
+					return m["asset"] == labels.Asset && m["wallet"] == labels.Wallet && m["wallet_id"] != ""
+				})).
 				Return(nil).
 				Maybe()
 

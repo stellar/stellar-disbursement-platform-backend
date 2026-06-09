@@ -18,6 +18,9 @@ type DBQueryLabels struct {
 type DisbursementLabels struct {
 	Asset  string
 	Wallet string
+	// WalletID is the source DISTRIBUTION wallet UUID (W4 per-wallet observability) —
+	// distinct from Wallet, which is the recipient wallet-provider name.
+	WalletID string
 	CommonLabels
 }
 
@@ -25,6 +28,7 @@ func (d DisbursementLabels) ToMap() map[string]string {
 	return map[string]string{
 		"asset":       d.Asset,
 		"wallet":      d.Wallet,
+		"wallet_id":   d.WalletID,
 		"tenant_name": d.TenantName,
 	}
 }

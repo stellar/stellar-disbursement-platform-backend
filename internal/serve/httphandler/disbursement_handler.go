@@ -223,8 +223,9 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq 
 
 func (d DisbursementHandler) recordCreateDisbursementMetrics(ctx context.Context, disbursement *data.Disbursement) {
 	labels := monitor.DisbursementLabels{
-		Asset:  disbursement.Asset.Code,
-		Wallet: disbursement.Wallet.Name,
+		Asset:    disbursement.Asset.Code,
+		Wallet:   disbursement.Wallet.Name,
+		WalletID: disbursement.SourceWalletID,
 		CommonLabels: monitor.CommonLabels{
 			TenantName: sdpcontext.MustGetTenantNameFromContext(ctx),
 		},

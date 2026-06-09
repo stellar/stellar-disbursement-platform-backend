@@ -63,6 +63,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			},
 			logLevel: log.DebugLevel,
 			fieldsMap: map[string]interface{}{
+				"wallet_id":       "",
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"event_id":        "test_event_id_1",
@@ -96,6 +97,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			},
 			logLevel: log.InfoLevel,
 			fieldsMap: map[string]interface{}{
+				"wallet_id":       "",
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"completed_at":    time.String(),
@@ -133,6 +135,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			},
 			logLevel: log.InfoLevel,
 			fieldsMap: map[string]interface{}{
+				"wallet_id":       "",
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"error":           errStr,
@@ -167,6 +170,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			},
 			logLevel: log.DebugLevel,
 			fieldsMap: map[string]interface{}{
+				"wallet_id":       "",
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"event_id":        "test_event_id_4",
@@ -200,6 +204,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			},
 			logLevel: log.InfoLevel,
 			fieldsMap: map[string]interface{}{
+				"wallet_id":       "",
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"completed_at":    time.String(),
@@ -237,6 +242,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			},
 			logLevel: log.InfoLevel,
 			fieldsMap: map[string]interface{}{
+				"wallet_id":       "",
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"error":           errStr,

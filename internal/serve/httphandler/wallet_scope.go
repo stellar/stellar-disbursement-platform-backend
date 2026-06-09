@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/stellar/go-stellar-sdk/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -112,6 +114,9 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 	if wallet.Status == data.ArchivedDistributionWalletStatus {
 		return nil, httperror.BadRequest("the wallet is archived and accepts no new disbursements or payments", nil, nil)
 	}
+
+	// Per-wallet observability (W4): wallet_id joins the request's structured-log context.
+	log.Set(ctx, log.Ctx(ctx).WithField("wallet_id", wallet.ID))
 
 	return wallet, nil
 }

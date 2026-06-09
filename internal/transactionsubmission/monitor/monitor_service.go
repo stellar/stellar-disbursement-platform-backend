@@ -81,6 +81,7 @@ func (ms *TSSMonitorService) buildCommonFields(tx store.Transaction, txMetadata 
 		// Transaction info
 		"tx_id":           tx.ID,
 		"tenant_id":       tx.TenantID,
+		"wallet_id":       tx.WalletID.String,
 		"channel_account": txMetadata.SrcChannelAcc,
 	}
 }
