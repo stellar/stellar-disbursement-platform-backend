@@ -396,6 +396,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"sdp_migrations",
 			"short_urls",
 			"sponsored_transactions",
+			"wallet_memberships",
+			"wallet_memberships_audit",
 			"wallets",
 			"wallets_assets",
 			"receiver_registration_attempts",
