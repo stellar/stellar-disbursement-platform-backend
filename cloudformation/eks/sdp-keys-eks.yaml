@@ -90,6 +90,18 @@ Parameters:
     Default: "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
     Description: "Environment variable: RECAPTCHA_SITE_SECRET_KEY"
 
+Rules:
+  Sep10PublicKeyRequiresPrivate:
+    RuleCondition: !Not [ !Equals [ !Ref Sep10SigningPublicKey, "" ] ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref Sep10SigningPrivateKey, "" ] ]
+        AssertDescription: "Sep10SigningPrivateKey must be provided when Sep10SigningPublicKey is set."
+  DistributionPublicKeyRequiresSeed:
+    RuleCondition: !Not [ !Equals [ !Ref DistributionPublicKey, "" ] ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref DistributionSeed, "" ] ]
+        AssertDescription: "DistributionSeed must be provided when DistributionPublicKey is set."
+
 Conditions:
   GenerateSep10Keys: !Equals [ !Ref Sep10SigningPublicKey, "" ]
   GenerateDistributionKeys: !Equals [ !Ref DistributionPublicKey, "" ]

@@ -22,23 +22,23 @@ export DOMAIN_NAME=example.org  # Your registered domain
 ## Cloudformation Stacks
 This guide walks through deploying the Stellar Disbursement Platform (SDP) infrastructure on AWS. The deployment consists of four CloudFormation stacks that create the necessary infrastructure in a specific order:
 
-- Network Stack (sdp-network-eks.yaml)
+- Network Stack (`sdp-network-eks.yaml`)
   - Creates or uses existing VPC and subnets
   - Sets up networking for both public and private resources
   - Exports used (imported) by database and EKS stack to deploy resources
 
-- Database Stack (sdp-database-eks.yaml)
+- Database Stack (`sdp-database-eks.yaml`)
   - Deploys RDS PostgreSQL database in private subnet
   - Creates necessary database secrets in AWS Secrets Manager
 
-- Keys Stack (sdp-keys-eks.yaml) [Optional]
+- Keys Stack (`sdp-keys-eks.yaml`) [Optional]
   - Manages Stellar and encryption keys by either:
     - Using provided keys via parameters, or
     - Auto-generating keys using Lambda function for dev/test environments
-  - Stores all keys and secrets in AWS Secrets Manager under /sdp/${ENVIRONMENT}/SECRET_NAME
+  - Stores all keys and secrets in AWS Secrets Manager under `/${namespace}/${ENVIRONMENT}/SECRET_NAME`
   - Keys include SEP-10 signing keys, distribution account keys, etc.
 
-- EKS Stack (sdp-eks.yaml)
+- EKS Stack (`sdp-eks.yaml`)
   - Creates EKS cluster and node group
   - Sets up IAM roles and security groups
   - Configures IRSA (IAM Roles for Service Accounts)
@@ -96,7 +96,7 @@ aws cloudformation create-stack \
 
 ## 3. Keys Stack Deployment
 
-Create and store SDP secrets in AWS Secrets Manager. All secrets are stored at `/sdp/${ENVIRONMENT}/SECRET_NAME` and synced to Kubernetes via ExternalSecrets.
+Create and store SDP secrets in AWS Secrets Manager. All secrets are stored at `/${namespace}/${ENVIRONMENT}/SECRET_NAME` and synced to Kubernetes via ExternalSecrets. Note that if you override the namespace (default value = `sdp`), you must also update the `remoteRef.key` paths in `helm/sdp-secrets-${ENVIRONMENT}.yaml` and the name-prefix filter accordingly.
 
 ### 3.1 Testnet Secrets
 
@@ -159,7 +159,7 @@ aws cloudformation create-stack \
     ParameterKey=DistributionAccountEncryptionPassphrase,ParameterValue=your-distribution-encryption-passphrase
     # etc
 ```
-Alternatively, you can write all the parameters as key-value pairs in a JSON file:
+Alternatively, you can write all the parameters as key-value pairs in a JSON file (complete missing parameters following the same pattern):
 
 ```json
 [
@@ -170,11 +170,10 @@ Alternatively, you can write all the parameters as key-value pairs in a JSON fil
   {
     "ParameterKey": "DistributionSeed",
     "ParameterValue": "your-distribution-account-secret-key"
-  }, 
-  # etc
+  }
 ]
 ```
-Then you can pass this JSON file to the `create-stack` command:
+Then pass this JSON file to the `create-stack` command:
 
 ```bash
 aws cloudformation create-stack \

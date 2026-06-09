@@ -60,6 +60,21 @@ Parameters:
     Type: String
     Default: "10.0.3.0/24"
 
+Rules:
+  ExistingVPCRequiresCidrAndSubnets:
+    RuleCondition: !Not [ !Equals [ !Ref ExistingVPCId, "" ] ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref ExistingVPCCidr, "" ] ]
+        AssertDescription: "ExistingVPCCidr must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPublicSubnet1Id, "" ] ]
+        AssertDescription: "ExistingPublicSubnet1Id must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPublicSubnet2Id, "" ] ]
+        AssertDescription: "ExistingPublicSubnet2Id must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPrivateSubnet1Id, "" ] ]
+        AssertDescription: "ExistingPrivateSubnet1Id must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPrivateSubnet2Id, "" ] ]
+        AssertDescription: "ExistingPrivateSubnet2Id must be provided when ExistingVPCId is set."
+
 Conditions:
   CreateNewVPC: !Equals 
     - !Ref ExistingVPCId
@@ -103,7 +118,7 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs !Ref AWS::Region ]
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -117,7 +132,7 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs !Ref AWS::Region ]
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -132,7 +147,7 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs !Ref AWS::Region ]
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-private-subnet-1
@@ -145,7 +160,7 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs !Ref AWS::Region ]
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-private-subnet-2
