@@ -243,6 +243,13 @@ func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptio
 	}
 }
 
+// WithEventDeliveryJobOption registers the outbox webhook-delivery job (W3 multi-wallet).
+func WithEventDeliveryJobOption(models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		s.addJob(jobs.NewEventDeliveryJob(models))
+	}
+}
+
 func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewPaymentFromSubmitterJob(paymentJobInterval, models, tssDBConnectionPool)

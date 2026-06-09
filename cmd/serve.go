@@ -114,6 +114,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 		}),
 		scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+		scheduler.WithEventDeliveryJobOption(models),
 		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
 			Models:                      models,
 			MessageDispatcher:           serveOpts.MessageDispatcher,
