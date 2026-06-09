@@ -23,6 +23,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
@@ -200,6 +201,15 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq 
 			return nil, httperror.BadRequest("could not create disbursement", err, nil)
 		}
 	}
+
+	// Outbox (W3): disbursement.created, same executor as the insert.
+	if err = events.Write(ctx, sqlExec, events.DisbursementCreated, sourceWallet.ID, map[string]any{
+		"disbursement_id": newID,
+		"name":            disbursement.Name,
+		"actor_user_id":   userID,
+	}); err != nil {
+		return nil, httperror.InternalError(ctx, "Cannot write disbursement.created event", err, nil)
+	}
 	newDisbursement, err := d.Models.Disbursements.Get(ctx, sqlExec, newID)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newID)
@@ -259,6 +269,15 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 		err = d.Models.Disbursements.Delete(ctx, tx, disbursementID)
 		if err != nil {
 			return nil, fmt.Errorf("deleting draft or ready disbursement: %w", err)
+		}
+
+		// Outbox (W3): a deleted draft is a rejected disbursement, same transaction.
+		if err = events.Write(ctx, tx, events.DisbursementRejected, disbursement.SourceWalletID, map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"reason":          "draft_deleted",
+		}); err != nil {
+			return nil, fmt.Errorf("writing disbursement.rejected event: %w", err)
 		}
 
 		return disbursement, nil

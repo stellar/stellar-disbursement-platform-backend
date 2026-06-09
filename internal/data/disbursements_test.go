@@ -568,7 +568,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			ReceiverWallet:       receiverWallet,
 		})
 
-		err = models.Disbursements.CompleteDisbursements(ctx, dbConnectionPool, []string{readyDisbursement.ID})
+		_, err = models.Disbursements.CompleteDisbursements(ctx, dbConnectionPool, []string{readyDisbursement.ID})
 		require.NoError(t, err)
 
 		readyDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, readyDisbursement.ID)
@@ -605,7 +605,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			ReceiverWallet:       receiverWallet,
 		})
 
-		err = models.Disbursements.CompleteDisbursements(ctx, dbConnectionPool, []string{startedDisbursement.ID})
+		_, err = models.Disbursements.CompleteDisbursements(ctx, dbConnectionPool, []string{startedDisbursement.ID})
 		require.NoError(t, err)
 
 		startedDisbursement, err = models.Disbursements.Get(ctx, dbConnectionPool, startedDisbursement.ID)
@@ -660,7 +660,7 @@ func Test_DisbursementModel_CompleteDisbursements(t *testing.T) {
 			ReceiverWallet:       receiverWallet,
 		})
 
-		err = models.Disbursements.CompleteDisbursements(ctx, dbConnectionPool, []string{disbursement1.ID, disbursement2.ID})
+		_, err = models.Disbursements.CompleteDisbursements(ctx, dbConnectionPool, []string{disbursement1.ID, disbursement2.ID})
 		require.NoError(t, err)
 
 		disbursement1, err = models.Disbursements.Get(ctx, dbConnectionPool, disbursement1.ID)

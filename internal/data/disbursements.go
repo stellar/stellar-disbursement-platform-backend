@@ -443,7 +443,7 @@ func (dsh *DisbursementStatusHistory) Scan(src interface{}) error {
 }
 
 // CompleteDisbursements sets disbursements statuses to complete after all payments are processed and successfully sent.
-func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec db.SQLExecuter, disbursementIDs []string) error {
+func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec db.SQLExecuter, disbursementIDs []string) ([]string, error) {
 	query := `
 		WITH incompleted_disbursements AS (
 			SELECT
@@ -473,12 +473,13 @@ func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec d
 			AND id NOT IN (SELECT disbursement_id FROM incompleted_disbursements)
 	`
 
-	_, err := sqlExec.ExecContext(ctx, query, CompletedDisbursementStatus, pq.Array(disbursementIDs), StartedDisbursementStatus, SuccessPaymentStatus)
+	completedIDs := []string{}
+	err := sqlExec.SelectContext(ctx, &completedIDs, query+" RETURNING id", CompletedDisbursementStatus, pq.Array(disbursementIDs), StartedDisbursementStatus, SuccessPaymentStatus)
 	if err != nil {
-		return fmt.Errorf("error completing disbursement: %w", err)
+		return nil, fmt.Errorf("error completing disbursement: %w", err)
 	}
 
-	return nil
+	return completedIDs, nil
 }
 
 // Delete deletes a disbursement by ID

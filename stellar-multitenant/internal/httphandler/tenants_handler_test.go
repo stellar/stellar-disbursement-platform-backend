@@ -383,6 +383,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"distribution_wallets",
 			"distribution_wallets_audit",
 			"embedded_wallets",
+			"events",
 			"messages",
 			"organizations",
 			"passkey_sessions",

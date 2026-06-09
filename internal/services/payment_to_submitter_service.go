@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
@@ -126,6 +127,22 @@ func (s PaymentToSubmitterService) markPaymentsAsFailed(ctx context.Context, sdp
 	}
 
 	numUpdated, err := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, failedPayments, data.FailedPaymentStatus)
+	if err == nil {
+		// Outbox (W3): disbursement.failed once per distinct disbursement with a permanently
+		// failed payment, same transaction. Direct payments have no disbursement to fail.
+		seenDisbursements := map[string]bool{}
+		for _, failedPayment := range failedPayments {
+			if failedPayment.Disbursement == nil || failedPayment.Disbursement.ID == "" || seenDisbursements[failedPayment.Disbursement.ID] {
+				continue
+			}
+			seenDisbursements[failedPayment.Disbursement.ID] = true
+			if writeErr := events.Write(ctx, sdpDBTx, events.DisbursementFailed, failedPayment.SourceWalletID, map[string]any{
+				"disbursement_id": failedPayment.Disbursement.ID,
+			}); writeErr != nil {
+				return fmt.Errorf("writing disbursement.failed event: %w", writeErr)
+			}
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("updating payment statuses to Failed: %w", err)
 	}

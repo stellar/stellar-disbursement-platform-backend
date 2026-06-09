@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -261,6 +262,19 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 
+		// Outbox (W3): approval + hand-off to the TSS pipeline, same transaction.
+		eventData := map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"actor_user_id":   user.ID,
+		}
+		if err = events.Write(ctx, dbTx, events.DisbursementApproved, disbursement.SourceWalletID, eventData); err != nil {
+			return fmt.Errorf("writing disbursement.approved event: %w", err)
+		}
+		if err = events.Write(ctx, dbTx, events.DisbursementSubmitted, disbursement.SourceWalletID, eventData); err != nil {
+			return fmt.Errorf("writing disbursement.submitted event: %w", err)
+		}
+
 		return nil
 	})
 }
@@ -387,6 +401,15 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 		err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// Outbox (W3): paused, same transaction.
+		if err = events.Write(ctx, dbTx, events.DisbursementPaused, disbursement.SourceWalletID, map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"actor_user_id":   user.ID,
+		}); err != nil {
+			return fmt.Errorf("writing disbursement.paused event: %w", err)
 		}
 
 		return nil
