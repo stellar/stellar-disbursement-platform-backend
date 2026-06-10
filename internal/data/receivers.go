@@ -277,6 +277,11 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQL
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("r.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
+	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
+		// Membership-filtered visibility (W2/W4, accepted flag R1): a receiver is visible to
+		// callers whose wallets have paid them at least once.
+		qb.AddCondition("EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = r.id AND pw.source_wallet_id = ANY(?))", pq.Array(walletIDs))
+	}
 
 	switch queryType {
 	case QueryTypeSelectPaginated:

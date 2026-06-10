@@ -11,10 +11,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type ExportHandler struct {
-	Models *data.Models
+	Models      *data.Models
+	AuthManager auth.AuthManager
 }
 
 func (e ExportHandler) ExportDisbursements(rw http.ResponseWriter, r *http.Request) {
@@ -32,6 +34,16 @@ func (e ExportHandler) ExportDisbursements(rw http.ResponseWriter, r *http.Reque
 	if validator.HasErrors() {
 		httperror.BadRequest("Request invalid", nil, validator.Errors).Render(rw)
 		return
+	}
+
+	// Membership-filtered visibility (W2/W4, flag R4): exports carry only the caller's wallets.
+	scope, scopeErr := resolveWalletReadScope(ctx, e.AuthManager, e.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
 	}
 
 	disbursements, err := e.Models.Disbursements.GetAll(ctx, e.Models.DBConnectionPool, queryParams, data.QueryTypeSelectAll)
@@ -86,6 +98,16 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 	if validator.HasErrors() {
 		httperror.BadRequest("Request invalid", nil, validator.Errors).Render(rw)
 		return
+	}
+
+	// Membership-filtered visibility (W2/W4, flag R4): exports carry only the caller's wallets.
+	scope, scopeErr := resolveWalletReadScope(ctx, e.AuthManager, e.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
 	}
 
 	payments, err := e.Models.Payment.GetAll(ctx, queryParams, e.Models.DBConnectionPool, data.QueryTypeSelectAll)
@@ -195,6 +217,16 @@ func (e ExportHandler) ExportReceivers(rw http.ResponseWriter, r *http.Request) 
 	if validator.HasErrors() {
 		httperror.BadRequest("Request invalid", nil, validator.Errors).Render(rw)
 		return
+	}
+
+	// Membership-filtered visibility (W2/W4, flags R1/R4).
+	scope, scopeErr := resolveWalletReadScope(ctx, e.AuthManager, e.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
 	}
 
 	receivers, err := e.Models.Receiver.GetAll(ctx, e.Models.DBConnectionPool, queryParams, data.QueryTypeSelectAll)

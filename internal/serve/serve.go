@@ -512,7 +512,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		// Receiver endpoints
 		r.Route("/receivers", func(r chi.Router) {
-			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
+			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool, AuthManager: authManager}
 
 			// Read operations
 			r.With(middleware.RequirePermission(
@@ -735,7 +735,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.Get)
 
 		exportHandler := httphandler.ExportHandler{
-			Models: o.Models,
+			Models:      o.Models,
+			AuthManager: authManager,
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,
