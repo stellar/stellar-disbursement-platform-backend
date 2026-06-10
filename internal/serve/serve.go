@@ -390,7 +390,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			data.ReadStatistics,
 			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Route("/statistics", func(r chi.Router) {
-			h := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
+			h := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool, Models: o.Models, AuthManager: authManager}
 			r.Get("/", h.GetStatistics)
 			r.Get("/{id}", h.GetStatisticsByDisbursement)
 		})
@@ -611,7 +611,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		// Distribution wallets (the tenant's sending accounts) — Owner-only per the spec.
 		if o.distributionWalletService != nil {
 			r.Route("/distribution-wallets", func(r chi.Router) {
-				distributionWalletsHandler := httphandler.DistributionWalletsHandler{Service: o.distributionWalletService, AuthManager: authManager}
+				distributionWalletsHandler := httphandler.DistributionWalletsHandler{
+					Service:                    o.distributionWalletService,
+					AuthManager:                authManager,
+					Models:                     o.Models,
+					DistributionAccountService: o.DistributionAccountService,
+				}
 
 				// Read operations
 				r.With(middleware.RequirePermission(
@@ -619,9 +624,17 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 				)).Group(func(r chi.Router) {
 					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
+					r.Get("/balance", distributionWalletsHandler.GetDistributionWalletsTotalBalance)
 					r.Get("/{id}", distributionWalletsHandler.GetDistributionWallet)
 					r.Get("/{id}/memberships", distributionWalletsHandler.GetDistributionWalletMemberships)
 				})
+
+				// Per-wallet balance (the dashboard Total Balance tile): any business role at the
+				// route; wallet membership is enforced in-handler (404 outside the caller's scope).
+				r.With(middleware.RequirePermission(
+					data.ReadDistributionWallets,
+					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+				)).Get("/{id}/balance", distributionWalletsHandler.GetDistributionWalletBalance)
 
 				// Write operations
 				r.With(middleware.RequirePermission(

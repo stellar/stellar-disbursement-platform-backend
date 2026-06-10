@@ -1,10 +1,12 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -12,14 +14,136 @@ import (
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // DistributionWalletsHandler exposes Owner-only CRUD for the tenant's distribution wallets
 // (the sending accounts — not the recipient wallet providers served by WalletsHandler).
 type DistributionWalletsHandler struct {
-	Service     services.DistributionWalletManagementServiceInterface
-	AuthManager auth.AuthManager
+	Service                    services.DistributionWalletManagementServiceInterface
+	AuthManager                auth.AuthManager
+	Models                     *data.Models
+	DistributionAccountService services.DistributionAccountServiceInterface
+}
+
+// WalletBalanceResponse is one wallet's live balance set (the dashboard Total Balance tile).
+type WalletBalanceResponse struct {
+	WalletID string            `json:"wallet_id,omitempty"`
+	Balances map[string]string `json:"balances"`
+}
+
+// GetDistributionWalletBalance returns one wallet's live on-chain balances. Reads follow the
+// membership taxonomy: 404 outside the caller's scope (existence undisclosed).
+func (h DistributionWalletsHandler) GetDistributionWalletBalance(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	walletID := chi.URLParam(req, "id")
+
+	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+	if !walletInReadScope(scope, walletID) {
+		httperror.NotFound("distribution wallet not found", nil, nil).Render(rw)
+		return
+	}
+
+	wallet, err := h.Service.GetWallet(ctx, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("distribution wallet not found", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot load distribution wallet", err, nil).Render(rw)
+		return
+	}
+
+	balances, httpErr := h.walletBalances(ctx, wallet)
+	if httpErr != nil {
+		httpErr.Render(rw)
+		return
+	}
+
+	httpjson.Render(rw, WalletBalanceResponse{WalletID: wallet.ID, Balances: balances}, httpjson.JSON)
+}
+
+// GetDistributionWalletsTotalBalance returns the all-wallets aggregate — Owner-only per the
+// accepted taxonomy (tenant-wide balance summaries are an Owner view).
+func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
+		return
+	}
+	if !user.IsOwner {
+		httperror.Forbidden("the all-wallets balance view is available to Owners only", nil, nil).Render(rw)
+		return
+	}
+
+	wallets, err := h.Service.ListWallets(ctx, false)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot list distribution wallets", err, nil).Render(rw)
+		return
+	}
+
+	totals := map[string]string{}
+	for i := range wallets {
+		balances, httpErr := h.walletBalances(ctx, &wallets[i])
+		if httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
+		for asset, amount := range balances {
+			totals[asset] = sumDecimalStrings(totals[asset], amount)
+		}
+	}
+
+	httpjson.Render(rw, WalletBalanceResponse{Balances: totals}, httpjson.JSON)
+}
+
+func (h DistributionWalletsHandler) walletBalances(ctx context.Context, wallet *data.DistributionWallet) (map[string]string, *httperror.HTTPError) {
+	if wallet.Address == nil || *wallet.Address == "" {
+		// Pending-activation wallets have no on-chain account yet.
+		return map[string]string{}, nil
+	}
+
+	account := schema.TransactionAccount{
+		Address: *wallet.Address,
+		Type:    wallet.AccountType,
+		Status:  wallet.AccountStatus,
+	}
+	balances, err := h.DistributionAccountService.GetBalances(ctx, &account)
+	if err != nil {
+		return nil, httperror.InternalError(ctx, "Cannot retrieve wallet balances", err, nil)
+	}
+
+	out := make(map[string]string, len(balances))
+	for asset, amount := range balances {
+		out[assetBalanceKey(asset)] = amount.String()
+	}
+	return out, nil
+}
+
+func assetBalanceKey(asset data.Asset) string {
+	if asset.IsNative() {
+		return "XLM"
+	}
+	return asset.Code + ":" + asset.Issuer
+}
+
+func sumDecimalStrings(a, b string) string {
+	if a == "" {
+		return b
+	}
+	da, errA := decimal.NewFromString(a)
+	db, errB := decimal.NewFromString(b)
+	if errA != nil || errB != nil {
+		return a
+	}
+	return da.Add(db).String()
 }
 
 // WalletMembershipRequest is the request body to grant a wallet-scoped role.
