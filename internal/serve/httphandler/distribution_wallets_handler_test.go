@@ -154,9 +154,10 @@ func Test_DistributionWalletsHandler_GetDistributionWallets(t *testing.T) {
 				gotIncludeArchived = includeArchived
 				return []data.DistributionWallet{{ID: "dw-1", Name: "default", IsDefault: true}}, nil
 			},
-		}}
+		}, AuthManager: newWalletScopeOwnerMock()}
 
 		req := httptest.NewRequest(http.MethodGet, "/distribution-wallets?include_archived=true", nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 		rr := httptest.NewRecorder()
 		handler.GetDistributionWallets(rr, req)
 
