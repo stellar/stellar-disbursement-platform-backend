@@ -138,12 +138,37 @@ func Test_W4_WalletAwareDashboards(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rr.Code, "no existence disclosure outside scope")
 	})
 
-	t.Run("aggregate balance: Owner-only, sums across wallets", func(t *testing.T) {
+	t.Run("aggregate balance: Owner sums all wallets; member sums only their scope", func(t *testing.T) {
 		rr := balanceAs(owner.ID, "/distribution-wallets/balance")
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "80"`, "40 + 40 across two wallets")
 
+		// Member aggregate mirrors /statistics: their membership set only — wallet B's
+		// balance never reaches them.
 		rr = balanceAs(memberA.ID, "/distribution-wallets/balance")
-		assert.Equal(t, http.StatusForbidden, rr.Code)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "40"`, "wallet A only")
+	})
+
+	t.Run("wallet listing: members see only their wallets (the picker source)", func(t *testing.T) {
+		listHandler := walletsHandler
+		lr := chi.NewRouter()
+		lr.Get("/distribution-wallets", listHandler.GetDistributionWallets)
+
+		req := httptest.NewRequest(http.MethodGet, "/distribution-wallets", nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, memberA.ID))
+		rr := httptest.NewRecorder()
+		lr.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), walletA.ID)
+		assert.NotContains(t, rr.Body.String(), walletBID, "no cross-wallet disclosure in the listing")
+
+		req = httptest.NewRequest(http.MethodGet, "/distribution-wallets", nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, owner.ID))
+		rr = httptest.NewRecorder()
+		lr.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), walletA.ID)
+		assert.Contains(t, rr.Body.String(), walletBID)
 	})
 }

@@ -22,6 +22,10 @@ const (
 	// visible in the events table for operations.
 	eventDeliveryMaxAttempts = 20
 	eventDeliveryHTTPTimeout = 10 * time.Second
+	// eventDeliveryRetentionDays bounds outbox growth: DELIVERED events older than this are
+	// pruned each run. Undelivered (including poisoned) events are NEVER pruned — they stay
+	// visible for operations until handled.
+	eventDeliveryRetentionDays = 30
 )
 
 // eventDeliveryJob delivers undelivered outbox events to the tenant's configured webhook URL
@@ -40,6 +44,15 @@ func NewEventDeliveryJob(models *data.Models) Job {
 }
 
 func (j eventDeliveryJob) Execute(ctx context.Context) error {
+	// Retention: prune delivered events past the window (runs regardless of webhook config so
+	// the outbox table stays bounded even if delivery is later disabled).
+	if _, pruneErr := j.models.DBConnectionPool.ExecContext(ctx, `
+		DELETE FROM events
+		WHERE delivered_at IS NOT NULL AND delivered_at < NOW() - make_interval(days => $1)`,
+		eventDeliveryRetentionDays); pruneErr != nil {
+		return fmt.Errorf("pruning delivered events: %w", pruneErr)
+	}
+
 	organization, err := j.models.Organizations.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("getting organization for event delivery: %w", err)

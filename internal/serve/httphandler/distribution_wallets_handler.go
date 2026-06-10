@@ -68,18 +68,16 @@ func (h DistributionWalletsHandler) GetDistributionWalletBalance(rw http.Respons
 	httpjson.Render(rw, WalletBalanceResponse{WalletID: wallet.ID, Balances: balances}, httpjson.JSON)
 }
 
-// GetDistributionWalletsTotalBalance returns the all-wallets aggregate — Owner-only per the
-// accepted taxonomy (tenant-wide balance summaries are an Owner view).
+// GetDistributionWalletsTotalBalance returns the balance aggregate, scoped per the read
+// taxonomy exactly like /statistics: Owners sum every wallet (the tenant-wide view stays
+// Owner-only); members sum only the wallets they hold memberships on. No caller ever sees a
+// balance outside their scope.
 func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
-		return
-	}
-	if !user.IsOwner {
-		httperror.Forbidden("the all-wallets balance view is available to Owners only", nil, nil).Render(rw)
+	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
 		return
 	}
 
@@ -91,6 +89,9 @@ func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.R
 
 	totals := map[string]string{}
 	for i := range wallets {
+		if scope != nil && !walletInReadScope(scope, wallets[i].ID) {
+			continue
+		}
 		balances, httpErr := h.walletBalances(ctx, &wallets[i])
 		if httpErr != nil {
 			httpErr.Render(rw)
@@ -282,10 +283,28 @@ func (h DistributionWalletsHandler) GetDistributionWallets(rw http.ResponseWrite
 
 	includeArchived := req.URL.Query().Get("include_archived") == "true"
 
+	// Membership-filtered visibility (read taxonomy): Owners list every wallet; members list
+	// only wallets they hold a membership on (the wallet picker's data source).
+	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+
 	wallets, err := h.Service.ListWallets(ctx, includeArchived)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve distribution wallets", err, nil).Render(rw)
 		return
+	}
+
+	if scope != nil {
+		visible := make([]data.DistributionWallet, 0, len(wallets))
+		for i := range wallets {
+			if walletInReadScope(scope, wallets[i].ID) {
+				visible = append(visible, wallets[i])
+			}
+		}
+		wallets = visible
 	}
 
 	httpjson.Render(rw, wallets, httpjson.JSON)

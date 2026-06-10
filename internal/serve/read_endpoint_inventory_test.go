@@ -46,10 +46,10 @@ var readEndpointInventory = map[string]string{
 	"GET /api-keys/":                             "tenant-scoped",
 	"GET /api-keys/{id}":                         "tenant-scoped",
 	"GET /balances":                              "tenant-scoped",
-	"GET /distribution-wallets/":                 "tenant-scoped", // Owner-only route
-	"GET /distribution-wallets/balance":          "tenant-scoped", // Owner-only aggregate
-	"GET /distribution-wallets/{id}/":            "tenant-scoped", // Owner-only route
-	"GET /distribution-wallets/{id}/memberships": "tenant-scoped", // Owner-only admin/audit view
+	"GET /distribution-wallets/":                 "membership-filtered", // members list their wallets; Owners all
+	"GET /distribution-wallets/balance":          "membership-filtered", // scope-summed aggregate (Owner = tenant-wide)
+	"GET /distribution-wallets/{id}/":            "tenant-scoped",       // Owner-only admin view
+	"GET /distribution-wallets/{id}/memberships": "tenant-scoped",       // Owner-only admin/audit view
 
 	// OUT OF SCOPE: recipient/SEP/embedded-wallet flows (PRD non-goal) and infra.
 	"GET /health":                                       "out-of-scope",

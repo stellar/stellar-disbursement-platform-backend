@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -114,4 +115,48 @@ func Test_EventDeliveryJob(t *testing.T) {
 		_, attempts = eventState(eventID)
 		assert.Equal(t, 2, attempts, "each run retries undelivered events")
 	})
+}
+
+// Test_EventDeliveryJob_retention proves the outbox stays bounded: delivered events past the
+// retention window are pruned; undelivered events — poisoned included — are never pruned.
+func Test_EventDeliveryJob_retention(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+
+	insertEvent := func(id string, deliveredAgoDays int, attempts int) {
+		var deliveredAt interface{}
+		if deliveredAgoDays >= 0 {
+			deliveredAt = fmt.Sprintf("%d days", deliveredAgoDays)
+		}
+		payload := fmt.Sprintf(`{"source_wallet_id": %q}`, wallet.ID)
+		_, insErr := dbConnectionPool.ExecContext(ctx, `
+			INSERT INTO events (id, event_type, schema_version, occurred_at, payload, delivery_attempts, delivered_at)
+			VALUES ($1, 'disbursement.created', 1, NOW() - INTERVAL '90 days', $2, $3,
+			        CASE WHEN $4::text IS NULL THEN NULL ELSE NOW() - $4::interval END)`,
+			id, payload, attempts, deliveredAt)
+		require.NoError(t, insErr)
+	}
+
+	insertEvent("11111111-1111-4111-8111-111111111111", 45, 1)  // delivered, stale → pruned
+	insertEvent("22222222-2222-4222-8222-222222222222", 2, 1)   // delivered, recent → kept
+	insertEvent("33333333-3333-4333-8333-333333333333", -1, 20) // poisoned, undelivered → kept forever
+
+	job := NewEventDeliveryJob(models)
+	require.NoError(t, job.Execute(ctx))
+
+	var remaining []string
+	require.NoError(t, dbConnectionPool.SelectContext(ctx, &remaining, `SELECT id FROM events ORDER BY id`))
+	assert.Equal(t, []string{
+		"22222222-2222-4222-8222-222222222222",
+		"33333333-3333-4333-8333-333333333333",
+	}, remaining)
 }

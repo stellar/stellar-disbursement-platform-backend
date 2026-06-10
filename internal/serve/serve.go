@@ -618,23 +618,26 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					DistributionAccountService: o.DistributionAccountService,
 				}
 
-				// Read operations
+				// Owner-only reads (admin views).
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 				)).Group(func(r chi.Router) {
-					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
-					r.Get("/balance", distributionWalletsHandler.GetDistributionWalletsTotalBalance)
 					r.Get("/{id}", distributionWalletsHandler.GetDistributionWallet)
 					r.Get("/{id}/memberships", distributionWalletsHandler.GetDistributionWalletMemberships)
 				})
 
-				// Per-wallet balance (the dashboard Total Balance tile): any business role at the
-				// route; wallet membership is enforced in-handler (404 outside the caller's scope).
+				// Membership-scoped reads (the dashboard picker + Total Balance tile): any
+				// business role at the route; the handlers filter to the caller's read scope
+				// (Owners: everything; members: their wallets; 404 outside per-wallet scope).
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
-				)).Get("/{id}/balance", distributionWalletsHandler.GetDistributionWalletBalance)
+				)).Group(func(r chi.Router) {
+					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
+					r.Get("/balance", distributionWalletsHandler.GetDistributionWalletsTotalBalance)
+					r.Get("/{id}/balance", distributionWalletsHandler.GetDistributionWalletBalance)
+				})
 
 				// Write operations
 				r.With(middleware.RequirePermission(
