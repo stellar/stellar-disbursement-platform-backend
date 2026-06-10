@@ -25,7 +25,7 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("getPaymentsStats", func(t *testing.T) {
-		paymentsCounter, paymentsAmountByAsset, errPayments := getPaymentsStats(ctx, dbConnectionPool, "")
+		paymentsCounter, paymentsAmountByAsset, errPayments := getPaymentsStats(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, errPayments)
 
 		// paymentsCounter assertions
@@ -53,7 +53,7 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 	})
 
 	t.Run("getReceiverWalletsStats", func(t *testing.T) {
-		receiverWalletStats, errReceiver := getReceiverWalletsStats(ctx, dbConnectionPool, "")
+		receiverWalletStats, errReceiver := getReceiverWalletsStats(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, errReceiver)
 
 		// receiverWalletStats assertions
@@ -71,13 +71,13 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 	})
 
 	t.Run("getTotalReceivers", func(t *testing.T) {
-		totalReceivers, err := getTotalReceivers(ctx, dbConnectionPool, "")
+		totalReceivers, err := getTotalReceivers(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), totalReceivers)
 	})
 
 	t.Run("getTotalDisbursements", func(t *testing.T) {
-		totalDisbursements, err := getTotalDisbursements(ctx, dbConnectionPool)
+		totalDisbursements, err := getTotalDisbursements(ctx, dbConnectionPool, nil)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), totalDisbursements)
 	})
@@ -143,7 +143,7 @@ func TestCalculateStatistics(t *testing.T) {
 	})
 
 	t.Run("get receiver wallet stats", func(t *testing.T) {
-		receiverWalletStats, errReceiver := getReceiverWalletsStats(ctx, dbConnectionPool, "")
+		receiverWalletStats, errReceiver := getReceiverWalletsStats(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, errReceiver)
 
 		assert.IsType(t, &ReceiverWalletsCounters{}, receiverWalletStats)
@@ -163,14 +163,14 @@ func TestCalculateStatistics(t *testing.T) {
 	})
 
 	t.Run("get total disbursement", func(t *testing.T) {
-		totalDisbursement, errDisbursement := getTotalDisbursements(ctx, dbConnectionPool)
+		totalDisbursement, errDisbursement := getTotalDisbursements(ctx, dbConnectionPool, nil)
 		require.NoError(t, errDisbursement)
 
 		assert.Equal(t, int64(1), totalDisbursement)
 	})
 
 	t.Run("get payment stats", func(t *testing.T) {
-		paymentsCounter, paymentsAmountByAsset, errPayments := getPaymentsStats(ctx, dbConnectionPool, "")
+		paymentsCounter, paymentsAmountByAsset, errPayments := getPaymentsStats(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, errPayments)
 
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
@@ -240,7 +240,7 @@ func TestCalculateStatistics(t *testing.T) {
 	})
 
 	t.Run("get payment stats with multiple assets codes", func(t *testing.T) {
-		paymentsCounter, paymentsAmountByAsset, err := getPaymentsStats(ctx, dbConnectionPool, "")
+		paymentsCounter, paymentsAmountByAsset, err := getPaymentsStats(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, err)
 
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
@@ -300,7 +300,7 @@ func TestCalculateStatistics(t *testing.T) {
 	})
 
 	t.Run("get payment stats for specific disbursement", func(t *testing.T) {
-		paymentsCounter, paymentsAmountByAsset, err := getPaymentsStats(ctx, dbConnectionPool, disbursement2.ID)
+		paymentsCounter, paymentsAmountByAsset, err := getPaymentsStats(ctx, dbConnectionPool, disbursement2.ID, nil)
 		require.NoError(t, err)
 
 		assert.IsType(t, &PaymentCounters{}, paymentsCounter)
@@ -346,7 +346,7 @@ func TestCalculateStatistics(t *testing.T) {
 	})
 
 	t.Run("get receiver wallet stats for specific disbursement", func(t *testing.T) {
-		receiverWalletStats, err := getReceiverWalletsStats(ctx, dbConnectionPool, disbursement2.ID)
+		receiverWalletStats, err := getReceiverWalletsStats(ctx, dbConnectionPool, disbursement2.ID, nil)
 		require.NoError(t, err)
 
 		assert.IsType(t, &ReceiverWalletsCounters{}, receiverWalletStats)
@@ -366,13 +366,13 @@ func TestCalculateStatistics(t *testing.T) {
 	})
 
 	t.Run("get total receivers", func(t *testing.T) {
-		totalReceivers, err := getTotalReceivers(ctx, dbConnectionPool, "")
+		totalReceivers, err := getTotalReceivers(ctx, dbConnectionPool, "", nil)
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), totalReceivers)
 	})
 
 	t.Run("get total receivers with disbursement ID", func(t *testing.T) {
-		totalReceivers, err := getTotalReceivers(ctx, dbConnectionPool, disbursement2.ID)
+		totalReceivers, err := getTotalReceivers(ctx, dbConnectionPool, disbursement2.ID, nil)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), totalReceivers)
 	})

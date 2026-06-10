@@ -9,12 +9,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func TestStatisticsHandler(t *testing.T) {
@@ -25,8 +28,18 @@ func TestStatisticsHandler(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	// setup
-	statisticsHandler := StatisticsHandler{DBConnectionPool: dbConnectionPool}
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	statsAuthMock := &auth.AuthManagerMock{}
+	statsAuthMock.On("GetUserByID", mock.Anything, "stats-owner").
+		Return(&auth.User{ID: "stats-owner", IsOwner: true}, nil).Maybe()
+	statisticsHandler := StatisticsHandler{DBConnectionPool: dbConnectionPool, Models: models, AuthManager: statsAuthMock}
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "stats-owner")))
+		})
+	})
 	r.Get("/statistics", statisticsHandler.GetStatistics)
 	r.Get("/statistics/{id}", statisticsHandler.GetStatisticsByDisbursement)
 
@@ -84,8 +97,6 @@ func TestStatisticsHandler(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
 
 	asset1 := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
