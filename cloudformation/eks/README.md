@@ -96,11 +96,11 @@ aws cloudformation create-stack \
 
 ## 3. Keys Stack Deployment
 
-Create and store SDP secrets in AWS Secrets Manager. All secrets are stored at `/${namespace}/${ENVIRONMENT}/SECRET_NAME` and synced to Kubernetes via ExternalSecrets. Note that if you override the namespace (default value = `sdp`), you must also update the `remoteRef.key` paths in `helm/sdp-secrets-${ENVIRONMENT}.yaml` and the name-prefix filter accordingly.
+Create and store SDP secrets in AWS Secrets Manager. The `sdp-keys-eks.yaml` file contains parameter fields for core and optional secrets that need to be provided. All secrets are stored at `/${namespace}/${ENVIRONMENT}/SECRET_NAME` (default `namespace` = `sdp`) and synced to Kubernetes via ExternalSecrets. 
 
 ### 3.1 Testnet Secrets
 
-For **testnet**, secrets can be auto-generated. You can deploy a lambda function that generates Stellar keypairs and funds the distribution account via friendbot.
+For **testnet** / dev environments, if no parameter values are supplied, core secret default values will be used. Stellar keys and passphrases need to be auto-generated if not supplied (see `sdp-keys-eks.yaml`). You can deploy a lambda function that generates Stellar keypairs and funds the distribution account via friendbot.
 
 This must be built and uploaded before the main keys stack:
 
@@ -117,7 +117,7 @@ zip -r stellar-layer.zip nodejs/
 aws s3 cp stellar-layer.zip s3://your-stellar-layer-bucket/stellar-layer.zip
 ```
 
-Then pass the bucket name when deploying the stack below via `ParameterKey=StellarLayerS3Bucket ParameterValue=your-stellar-layer-bucket` (the default bucket name is stellar-layer, and the object key must be stellar-layer.zip). 
+Then pass the bucket name when deploying the stack below via `ParameterKey=StellarLayerS3Bucket ParameterValue=your-stellar-layer-bucket`. This parameter is required whenever any Stellar key or passphrase is left blank for auto-generation, and the parameter value must be the bucket name you provided above (e.g. `your-stellar-layer-bucket`).
 
 > **Note**: Do not generate these keypairs for mainnet/prod. Skip this section and bring your own keys.
 
@@ -135,13 +135,11 @@ aws cloudformation create-stack \
 
 ### 3.2 Mainnet Secrets
 
-For **mainnet** (or when using pre-created Stellar accounts), you will need to provide the necessary parameter values.
+For **mainnet** (or when using pre-created Stellar accounts), you will need to provide the necessary parameter values, both for core and any additional optional secrets. Core secrets have insecure defaults that **must** be overriden for mainnet deployment. 
 
-The `sdp-keys-eks.yaml` file contains the minimum required parameter values that need to be provided. These include insecure defaults that **must** be overriden for mainnet deployment. 
+Please review optional secrets as desired. For a description of these, please see: [Configuring the SDP](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) and the [SDP Helm Chart README](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/helmchart/sdp/README.md).
 
-Please review additional custom parameters as desired (for example, for setting up embedded wallet support, AWS/Twilio messaging, etc.). To add them, parameter fields must be added both to `sdp-keys-eks.yaml` and `sdp-secrets-prod.yaml`. For a description of these parameters, please see: [Configuring the SDP](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) and the [SDP Helm Chart README](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/helmchart/sdp/README.md).
-
-Once parameters have been configured, you can create the SDP secrets using the following command (complete any missing parameters):
+Once parameters have been configured, you can create the SDP secrets using the following command (incomplete example, supply any missing parameters):
 
 ```bash
 aws cloudformation create-stack \
@@ -159,7 +157,7 @@ aws cloudformation create-stack \
     ParameterKey=DistributionAccountEncryptionPassphrase,ParameterValue=your-distribution-encryption-passphrase
     # etc
 ```
-Alternatively, you can write all the parameters as key-value pairs in a JSON file (complete missing parameters following the same pattern):
+Alternatively, you can write all the parameters as key-value pairs in a JSON file (incomplete example):
 
 ```json
 [

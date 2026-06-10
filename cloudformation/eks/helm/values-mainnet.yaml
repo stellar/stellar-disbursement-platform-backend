@@ -24,19 +24,6 @@ sdp:
   kubeSecrets:
     secretName: sdp-secrets
     create: false
-    data:
-      EC256_PRIVATE_KEY: "/sdp/prod/EC256_PRIVATE_KEY"
-      SEP10_SIGNING_PRIVATE_KEY: "/sdp/prod/SEP10_SIGNING_PRIVATE_KEY"
-      SEP10_SIGNING_PUBLIC_KEY: "/sdp/prod/SEP10_SIGNING_PUBLIC_KEY"
-      SEP24_JWT_SECRET: "/sdp/prod/SEP24_JWT_SECRET"
-      DISTRIBUTION_SEED: "/sdp/prod/DISTRIBUTION_SEED"
-      DISTRIBUTION_PUBLIC_KEY: "/sdp/prod/DISTRIBUTION_PUBLIC_KEY"
-      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/prod/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/prod/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
-      DATABASE_URL: "/sdp/prod/DATABASE_URL"
-      RECAPTCHA_SITE_SECRET_KEY: "/sdp/prod/RECAPTCHA_SITE_SECRET_KEY"
-      ADMIN_API_KEY: "/sdp/prod/ADMIN_API_KEY"
-      ADMIN_ACCOUNT: "/sdp/prod/ADMIN_ACCOUNT"
   # =========================== START sdp.configMap ===========================
   configMap:
     data:
@@ -73,12 +60,6 @@ tss:
   kubeSecrets:
     create: false
     secretName: sdp-secrets
-    data:
-      DISTRIBUTION_PUBLIC_KEY: "/sdp/prod/DISTRIBUTION_PUBLIC_KEY"
-      DISTRIBUTION_SEED: "/sdp/prod/DISTRIBUTION_SEED"
-      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/prod/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE"
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: "/sdp/prod/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
-      DATABASE_URL: "/sdp/prod/DATABASE_URL"
   configMap:
     data:
       NUM_CHANNEL_ACCOUNTS: "3"

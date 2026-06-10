@@ -165,7 +165,7 @@ Resources:
             Action:
               - route53:ChangeResourceRecordSets
             Resource: 
-              - !Sub "arn:aws:route53:::hostedzone/*"
+              - "arn:aws:route53:::hostedzone/*"
           - Effect: Allow
             Action:
               - route53:ListHostedZones
@@ -268,8 +268,13 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
+                  - 'secretsmanager:BatchGetSecretValue'
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${namespace}/*
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:ListSecrets'
+                Resource: "*"
 
   ClusterOIDCIdFunction:
     Type: AWS::Lambda::Function
@@ -366,8 +371,13 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
+                  - 'secretsmanager:BatchGetSecretValue'
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${namespace}/*
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:ListSecrets'
+                Resource: "*"
 
 Outputs:
   ClusterName:
