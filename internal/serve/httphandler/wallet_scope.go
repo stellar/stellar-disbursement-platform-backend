@@ -24,6 +24,11 @@ func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, m
 		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
 
+	// Owners are tenant-wide by definition — no membership lookup (and no DB) needed.
+	if user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+		return nil, nil
+	}
+
 	scope, err := services.ResolveWalletReadScope(ctx, models.DBConnectionPool, models.WalletMemberships, user)
 	if err != nil {
 		return nil, httperror.InternalError(ctx, "Cannot resolve wallet visibility", err, nil)
