@@ -108,7 +108,11 @@ func Test_W4_WalletAwareDashboards(t *testing.T) {
 		Return(map[data.Asset]decimal.Decimal{usdc: decimal.NewFromInt(40)}, nil)
 
 	walletsHandler := DistributionWalletsHandler{
-		Service:                    &mockDistributionWalletService{getFn: func(_ context.Context, id string) (*data.DistributionWallet, error) { return models.DistributionWallets.Get(ctx, dbConnectionPool, id) }, listFn: func(_ context.Context, includeArchived bool) ([]data.DistributionWallet, error) { return models.DistributionWallets.GetAll(ctx, dbConnectionPool, includeArchived) }},
+		Service: &mockDistributionWalletService{getFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+			return models.DistributionWallets.Get(ctx, dbConnectionPool, id)
+		}, listFn: func(_ context.Context, includeArchived bool) ([]data.DistributionWallet, error) {
+			return models.DistributionWallets.GetAll(ctx, dbConnectionPool, includeArchived)
+		}},
 		AuthManager:                authManagerMock,
 		Models:                     models,
 		DistributionAccountService: mDistAccSvc,
