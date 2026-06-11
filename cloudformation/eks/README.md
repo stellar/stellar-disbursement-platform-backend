@@ -46,7 +46,12 @@ This guide walks through deploying the Stellar Disbursement Platform (SDP) infra
 
 After the CloudFormation stacks are deployed, additional Kubernetes resources are installed via Helm charts to complete the setup. The SDP expects secrets to be available as Kubernetes secrets, but how those secrets are synchronized (whether through ExternalSecrets, direct creation, or other means) is left to the deployer's preference.
 
-Note: Both the Keys stack and ExternalSecrets are optional implementation choices. You can manage and sync secrets to Kubernetes secrets through whatever mechanism best fits your security requirements and operational preferences.
+> **Note**: Create each successive stack only after the previous one has finished. You can check if stack creation is complete with the following command:
+ ```bash
+  aws cloudformation describe-stacks --region $AWS_REGION \
+    --query "Stacks[?contains(StackName,'${STACK_NAME_PREFIX}-')].[StackName,StackStatus]" \
+    --output table
+  ```
 
 ## Change Directory to the EKS Cloudformation Directory
 ```bash
@@ -195,7 +200,8 @@ aws cloudformation create-stack \
   --region ${AWS_REGION} \
   --parameters \
     ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network \
-    ParameterKey=DatabaseStackName,ParameterValue=${STACK_NAME_PREFIX}-database
+    ParameterKey=DatabaseStackName,ParameterValue=${STACK_NAME_PREFIX}-database \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT}
 ```
 
 ### EKS Configuration and Deployment
@@ -339,7 +345,8 @@ helm install cert-manager jetstack/cert-manager \
 # Verify installation
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=120s
 
-# Apply ClusterIssuer (replace email and region fields beforehand)
+# Apply ClusterIssuer 
+# IMPORTANT: replace email and region fields in `cluster-issuer.yaml` beforehand
 kubectl apply -f helm/cluster-issuer.yaml
 ```
 
