@@ -13,6 +13,7 @@ Before starting, set these environment variables:
 export AWS_REGION=your-region  # e.g., us-west-2, eu-west-1, etc.
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export ENVIRONMENT=dev  # or prod, staging, etc.
+export NAMESPACE=sdp
 
 # Optional variables (for customizing deployment)
 export STACK_NAME_PREFIX=sdp  # Prefix for all CloudFormation stacks
@@ -96,7 +97,8 @@ aws cloudformation create-stack \
   --region ${AWS_REGION} \
   --parameters \
     ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network \
-    ParameterKey=env,ParameterValue=${ENVIRONMENT}
+    ParameterKey=env,ParameterValue=${ENVIRONMENT} \
+    ParameterKey=namespace,ParameterValue=${NAMESPACE} \
 ```
 
 ## 3. Keys Stack Deployment
@@ -154,12 +156,11 @@ aws cloudformation create-stack \
   --region ${AWS_REGION} \
   --parameters \
     ParameterKey=env,ParameterValue=${ENVIRONMENT} \
+    ParameterKey=namespace,ParameterValue=${NAMESPACE} \
     ParameterKey=DistributionSeed,ParameterValue=your-distribution-account-secret-key \
     ParameterKey=DistributionPublicKey,ParameterValue=your-distribution-account-public-key \
     ParameterKey=Sep10SigningPrivateKey,ParameterValue=your-sep10-signing-private-key \
     ParameterKey=Sep10SigningPublicKey,ParameterValue=your-sep10-signing-public-key \
-    ParameterKey=ChannelAccountEncryptionPassphrase,ParameterValue=your-channel-encryption-passphrase \
-    ParameterKey=DistributionAccountEncryptionPassphrase,ParameterValue=your-distribution-encryption-passphrase
     # etc
 ```
 Alternatively, you can write all the parameters as key-value pairs in a JSON file (incomplete example):
@@ -201,7 +202,8 @@ aws cloudformation create-stack \
   --parameters \
     ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network \
     ParameterKey=DatabaseStackName,ParameterValue=${STACK_NAME_PREFIX}-database \
-    ParameterKey=env,ParameterValue=${ENVIRONMENT}
+    ParameterKey=env,ParameterValue=${ENVIRONMENT} \
+    ParameterKey=namespace,ParameterValue=${NAMESPACE}
 ```
 
 ### EKS Configuration and Deployment
@@ -235,6 +237,8 @@ kubectl config get-contexts
 ```bash
 kubectl create namespace sdp
 ```
+
+> **Note**: If deploying under a different namespace, replace sdp in the namespace-scoped kubectl/helm commands.
 
 ## 7. External Secrets Operator Installation
 ```bash
@@ -299,11 +303,9 @@ kubectl get secretstore aws-backend -n sdp
 
 ## 9. Create External Secrets
 ```bash
-kubectl apply -n sdp -f helm/sdp-secrets-${ENVIRONMENT}.yaml
-kubectl get externalsecret sdp-secrets -n sdp
+envsubst '${NAMESPACE} ${ENVIRONMENT}' < helm/sdp-secrets.yaml | kubectl apply -f -
+kubectl get externalsecret sdp-secrets -n ${NAMESPACE}
 ```
-
->Note: for a staging environment, a new `sdp-secrets-staging.yaml` file must be created first.
 
 ## 10. Install Nginx Ingress Controller
 ```bash
