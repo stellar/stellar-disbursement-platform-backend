@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- Use `claude-code-action`'s native Workload Identity Federation inputs in the automated release workflow, removing the manual OIDC token fetch and exchange steps. [#1141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1141)
+
 ### Fixed
 
+- Fix exclusion of `DIRECT` payments in receiver and wallet stats queries. [#1139](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1139)
 - Fix & update outdated Cloudformation/EKS Stacks and deployment guide. [#1140](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1140)
 
 ## [6.5.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.5.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.4.0...6.5.0))

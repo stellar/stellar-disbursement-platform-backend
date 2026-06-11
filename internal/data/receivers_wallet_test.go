@@ -528,6 +528,93 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 		err = dbTx.Commit()
 		require.NoError(t, err)
 	})
+
+	t.Run("attributes payments of all types to correct wallet", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
+		walletA := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet-A", "https://www.wallet-a.com", "www.wallet-a.com", "wallet-a://")
+		walletB := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet-B", "https://www.wallet-b.com", "www.wallet-b.com", "wallet-b://")
+		rwA := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, walletA.ID, RegisteredReceiversWalletStatus)
+		rwB := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, walletB.ID, RegisteredReceiversWalletStatus)
+
+		// walletA: successful DISBURSEMENT payment of 100 ...
+		disbursement.Name = "disbursement A"
+		disbursement.Wallet = walletA
+		dA := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
+
+		payment.Status = SuccessPaymentStatus
+		payment.Disbursement = dA
+		payment.Amount = "100"
+		payment.ReceiverWallet = rwA
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		// walletA: successful DIRECT payment of 200
+		payment.Status = SuccessPaymentStatus
+		payment.Type = PaymentTypeDirect
+		payment.Disbursement = nil
+		payment.Amount = "200"
+		payment.ReceiverWallet = rwA
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		// walletB: successful DIRECT payment of 500.
+		payment.Status = SuccessPaymentStatus
+		payment.Disbursement = nil
+		payment.Amount = "500"
+		payment.ReceiverWallet = rwB
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		// Defer a rollback in case anything fails.
+		defer func() {
+			err = dbTx.Rollback()
+			require.Error(t, err, "not in transaction")
+		}()
+
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
+		require.NoError(t, err)
+
+		statsByWalletID := make(map[string]ReceiverWalletStats, len(actual))
+		for _, rw := range actual {
+			statsByWalletID[rw.ID] = rw.ReceiverWalletStats
+		}
+
+		// walletA counts both payments (DISBURSEMENT + DIRECT): 2 received, 300 total.
+		assert.Equal(t, ReceiverWalletStats{
+			TotalPayments:     "2",
+			PaymentsReceived:  "2",
+			FailedPayments:    "0",
+			CanceledPayments:  "0",
+			RemainingPayments: "0",
+			ReceivedAmounts: []Amount{
+				{
+					AssetCode:      "USDC",
+					AssetIssuer:    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+					ReceivedAmount: "300.0000000",
+				},
+			},
+		}, statsByWalletID[rwA.ID])
+
+		// walletB: only its own DIRECT payment
+		assert.Equal(t, ReceiverWalletStats{
+			TotalPayments:     "1",
+			PaymentsReceived:  "1",
+			FailedPayments:    "0",
+			CanceledPayments:  "0",
+			RemainingPayments: "0",
+			ReceivedAmounts: []Amount{
+				{
+					AssetCode:      "USDC",
+					AssetIssuer:    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+					ReceivedAmount: "500.0000000",
+				},
+			},
+		}, statsByWalletID[rwB.ID])
+
+		err = dbTx.Commit()
+		require.NoError(t, err)
+	})
 }
 
 func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
