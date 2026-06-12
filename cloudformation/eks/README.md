@@ -348,8 +348,8 @@ helm install cert-manager jetstack/cert-manager \
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=120s
 
 # Apply ClusterIssuer 
-# IMPORTANT: replace email and region fields in `cluster-issuer.yaml` beforehand
-kubectl apply -f helm/cluster-issuer.yaml
+export EMAIL=your-email.org
+envsubst '${AWS_REGION} ${EMAIL}' < helm/cluster-issuer.yaml | kubectl apply -f -
 ```
 
 ## 12. Install External-DNS
