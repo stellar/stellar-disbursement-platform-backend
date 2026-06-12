@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Add Gateway API support to the SDP Helm chart. [#1143](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1143)
+
 ### Changed
 
 - Use `claude-code-action`'s native Workload Identity Federation inputs in the automated release workflow, removing the manual OIDC token fetch and exchange steps. [#1141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1141)

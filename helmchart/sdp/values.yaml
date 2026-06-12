@@ -362,6 +362,52 @@ sdp:
       secretName: backend-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
       # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
 
+  ## @extra sdp.httpRoute Configuration for the Gateway API HTTPRoute for the SDP service. Additive to (not a replacement for) sdp.ingress.
+  ## @param sdp.httpRoute.enabled If true, a Gateway API HTTPRoute will be created for the SDP service. When sdp.route.adminDomain is set, a second HTTPRoute is created for the admin endpoint.
+  ## @extra sdp.httpRoute.parentRefs References to existing Gateways the HTTPRoute should attach to. Ignored when sdp.httpRoute.gateway.enabled is true.
+  ## @param sdp.httpRoute.parentRefs[0].name Name of the parent Gateway resource.
+  ## @param sdp.httpRoute.parentRefs[0].namespace Namespace of the parent Gateway. Empty string defaults to the release namespace.
+  ## @param sdp.httpRoute.parentRefs[0].sectionName Listener name within the Gateway to attach to. Empty string attaches to all listeners.
+  ## @param sdp.httpRoute.hostnames Optional list of hostnames for the HTTPRoute. When empty, defaults to sdp.route.domain and sdp.route.mtnDomain. Each entry must be a DNS hostname (no scheme, no port). Strings are passed through `tpl`, so Helm expressions like '{{ .Values.sdp.route.domain }}' work.
+  ## @param sdp.httpRoute.annotations Extra annotations added to the HTTPRoute object.
+  ## @param sdp.httpRoute.labels Extra labels added to the HTTPRoute object.
+  ## @extra sdp.httpRoute.gateway Optional in-chart Gateway resource. Most users will set sdp.httpRoute.parentRefs instead and let a platform-owned Gateway handle traffic.
+  ## @param sdp.httpRoute.gateway.enabled If true, a Gateway resource is created in the release namespace and the HTTPRoute auto-attaches to it (parentRefs is ignored).
+  ## @param sdp.httpRoute.gateway.gatewayClassName Name of the GatewayClass to use (e.g. "istio", "envoy", "cilium"). Required when gateway.enabled is true.
+  ## @param sdp.httpRoute.gateway.name Optional name override for the created Gateway. Defaults to `<fullname>-gateway`.
+  ## @extra sdp.httpRoute.gateway.listeners Listener configuration for the created Gateway.
+  ## @param sdp.httpRoute.gateway.listeners[0].name Listener name.
+  ## @param sdp.httpRoute.gateway.listeners[0].protocol Listener protocol (HTTP or HTTPS).
+  ## @param sdp.httpRoute.gateway.listeners[0].port Listener port.
+  ## @param sdp.httpRoute.gateway.annotations Extra annotations added to the Gateway object.
+  ## @param sdp.httpRoute.gateway.labels Extra labels added to the Gateway object.
+  httpRoute:
+    enabled: false
+    parentRefs:
+      - name: sdp-gateway
+        namespace: ""      # defaults to release namespace
+        sectionName: ""
+    hostnames: []
+    annotations: {}
+    labels: {}
+    gateway:
+      enabled: false
+      gatewayClassName: ""
+      name: ""
+      listeners:
+        - name: http
+          protocol: HTTP
+          port: 80
+        # - name: https
+        #   protocol: HTTPS
+        #   port: 443
+        #   tls:
+        #     mode: Terminate
+        #     certificateRefs:
+        #       - name: backend-tls-cert-name
+      annotations: {}
+      labels: {}
+
 # =========================== START tss ===========================
 ## @section Transaction Submission Service
 ## @descriptionStart
@@ -563,3 +609,49 @@ dashboard:
     - hosts:
       - '{{ include "sdp.dashboard.domain" . }}'
       secretName: dashboard-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
+
+  ## @extra dashboard.httpRoute Configuration for the Gateway API HTTPRoute for the dashboard. Additive to (not a replacement for) dashboard.ingress.
+  ## @param dashboard.httpRoute.enabled If true, a Gateway API HTTPRoute will be created for the dashboard.
+  ## @extra dashboard.httpRoute.parentRefs References to existing Gateways the HTTPRoute should attach to. Ignored when dashboard.httpRoute.gateway.enabled is true.
+  ## @param dashboard.httpRoute.parentRefs[0].name Name of the parent Gateway resource.
+  ## @param dashboard.httpRoute.parentRefs[0].namespace Namespace of the parent Gateway. Empty string defaults to the release namespace.
+  ## @param dashboard.httpRoute.parentRefs[0].sectionName Listener name within the Gateway to attach to. Empty string attaches to all listeners.
+  ## @param dashboard.httpRoute.hostnames Optional list of hostnames for the HTTPRoute. When empty, defaults to dashboard.route.domain and dashboard.route.mtnDomain. Each entry must be a DNS hostname (no scheme, no port). Strings are passed through `tpl`, so Helm expressions like '{{ .Values.dashboard.route.domain }}' work.
+  ## @param dashboard.httpRoute.annotations Extra annotations added to the HTTPRoute object.
+  ## @param dashboard.httpRoute.labels Extra labels added to the HTTPRoute object.
+  ## @extra dashboard.httpRoute.gateway Optional in-chart Gateway resource. Most users will set dashboard.httpRoute.parentRefs instead and let a platform-owned Gateway handle traffic.
+  ## @param dashboard.httpRoute.gateway.enabled If true, a Gateway resource is created in the release namespace and the HTTPRoute auto-attaches to it (parentRefs is ignored).
+  ## @param dashboard.httpRoute.gateway.gatewayClassName Name of the GatewayClass to use (e.g. "istio", "envoy", "cilium"). Required when gateway.enabled is true.
+  ## @param dashboard.httpRoute.gateway.name Optional name override for the created Gateway. Defaults to `<fullname>-dashboard-gateway`.
+  ## @extra dashboard.httpRoute.gateway.listeners Listener configuration for the created Gateway.
+  ## @param dashboard.httpRoute.gateway.listeners[0].name Listener name.
+  ## @param dashboard.httpRoute.gateway.listeners[0].protocol Listener protocol (HTTP or HTTPS).
+  ## @param dashboard.httpRoute.gateway.listeners[0].port Listener port.
+  ## @param dashboard.httpRoute.gateway.annotations Extra annotations added to the Gateway object.
+  ## @param dashboard.httpRoute.gateway.labels Extra labels added to the Gateway object.
+  httpRoute:
+    enabled: false
+    parentRefs:
+      - name: dashboard-gateway
+        namespace: ""      # defaults to release namespace
+        sectionName: ""
+    hostnames: []
+    annotations: {}
+    labels: {}
+    gateway:
+      enabled: false
+      gatewayClassName: ""
+      name: ""
+      listeners:
+        - name: http
+          protocol: HTTP
+          port: 80
+        # - name: https
+        #   protocol: HTTPS
+        #   port: 443
+        #   tls:
+        #     mode: Terminate
+        #     certificateRefs:
+        #       - name: dashboard-tls-cert-name
+      annotations: {}
+      labels: {}
