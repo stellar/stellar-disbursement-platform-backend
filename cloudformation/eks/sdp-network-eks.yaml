@@ -1,8 +1,7 @@
-Parameters:
-  AWSRegion:
-    Type: String
-    Default: "us-west-1"
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC Networking stack for SDP on EKS'
 
+Parameters:
   env:
     Type: String
     Default: "dev"
@@ -15,6 +14,11 @@ Parameters:
     Type: String
     Default: ""
     Description: "If specified, use an existing VPC instead of creating a new one"
+
+  ExistingVPCCidr:
+    Type: String
+    Default: ""
+    Description: "If using existing VPC, specify its CIDR block"
 
   ExistingPublicSubnet1Id:
     Type: String
@@ -56,6 +60,21 @@ Parameters:
     Type: String
     Default: "10.0.3.0/24"
 
+Rules:
+  ExistingVPCRequiresCidrAndSubnets:
+    RuleCondition: !Not [ !Equals [ !Ref ExistingVPCId, "" ] ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref ExistingVPCCidr, "" ] ]
+        AssertDescription: "ExistingVPCCidr must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPublicSubnet1Id, "" ] ]
+        AssertDescription: "ExistingPublicSubnet1Id must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPublicSubnet2Id, "" ] ]
+        AssertDescription: "ExistingPublicSubnet2Id must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPrivateSubnet1Id, "" ] ]
+        AssertDescription: "ExistingPrivateSubnet1Id must be provided when ExistingVPCId is set."
+      - Assert: !Not [ !Equals [ !Ref ExistingPrivateSubnet2Id, "" ] ]
+        AssertDescription: "ExistingPrivateSubnet2Id must be provided when ExistingVPCId is set."
+
 Conditions:
   CreateNewVPC: !Equals 
     - !Ref ExistingVPCId
@@ -72,7 +91,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-vpc
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   InternetGateway:
@@ -82,7 +101,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-igw
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   AttachGateway:
@@ -99,12 +118,12 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Sub ${AWS::Region}a
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-public-subnet-1
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   PublicSubnet2:
@@ -113,12 +132,12 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Sub ${AWS::Region}c
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-public-subnet-2
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   # Private Subnets
@@ -128,11 +147,11 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Sub ${AWS::Region}a
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-private-subnet-1
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   PrivateSubnet2:
@@ -141,11 +160,11 @@ Resources:
     Properties:
       VpcId: !Ref SDPVPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Sub ${AWS::Region}c
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-private-subnet-2
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   # NAT Gateway
@@ -156,7 +175,7 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   NatGateway:
@@ -168,7 +187,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-nat-gateway
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   # Route Tables
@@ -180,7 +199,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-public-route-table
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   PrivateRouteTable:
@@ -191,7 +210,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${env}-${AWS::StackName}-private-route-table
-        - Key: env
+        - Key: Environment
           Value: !Ref env
 
   PublicRoute:
@@ -251,11 +270,11 @@ Outputs:
       Name: !Sub ${AWS::StackName}-vpc-id
 
   VPCCidr:
-    Description: VIPC CIDR
+    Description: VPC CIDR
     Value: !If 
-    - CreateNewVPC
-    - !Ref VPCCidr
-    - !GetAtt SDPVPC.CidrBlock
+      - CreateNewVPC
+      - !Ref VPCCidr
+      - !Ref ExistingVPCCidr
     Export:
       Name: !Sub ${AWS::StackName}-vpc-cidr
   

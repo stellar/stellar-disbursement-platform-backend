@@ -1,44 +1,75 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Stack for managing Stellar and encryption keys in Secrets Manager for ECS'
+Description: 'Stack for managing Stellar and encryption keys in Secrets Manager for EKS'
 
 Parameters:
+  # -- Config parameters --
   env:
     Type: String
     Default: "dev"
-    Description: "Environment variable: ENV"
-  
+    AllowedValues: 
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
   namespace:
     Type: String
     Description: "Environment variable: namespace - Kubernetes namespace where SDP will be deployed"
     Default: "sdp"
-  
+
+  # -- Required for generating secrets --
   StellarLayerS3Bucket:
     Type: String
     Description: "S3 bucket containing the Stellar SDK Lambda layer"
-    Default: "stellar-layer"
-    
+    Default: ""
+  
+  # -- Core secrets (with default values) --
+  Ec256PrivateKey:
+    Type: String
+    NoEcho: true
+    Default: |
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIPRRtyc5EQoNPFhkcDzC47B2Zpo5b0NiM3Ftvky86+bEoAoGCCqGSM49
+      AwEHoUQDQgAEWinhVw0QHkZDeZ777zfBKT0cupULkpEd8Y52iPs76AT7JQ1cuGbm
+      jxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==
+      -----END EC PRIVATE KEY-----
+    Description: "Environment variable: EC256_PRIVATE_KEY"
+
+  Sep24JwtSecret:
+    Type: String
+    NoEcho: true
+    Default: "jwt_secret_1234567890"
+    Description: "Environment variable: SEP24_JWT_SECRET"
+
+  AdminApiKey:
+    Type: String
+    NoEcho: true
+    Default: "admin-api-key"
+    Description: "Environment variable: ADMIN_API_KEY"
+
+  AdminAccount:
+    Type: String
+    NoEcho: true
+    Default: "admin@example.org"
+    Description: "Environment variable: ADMIN_ACCOUNT"
+
+  RecaptchaSiteSecretKey:
+    Type: String
+    NoEcho: true
+    Default: "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
+    Description: "Environment variable: RECAPTCHA_SITE_SECRET_KEY"
+
+  # -- Stellar keys and passphrases with generated values if left blank and StellarLayerS3Bucket is supplied --
   Sep10SigningPrivateKey:
     Type: String
     Default: ""
     NoEcho: true
     Description: "Environment variable: SEP10_SIGNING_PRIVATE_KEY"
 
-  SecretSep10SigningSeed:
-    Type: String
-    Default: ""
-    NoEcho: true
-    Description: "Environment variable: Platform SECRET_SEP10_SIGNING_SEED"
-
   Sep10SigningPublicKey:
     Type: String
     Default: ""
     Description: "Environment variable: SEP10_SIGNING_PUBLIC_KEY"
-
-  SecretSep10JwtSecret:
-    Type: String
-    NoEcho: true
-    Default: "jwt_secret_1234567890"
-    Description: "Environment variable: SECRET_SEP10_JWT_SECRET"
 
   DistributionSeed:
     Type: String
@@ -63,90 +94,152 @@ Parameters:
     NoEcho: true
     Description: "Environment variable: CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE"
 
-  Ec256PrivateKey:
+  # -- Optional integration secrets created only when value is supplied --
+  # AWS messaging (SES email / SNS SMS)
+  AwsAccessKeyId:
     Type: String
+    Default: ""
     NoEcho: true
-    Default: |
-      -----BEGIN EC PRIVATE KEY-----
-      MHcCAQEEIPRRtyc5EQoNPFhkcDzC47B2Zpo5b0NiM3Ftvky86+bEoAoGCCqGSM49
-      AwEHoUQDQgAEWinhVw0QHkZDeZ777zfBKT0cupULkpEd8Y52iPs76AT7JQ1cuGbm
-      jxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==
-      -----END EC PRIVATE KEY-----
-    Description: "Environment variable: EC256_PRIVATE_KEY"
-
-  Ec256PublicKey:
-    Type: String
-    Default: |
-      -----BEGIN PUBLIC KEY-----
-      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWinhVw0QHkZDeZ777zfBKT0cupUL
-      kpEd8Y52iPs76AT7JQ1cuGbmjxJASNwp907KzNzOZJSV07bFdN/Tkwebgg==
-      -----END PUBLIC KEY-----
-    Description: "Environment variable: EC256_PUBLIC_KEY"
-
-  SecretSep24InteractiveUrlJwtSecret:
-    Type: String
-    NoEcho: true
-    Default: "jwt_secret_1234567890"
-    Description: "Environment variable: SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET"
-
-  SecretSep24MoreInfoUrlJwtSecret:
-    Type: String
-    NoEcho: true
-    Default: "jwt_secret_1234567890"
-    Description: "Environment variable: SECRET_SEP24_MORE_INFO_URL_JWT_SECRET"
-
-  Sep24JwtSecret:
-    Type: String
-    NoEcho: true
-    Default: "jwt_secret_1234567890"
-    Description: "Environment variable: SEP24_JWT_SECRET"
-
-  
-  AdminApiKey:
-    Type: String
-    NoEcho: true
-    Default: "admin-api-key"
-    Description: "Environment variable: ADMIN_API_KEY"
-
-  RecaptchaSiteKey:
-    Type: String
-    NoEcho: true
-    Default: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
-    Description: "Environment variable: RECAPTCHA_SITE_KEY"
-
-  RecaptchaSiteSecretKey:
-    Type: String
-    NoEcho: true
-    Default: "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
-    Description: "Environment variable: RECAPTCHA_SITE_SECRET_KEY"
-
-  AwsSnsSenderId:
-    Type: String
-    NoEcho: true
-    Default: "AWS_SNS_SENDER_ID"
-    Description: "Environment variable: AWS_SNS_SENDER_ID"
+    Description: "Environment variable: AWS_ACCESS_KEY_ID"
 
   AwsSecretAccessKey:
     Type: String
+    Default: ""
     NoEcho: true
-    Default: "AWS_SECRET_ACCESS_KEY"
     Description: "Environment variable: AWS_SECRET_ACCESS_KEY"
 
-  AwsAccessKeyId:
+  AwsRegion:
     Type: String
-    NoEcho: true
-    Default: "AWS_ACCESS_KEY_ID"
-    Description: "Environment variable: AWS_ACCESS_KEY_ID"
+    Default: ""
+    Description: "Environment variable: AWS_REGION"
 
+  AwsSesSenderId:
+    Type: String
+    Default: ""
+    Description: "Environment variable: AWS_SES_SENDER_ID"
+
+  AwsSnsSenderId:
+    Type: String
+    Default: ""
+    Description: "Environment variable: AWS_SNS_SENDER_ID"
+
+  # Twilio (SMS / WhatsApp / SendGrid email)
+  TwilioAccountSid:
+    Type: String
+    Default: ""
+    Description: "Environment variable: TWILIO_ACCOUNT_SID"
+
+  TwilioAuthToken:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Environment variable: TWILIO_AUTH_TOKEN"
+
+  TwilioServiceSid:
+    Type: String
+    Default: ""
+    Description: "Environment variable: TWILIO_SERVICE_SID"
+
+  TwilioWhatsappFromNumber:
+    Type: String
+    Default: ""
+    Description: "Environment variable: TWILIO_WHATSAPP_FROM_NUMBER"
+
+  TwilioWhatsappReceiverInvitationTemplateSid:
+    Type: String
+    Default: ""
+    Description: "Environment variable: TWILIO_WHATSAPP_RECEIVER_INVITATION_TEMPLATE_SID"
+
+  TwilioWhatsappReceiverOtpTemplateSid:
+    Type: String
+    Default: ""
+    Description: "Environment variable: TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID"
+
+  TwilioSendgridApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Environment variable: TWILIO_SENDGRID_API_KEY"
+
+  TwilioSendgridSenderAddress:
+    Type: String
+    Default: ""
+    Description: "Environment variable: TWILIO_SENDGRID_SENDER_ADDRESS"
+
+  # Monitoring and logging configuration
+  SentryDsn:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Environment variable: SENTRY_DSN"
+
+  # RPC Configuration
+  RpcRequestAuthHeaderValue:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Environment variable: RPC_REQUEST_AUTH_HEADER_VALUE"
+
+  # Bridge integration
+  BridgeApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: "Environment variable: BRIDGE_API_KEY"
+
+Rules:
+  LayerBucketRequiredWhenGenerating:
+    RuleCondition: !Or
+      - !Equals [ !Ref Sep10SigningPublicKey, "" ]
+      - !Equals [ !Ref DistributionPublicKey, "" ]
+      - !Equals [ !Ref DistributionAccountEncryptionPassphrase, "" ]
+      - !Equals [ !Ref ChannelAccountEncryptionPassphrase, "" ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref StellarLayerS3Bucket, "" ] ]
+        AssertDescription: "StellarLayerS3Bucket must be provided when any Stellar key/passphrase is left blank for auto-generation."
+  Sep10PublicKeyRequiresPrivate:
+    RuleCondition: !Not [ !Equals [ !Ref Sep10SigningPublicKey, "" ] ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref Sep10SigningPrivateKey, "" ] ]
+        AssertDescription: "Sep10SigningPrivateKey must be provided when Sep10SigningPublicKey is set."
+  DistributionPublicKeyRequiresSeed:
+    RuleCondition: !Not [ !Equals [ !Ref DistributionPublicKey, "" ] ]
+    Assertions:
+      - Assert: !Not [ !Equals [ !Ref DistributionSeed, "" ] ]
+        AssertDescription: "DistributionSeed must be provided when DistributionPublicKey is set."
 
 Conditions:
-  GenerateSep10Keys: !Equals [ !Ref Sep10SigningPrivateKey, "" ]
-  GenerateDistributionKeys: !Equals [ !Ref DistributionSeed, "" ]
-  GenerateChannelKeys: !Equals [ !Ref ChannelAccountEncryptionPassphrase, "" ]
+  GenerateSep10Keys: !Equals [ !Ref Sep10SigningPublicKey, "" ]
+  GenerateDistributionKeys: !Equals [ !Ref DistributionPublicKey, "" ]
+  GenerateDistributionEncryptionPassphrase: !Equals [ !Ref DistributionAccountEncryptionPassphrase, "" ]
+  GenerateChannelEncryptionPassphrase: !Equals [ !Ref ChannelAccountEncryptionPassphrase, "" ]
+  NeedKeyGeneration: !Or
+    - !Condition GenerateSep10Keys
+    - !Condition GenerateDistributionKeys
+    - !Condition GenerateDistributionEncryptionPassphrase
+    - !Condition GenerateChannelEncryptionPassphrase
+
+  HasAwsAccessKeyId: !Not [ !Equals [ !Ref AwsAccessKeyId, "" ] ]
+  HasAwsSecretAccessKey: !Not [ !Equals [ !Ref AwsSecretAccessKey, "" ] ]
+  HasAwsRegion: !Not [ !Equals [ !Ref AwsRegion, "" ] ]
+  HasAwsSesSenderId: !Not [ !Equals [ !Ref AwsSesSenderId, "" ] ]
+  HasAwsSnsSenderId: !Not [ !Equals [ !Ref AwsSnsSenderId, "" ] ]
+  HasTwilioAccountSid: !Not [ !Equals [ !Ref TwilioAccountSid, "" ] ]
+  HasTwilioAuthToken: !Not [ !Equals [ !Ref TwilioAuthToken, "" ] ]
+  HasTwilioServiceSid: !Not [ !Equals [ !Ref TwilioServiceSid, "" ] ]
+  HasTwilioWhatsappFromNumber: !Not [ !Equals [ !Ref TwilioWhatsappFromNumber, "" ] ]
+  HasTwilioWhatsappReceiverInvitationTemplateSid: !Not [ !Equals [ !Ref TwilioWhatsappReceiverInvitationTemplateSid, "" ] ]
+  HasTwilioWhatsappReceiverOtpTemplateSid: !Not [ !Equals [ !Ref TwilioWhatsappReceiverOtpTemplateSid, "" ] ]
+  HasTwilioSendgridApiKey: !Not [ !Equals [ !Ref TwilioSendgridApiKey, "" ] ]
+  HasTwilioSendgridSenderAddress: !Not [ !Equals [ !Ref TwilioSendgridSenderAddress, "" ] ]
+  HasSentryDsn: !Not [ !Equals [ !Ref SentryDsn, "" ] ]
+  HasRpcRequestAuthHeaderValue: !Not [ !Equals [ !Ref RpcRequestAuthHeaderValue, "" ] ]
+  HasBridgeApiKey: !Not [ !Equals [ !Ref BridgeApiKey, "" ] ]
 
 Resources:
   StellarKeyGenRole:
     Type: AWS::IAM::Role
+    Condition: NeedKeyGeneration
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -157,50 +250,23 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: SecretsManagerAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:CreateSecret
-                  - secretsmanager:PutSecretValue
-                  - secretsmanager:UpdateSecret
-                Resource: 
-                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${env}/*'
-
-  StellarKeyGenRolePolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: !Sub ${AWS::StackName}-stellar-keygen-policy
-      Roles: 
-        - !Ref StellarKeyGenRole
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - "logs:CreateLogGroup"
-              - "logs:CreateLogStream"
-              - "logs:PutLogEvents"
-            Resource: 
-              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
 
   StellarSDKLayer:
     Type: AWS::Lambda::LayerVersion
+    Condition: NeedKeyGeneration
     Properties:
       LayerName: stellar-sdk-layer
       Content: 
         S3Bucket: !Ref StellarLayerS3Bucket
         S3Key: stellar-layer.zip
       CompatibleRuntimes:
-        - nodejs18.x
+        - nodejs22.x
 
   StellarKeyGenFunction:
     Type: AWS::Lambda::Function
+    Condition: NeedKeyGeneration
     Properties:
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Handler: index.handler
       Role: !GetAtt StellarKeyGenRole.Arn
       Timeout: 30
@@ -269,14 +335,16 @@ Resources:
               if (event.RequestType === 'Delete') {
                 console.log('Delete request, sending success response');
               } else {
-                console.log('Generating new keypair');
-                const pair = Keypair.random();
+                const seed = (event.ResourceProperties.SecretSeed || '').trim();
+                const pair = seed ? Keypair.fromSecret(seed) : Keypair.random();
+                console.log(seed ? 'Deriving keypair from provided seed' : 'Generating new keypair');
                 response.Data = {
                   publicKey: pair.publicKey(),
                   secretKey: pair.secret()
                 };
 
-                if (event.ResourceProperties.KeyPairId === 'distribution') {
+                // Only fund a freshly *generated* distribution account (testnet); never a provided seed.
+                if (event.ResourceProperties.KeyPairId === 'distribution' && !seed) {
                   console.log('Funding distribution account on testnet');
                   try {
                     await fundTestnetAccount(pair.publicKey());
@@ -311,241 +379,231 @@ Resources:
     Properties:
       ServiceToken: !GetAtt StellarKeyGenFunction.Arn
       KeyPairId: sep10
+      SecretSeed: !Ref Sep10SigningPrivateKey
 
   DistributionKeyGenPair:
-    Type: Custom::StellarKeyPairx
+    Type: Custom::StellarKeyPair
     Condition: GenerateDistributionKeys
     Properties:
       ServiceToken: !GetAtt StellarKeyGenFunction.Arn
       KeyPairId: distribution
-  
-  ChannelKeyGenPair:
+      SecretSeed: !Ref DistributionSeed
+
+  DistributionEncryptionKeyGenPair:
     Type: Custom::StellarKeyPair
-    Condition: GenerateChannelKeys
+    Condition: GenerateDistributionEncryptionPassphrase
     Properties:
       ServiceToken: !GetAtt StellarKeyGenFunction.Arn
-      KeyPairId: channel
+      KeyPairId: distribution-encryption
+
+  ChannelEncryptionKeyGenPair:
+    Type: Custom::StellarKeyPair
+    Condition: GenerateChannelEncryptionPassphrase
+    Properties:
+      ServiceToken: !GetAtt StellarKeyGenFunction.Arn
+      KeyPairId: channel-encryption
   
   Sep10SigningPrivateKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/SEP10_SIGNING_PRIVATE_KEY
+      Name: !Sub /${namespace}/${env}/SEP10_SIGNING_PRIVATE_KEY
       Description: "SEP10 signing private key"
       SecretString: !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.secretKey, !Ref Sep10SigningPrivateKey]
 
-  SecretSep10SigningSeedSm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/SECRET_SEP10_SIGNING_SEED
-      Description: "SEP10 signing private key"
-      SecretString: !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.secretKey, !Ref Sep10SigningPrivateKey]
-  
   Sep10SigningPublicKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/SEP10_SIGNING_PUBLIC_KEY
+      Name: !Sub /${namespace}/${env}/SEP10_SIGNING_PUBLIC_KEY
       Description: "SEP10 signing public key"
       SecretString: !If [GenerateSep10Keys, !GetAtt Sep10KeyGenPair.publicKey, !Ref Sep10SigningPublicKey]
-
-  SecretSep10JwtSecretSm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/SECRET_SEP10_JWT_SECRET
-      Description: "SECRET_SEP10_JWT_SECRET"
-      SecretString: !Ref SecretSep10JwtSecret
 
   DistributionSeedSm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/DISTRIBUTION_SEED
+      Name: !Sub /${namespace}/${env}/DISTRIBUTION_SEED
       Description: "Distribution account seed"
       SecretString: !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.secretKey, !Ref DistributionSeed]
 
   DistributionPublicKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/DISTRIBUTION_PUBLIC_KEY
+      Name: !Sub /${namespace}/${env}/DISTRIBUTION_PUBLIC_KEY
       Description: "Distribution account public key"
       SecretString: !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.publicKey, !Ref DistributionPublicKey]
 
   DistributionEncryptionPassphraseSm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE
+      Name: !Sub /${namespace}/${env}/DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE
       Description: "Distribution account encryption passphrase"
-      SecretString: !If [GenerateDistributionKeys, !GetAtt DistributionKeyGenPair.secretKey, !Ref DistributionAccountEncryptionPassphrase]
+      SecretString: !If [GenerateDistributionEncryptionPassphrase, !GetAtt DistributionEncryptionKeyGenPair.secretKey, !Ref DistributionAccountEncryptionPassphrase]
 
   ChannelEncryptionPassphraseSm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
+      Name: !Sub /${namespace}/${env}/CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
       Description: "Channel account encryption passphrase"
-      SecretString: !If [GenerateChannelKeys, !GetAtt ChannelKeyGenPair.secretKey, !Ref ChannelAccountEncryptionPassphrase]
+      SecretString: !If [GenerateChannelEncryptionPassphrase, !GetAtt ChannelEncryptionKeyGenPair.secretKey, !Ref ChannelAccountEncryptionPassphrase]
 
   Ec256PrivateKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/EC256_PRIVATE_KEY
+      Name: !Sub /${namespace}/${env}/EC256_PRIVATE_KEY
       Description: "EC256 private key"
       SecretString: !Ref Ec256PrivateKey
-
-  Ec256PublicKeySm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/EC256_PUBLIC_KEY
-      Description: "EC256 public key"
-      SecretString: !Ref Ec256PublicKey
-
-  SecretSep24InteractiveUrlJwtSm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET
-      Description: "SEP24 interactive URL JWT secret"
-      SecretString: !Ref SecretSep24InteractiveUrlJwtSecret
-
-  SecretSep24MoreInfoUrlJwtSm:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/SECRET_SEP24_MORE_INFO_URL_JWT_SECRET
-      Description: "SEP24 more info URL JWT secret"
-      SecretString: !Ref SecretSep24MoreInfoUrlJwtSecret
 
   Sep24JwtSm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/SEP24_JWT_SECRET
+      Name: !Sub /${namespace}/${env}/SEP24_JWT_SECRET
       Description: "SEP24 JWT secret"
       SecretString: !Ref Sep24JwtSecret
 
   AdminApiKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/ADMIN_API_KEY
+      Name: !Sub /${namespace}/${env}/ADMIN_API_KEY
       Description: "Admin API key"
       SecretString: !Ref AdminApiKey
 
-  RecaptchaSiteKeySm:
+  AdminAccountSm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/RECAPTCHA_SITE_KEY
-      Description: "Recaptcha site key"
-      SecretString: !Ref RecaptchaSiteKey
+      Name: !Sub /${namespace}/${env}/ADMIN_ACCOUNT
+      Description: "Admin account ID"
+      SecretString: !Ref AdminAccount
 
   RecaptchaSiteSecretKeySm:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub /sdp/${env}/RECAPTCHA_SITE_SECRET_KEY
+      Name: !Sub /${namespace}/${env}/RECAPTCHA_SITE_SECRET_KEY
       Description: "Recaptcha site secret key"
       SecretString: !Ref RecaptchaSiteSecretKey
 
-  AwsSnsSenderIdSm:
+  AwsAccessKeyIdSm:
     Type: AWS::SecretsManager::Secret
+    Condition: HasAwsAccessKeyId
     Properties:
-      Name: !Sub /sdp/${env}/AWS_SNS_SENDER_ID
-      Description: "Recaptcha site secret key"
-      SecretString: !Ref AwsSnsSenderId
+      Name: !Sub /${namespace}/${env}/AWS_ACCESS_KEY_ID
+      Description: "AWS IAM access key ID"
+      SecretString: !Ref AwsAccessKeyId
 
   AwsSecretAccessKeySm:
     Type: AWS::SecretsManager::Secret
+    Condition: HasAwsSecretAccessKey
     Properties:
-      Name: !Sub /sdp/${env}/AWS_SECRET_ACCESS_KEY
-      Description: "Recaptcha site secret key"
+      Name: !Sub /${namespace}/${env}/AWS_SECRET_ACCESS_KEY
+      Description: "AWS IAM secret access key"
       SecretString: !Ref AwsSecretAccessKey
 
-  AwsAccessKeyIdSm:
+  AwsRegionSm:
     Type: AWS::SecretsManager::Secret
+    Condition: HasAwsRegion
     Properties:
-      Name: !Sub /sdp/${env}/AWS_ACCESS_KEY_ID
-      Description: "Recaptcha site secret key"
-      SecretString: !Ref AwsAccessKeyId
+      Name: !Sub /${namespace}/${env}/AWS_REGION
+      Description: "AWS region for SES/SNS"
+      SecretString: !Ref AwsRegion
 
-Outputs:
-  Sep10SigningPrivateKeySmArn:
-    Value: !Ref Sep10SigningPrivateKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-sep10-signing-private-key-sm-arn
-    Description: "ARN for SEP10_SIGNING_PRIVATE_KEY secret"
+  AwsSesSenderIdSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasAwsSesSenderId
+    Properties:
+      Name: !Sub /${namespace}/${env}/AWS_SES_SENDER_ID
+      Description: "AWS SES sender identifier"
+      SecretString: !Ref AwsSesSenderId
 
-  Sep10SigningPublicKeySmArn:
-    Value: !Ref Sep10SigningPublicKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-sep10-signing-public-key-sm-arn
-    Description: "ARN for SEP10_SIGNING_PUBLIC_KEY secret"
+  AwsSnsSenderIdSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasAwsSnsSenderId
+    Properties:
+      Name: !Sub /${namespace}/${env}/AWS_SNS_SENDER_ID
+      Description: "AWS SNS sender identifier"
+      SecretString: !Ref AwsSnsSenderId
 
-  SecretSep10JwtSecretSmArn:
-    Value: !Ref SecretSep10JwtSecretSm
-    Export:
-      Name: !Sub ${AWS::StackName}-sep10-jwt-secret-key-sm-arn
-    Description: "ARN for SEP10_JWT_SECRET secret"
+  TwilioAccountSidSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioAccountSid
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_ACCOUNT_SID
+      Description: "Twilio account SID"
+      SecretString: !Ref TwilioAccountSid
 
-  DistributionSeedSmArn:
-    Value: !Ref DistributionSeedSm
-    Export:
-      Name: !Sub ${AWS::StackName}-distribution-seed-sm-arn
-    Description: "ARN for DISTRIBUTION_SEED secret"
+  TwilioAuthTokenSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioAuthToken
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_AUTH_TOKEN
+      Description: "Twilio auth token"
+      SecretString: !Ref TwilioAuthToken
 
-  DistributionPublicKeySmArn:
-    Value: !Ref DistributionPublicKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-distribution-public-key-sm-arn
-    Description: "ARN for DISTRIBUTION_PUBLIC_KEY secret"
+  TwilioServiceSidSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioServiceSid
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_SERVICE_SID
+      Description: "Twilio service SID"
+      SecretString: !Ref TwilioServiceSid
 
-  DistributionEncryptionPassphraseSmArn:
-    Value: !Ref DistributionEncryptionPassphraseSm
-    Export:
-      Name: !Sub ${AWS::StackName}-distribution-encryption-passphrase-sm-arn
-    Description: "ARN for DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE secret"
+  TwilioWhatsappFromNumberSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioWhatsappFromNumber
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_WHATSAPP_FROM_NUMBER
+      Description: "Twilio WhatsApp from number"
+      SecretString: !Ref TwilioWhatsappFromNumber
 
-  ChannelEncryptionPassphraseSmArn:
-    Value: !Ref ChannelEncryptionPassphraseSm
-    Export:
-      Name: !Sub ${AWS::StackName}-channel-encryption-passphrase-sm-arn
-    Description: "ARN for CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE secret"
+  TwilioWhatsappReceiverInvitationTemplateSidSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioWhatsappReceiverInvitationTemplateSid
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_WHATSAPP_RECEIVER_INVITATION_TEMPLATE_SID
+      Description: "Twilio WhatsApp receiver invitation template SID"
+      SecretString: !Ref TwilioWhatsappReceiverInvitationTemplateSid
 
-  Ec256PrivateKeySmArn:
-    Value: !Ref Ec256PrivateKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-ec256-private-key-sm-arn
-    Description: "ARN for EC256_PRIVATE_KEY secret"
+  TwilioWhatsappReceiverOtpTemplateSidSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioWhatsappReceiverOtpTemplateSid
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_WHATSAPP_RECEIVER_OTP_TEMPLATE_SID
+      Description: "Twilio WhatsApp receiver OTP template SID"
+      SecretString: !Ref TwilioWhatsappReceiverOtpTemplateSid
 
-  Ec256PublicKeySmArn:
-    Value: !Ref Ec256PublicKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-ec256-public-key-sm-arn
-    Description: "ARN for EC256_PUBLIC_KEY secret"
+  TwilioSendgridApiKeySm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioSendgridApiKey
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_SENDGRID_API_KEY
+      Description: "Twilio SendGrid API key"
+      SecretString: !Ref TwilioSendgridApiKey
 
-  SecretSep24InteractiveUrlJwtSmArn:
-    Value: !Ref SecretSep24InteractiveUrlJwtSm
-    Export:
-      Name: !Sub ${AWS::StackName}-sep24-interactive-url-jwt-sm-arn
-    Description: "ARN for SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET secret"
+  TwilioSendgridSenderAddressSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasTwilioSendgridSenderAddress
+    Properties:
+      Name: !Sub /${namespace}/${env}/TWILIO_SENDGRID_SENDER_ADDRESS
+      Description: "Twilio SendGrid sender address"
+      SecretString: !Ref TwilioSendgridSenderAddress
 
-  SecretSep24MoreInfoUrlJwtSmArn:
-    Value: !Ref SecretSep24MoreInfoUrlJwtSm
-    Export:
-      Name: !Sub ${AWS::StackName}-sep24-more-info-url-jwt-sm-arn
-    Description: "ARN for SECRET_SEP24_MORE_INFO_URL_JWT_SECRET secret"
+  SentryDsnSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasSentryDsn
+    Properties:
+      Name: !Sub /${namespace}/${env}/SENTRY_DSN
+      Description: "Sentry DSN"
+      SecretString: !Ref SentryDsn
 
-  Sep24JwtSmArn:
-    Value: !Ref Sep24JwtSm
-    Export:
-      Name: !Sub ${AWS::StackName}-sep24-jwt-sm-arn
-    Description: "ARN for SEP24_JWT_SECRET secret"
+  RpcRequestAuthHeaderValueSm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasRpcRequestAuthHeaderValue
+    Properties:
+      Name: !Sub /${namespace}/${env}/RPC_REQUEST_AUTH_HEADER_VALUE
+      Description: "Auth header value for protected RPC server"
+      SecretString: !Ref RpcRequestAuthHeaderValue
 
-  AdminApiKeySmArn:
-    Value: !Ref AdminApiKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-admin-api-key-sm-arn
-    Description: "ARN for ADMIN_API_KEY secret"
-
-  RecaptchaSiteKeySmArn:
-    Value: !Ref RecaptchaSiteKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-recaptcha-site-key-sm-arn
-    Description: "ARN for RECAPTCHA_SITE_KEY secret"
-
-  RecaptchaSiteSecretKeySmArn:
-    Value: !Ref RecaptchaSiteSecretKeySm
-    Export:
-      Name: !Sub ${AWS::StackName}-recaptcha-site-secret-key-sm-arn
-    Description: "ARN for RECAPTCHA_SITE_SECRET_KEY secret"
+  BridgeApiKeySm:
+    Type: AWS::SecretsManager::Secret
+    Condition: HasBridgeApiKey
+    Properties:
+      Name: !Sub /${namespace}/${env}/BRIDGE_API_KEY
+      Description: "Bridge integration API key"
+      SecretString: !Ref BridgeApiKey
