@@ -72,6 +72,57 @@ jobs:
           echo "base=$BASE" >> $GITHUB_OUTPUT
           git log "$BASE"..HEAD --pretty=format:"%h %s%n%b---" > /tmp/commits.txt
 
+      # TEMPORARY DEBUG: the native claude-code-action hides the WIF token-exchange
+      # error. This step reproduces the exchange manually (as the workflow did before
+      # #1141, including workspace_id) and prints the raw /v1/oauth/token response so
+      # the real reason code is visible in the run logs. Non-fatal: the native action
+      # still runs after it, so one run shows both outcomes. Remove once auth is fixed.
+      - name: Debug WIF token exchange
+        env:
+          ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          ANTHROPIC_FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+        run: |
+          set -uo pipefail
+
+          echo "::group::Fetch GitHub OIDC token (audience=https://api.anthropic.com)"
+          JWT=$(curl -sS \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" \
+            | jq -r '.value // empty')
+          if [ -z "$JWT" ]; then
+            echo "::error::Could not fetch GitHub OIDC token (is id-token: write set?)"
+            exit 1
+          fi
+          echo "OIDC token fetched (${#JWT} bytes). Claims the rule matches against:"
+          echo "$JWT" | jq -rR 'split(".")[1] | gsub("-";"+") | gsub("_";"/") | @base64d | fromjson | {iss, sub, aud, repository, repository_owner, ref, event_name}' 2>/dev/null || echo "(could not decode claims)"
+          echo "::endgroup::"
+
+          echo "::group::Exchange at POST /v1/oauth/token"
+          PAYLOAD=$(jq -nc \
+            --arg assertion "$JWT" \
+            --arg rule "$ANTHROPIC_FEDERATION_RULE_ID" \
+            --arg org "$ANTHROPIC_ORGANIZATION_ID" \
+            --arg sa "$ANTHROPIC_SERVICE_ACCOUNT_ID" \
+            --arg ws "$ANTHROPIC_WORKSPACE_ID" \
+            '{grant_type:"urn:ietf:params:oauth:grant-type:jwt-bearer",assertion:$assertion,federation_rule_id:$rule,organization_id:$org,service_account_id:$sa,workspace_id:$ws}')
+          RAW=$(curl -sS -w $'\n%{http_code}' -X POST https://api.anthropic.com/v1/oauth/token \
+            -H 'content-type: application/json' --data-binary "$PAYLOAD")
+          CODE=$(printf '%s' "$RAW" | tail -n1)
+          BODY=$(printf '%s' "$RAW" | sed '$d')
+          TOKEN=$(printf '%s' "$BODY" | jq -r '.access_token // empty' 2>/dev/null)
+          [ -n "$TOKEN" ] && echo "::add-mask::$TOKEN"
+          echo "HTTP status: $CODE"
+          echo "Response (access_token redacted):"
+          printf '%s' "$BODY" | jq 'if .access_token then .access_token = "***REDACTED***" else . end' 2>/dev/null || printf '%s\n' "$BODY"
+          if [ -n "$TOKEN" ]; then
+            echo "✅ Manual exchange SUCCEEDED — rule/SA/workspace are valid; the issue is the native action's request, not the credentials."
+          else
+            echo "❌ Manual exchange FAILED — the response above is the real reason the native path fails too."
+          fi
+          echo "::endgroup::"
+
       - name: Update CHANGELOG
         uses: anthropics/claude-code-action@v1
         with:
