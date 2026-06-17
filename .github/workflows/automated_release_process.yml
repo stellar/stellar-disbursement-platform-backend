@@ -118,6 +118,23 @@ jobs:
           echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
           echo "Token exchange succeeded (HTTP $CODE, expires in $(printf '%s' "$BODY" | jq -r '.expires_in')s)"
 
+          # TEMPORARY: probe which models this workspace can actually call. The agent
+          # fails instantly ($0) on some models; this prints the real /v1/messages
+          # error per model so we can pin one the workspace is entitled to. Remove
+          # once the model is chosen.
+          echo "::group::Probe /v1/messages model access"
+          for M in claude-sonnet-4-6 claude-opus-4-6 claude-opus-4-8 claude-haiku-4-5; do
+            PR=$(curl -sS -w $'\n%{http_code}' https://api.anthropic.com/v1/messages \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "content-type: application/json" \
+              -d "{\"model\":\"$M\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}")
+            PC=$(printf '%s' "$PR" | tail -n1)
+            PB=$(printf '%s' "$PR" | sed '$d')
+            echo "model=$M -> HTTP $PC : $(printf '%s' "$PB" | jq -c '{type: (.type // "ok"), error: .error.type, message: .error.message}' 2>/dev/null || printf '%s' "$PB")"
+          done
+          echo "::endgroup::"
+
       - name: Update CHANGELOG
         uses: anthropics/claude-code-action@v1
         with:
