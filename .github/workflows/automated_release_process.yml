@@ -16,7 +16,7 @@ on:
 env:
   REPO_ORG: stellar
   REPO_NAME: stellar-disbursement-platform-backend
-  REVIEWER: JiahuiWho,marwen-abid
+  REVIEWER: JiahuiWho,marwen-abid,hypekostas
 
 jobs:
   create-release:
@@ -73,7 +73,6 @@ jobs:
           git log "$BASE"..HEAD --pretty=format:"%h %s%n%b---" > /tmp/commits.txt
 
       - name: Update CHANGELOG
-        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -114,7 +113,7 @@ jobs:
           anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
           anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: --max-turns 10 --allowedTools Read,Edit
+          claude_args: --model claude-sonnet-4-6 --max-turns 10 --allowedTools Read,Edit
 
       - name: Stage CHANGELOG
         run: |
