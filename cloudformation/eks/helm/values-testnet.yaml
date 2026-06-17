@@ -6,7 +6,7 @@ global:
 
 sdp:
   image:
-    tag: "6.5.0"
+    tag: "6.6.0"
   route:
     domain: sdp-backend.example.org
     mtnDomain: "*.sdp-backend.example.org"
@@ -68,7 +68,7 @@ tss:
 # ============================= dashboard ===================================
 dashboard:
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:6.5.0
+    fullName: stellar/stellar-disbursement-platform-frontend:6.6.0
   enabled: true
   route:
     domain: "dashboard.example.org"
