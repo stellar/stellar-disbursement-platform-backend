@@ -72,12 +72,13 @@ jobs:
           echo "base=$BASE" >> $GITHUB_OUTPUT
           git log "$BASE"..HEAD --pretty=format:"%h %s%n%b---" > /tmp/commits.txt
 
-      # TEMPORARY DEBUG: the native claude-code-action hides the WIF token-exchange
-      # error. This step reproduces the exchange manually (as the workflow did before
-      # #1141, including workspace_id) and prints the raw /v1/oauth/token response so
-      # the real reason code is visible in the run logs. Non-fatal: the native action
-      # still runs after it, so one run shows both outcomes. Remove once auth is fixed.
-      - name: Debug WIF token exchange
+      # Exchange the GitHub OIDC token for a short-lived Anthropic access token.
+      # claude-code-action@v1's native WIF inputs do not produce a working exchange
+      # for this repo's federation rule (the rule requires workspace_id in the
+      # request, which the action omits), so we do the exchange explicitly — the same
+      # mechanism the workflow used before #1141 — and hand the token to the action.
+      - name: Exchange GitHub OIDC for Anthropic token
+        id: anthropic_token
         env:
           ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
           ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
@@ -86,7 +87,6 @@ jobs:
         run: |
           set -uo pipefail
 
-          echo "::group::Fetch GitHub OIDC token (audience=https://api.anthropic.com)"
           JWT=$(curl -sS \
             -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" \
@@ -95,11 +95,7 @@ jobs:
             echo "::error::Could not fetch GitHub OIDC token (is id-token: write set?)"
             exit 1
           fi
-          echo "OIDC token fetched (${#JWT} bytes). Claims the rule matches against:"
-          echo "$JWT" | jq -rR 'split(".")[1] | gsub("-";"+") | gsub("_";"/") | @base64d | fromjson | {iss, sub, aud, repository, repository_owner, ref, event_name}' 2>/dev/null || echo "(could not decode claims)"
-          echo "::endgroup::"
 
-          echo "::group::Exchange at POST /v1/oauth/token"
           PAYLOAD=$(jq -nc \
             --arg assertion "$JWT" \
             --arg rule "$ANTHROPIC_FEDERATION_RULE_ID" \
@@ -112,16 +108,15 @@ jobs:
           CODE=$(printf '%s' "$RAW" | tail -n1)
           BODY=$(printf '%s' "$RAW" | sed '$d')
           TOKEN=$(printf '%s' "$BODY" | jq -r '.access_token // empty' 2>/dev/null)
-          [ -n "$TOKEN" ] && echo "::add-mask::$TOKEN"
-          echo "HTTP status: $CODE"
-          echo "Response (access_token redacted):"
-          printf '%s' "$BODY" | jq 'if .access_token then .access_token = "***REDACTED***" else . end' 2>/dev/null || printf '%s\n' "$BODY"
-          if [ -n "$TOKEN" ]; then
-            echo "✅ Manual exchange SUCCEEDED — rule/SA/workspace are valid; the issue is the native action's request, not the credentials."
-          else
-            echo "❌ Manual exchange FAILED — the response above is the real reason the native path fails too."
+
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Token exchange failed (HTTP $CODE)"
+            printf '%s\n' "$BODY"
+            exit 1
           fi
-          echo "::endgroup::"
+          echo "::add-mask::$TOKEN"
+          echo "access_token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "Token exchange succeeded (HTTP $CODE, expires in $(printf '%s' "$BODY" | jq -r '.expires_in')s)"
 
       - name: Update CHANGELOG
         uses: anthropics/claude-code-action@v1
@@ -159,10 +154,7 @@ jobs:
             If the [Unreleased] section is empty AND there are no uncovered commits, use `- Release ${{ inputs.version }}` as the body.
 
             Use the Edit tool to modify CHANGELOG.md. Do not create or modify any other files.
-          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
-          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
-          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
-          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          claude_code_oauth_token: ${{ steps.anthropic_token.outputs.access_token }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: --model claude-sonnet-4-6 --max-turns 10 --allowedTools Read,Edit
 
