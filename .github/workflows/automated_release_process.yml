@@ -73,6 +73,11 @@ jobs:
           git log "$BASE"..HEAD --pretty=format:"%h %s%n%b---" > /tmp/commits.txt
 
       - name: Update CHANGELOG
+        # Optional: CHANGELOG generation runs Claude via the Anthropic API, whose cost
+        # isn't always controllable (e.g. workspace spend caps). If it fails, the
+        # release proceeds without an auto-generated entry; see the warning emitted by
+        # the "Validate CHANGELOG update" step below.
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
@@ -125,9 +130,7 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md does not contain a section for version ${VERSION}."
-            echo "The 'Update CHANGELOG' step may have failed. Check the logs above."
-            exit 1
+            echo "::warning::CHANGELOG.md has no section for ${VERSION} — the 'Update CHANGELOG' step did not produce one (e.g. Anthropic workspace spend cap). Continuing; add release notes manually if needed."
           fi
 
       - name: Install Node.js for Helm tooling
