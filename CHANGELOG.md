@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [6.6.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.5.0...6.6.0))
+
+### Added
+
+- Add Gateway API support to the SDP Helm chart. [#1143](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1143)
+
+### Changed
+
+- Use `claude-code-action`'s native Workload Identity Federation inputs in the automated release workflow, removing the manual OIDC token fetch and exchange steps. [#1141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1141)
+- Harden the Claude automated release workflow security. [#1130](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1130)
+- Update CONTRIBUTING.md with branch naming rules. [#1133](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1133)
+- Fix typo in the SDP Helm chart description. [#1127](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1127)
+
+### Fixed
+
+- Fix exclusion of `DIRECT` payments in receiver and wallet stats queries. [#1139](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1139)
+- Fix & update outdated Cloudformation/EKS Stacks and deployment guide. [#1140](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1140)
+- Prevent cross-tenant access via tenant-unscoped API-key validation cache. [#1142](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1142)
+
+### Security and Dependencies
+
+- Bump the minor-and-patch group across 1 directory with 14 updates. [#1145](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1145)
+- Bump alpine from 3.23 to 3.24 in the all-docker group. [#1144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1144)
+- Bump the npm_and_yarn group across 1 directory with 3 updates. [#1146](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1146)
+- Bump the all-actions group across 1 directory with 3 updates. [#1137](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1137)
+
 ## [6.5.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.5.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.4.0...6.5.0))
 
 ### Added

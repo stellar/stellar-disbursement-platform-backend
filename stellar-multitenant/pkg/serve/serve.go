@@ -126,7 +126,6 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
 	mux.Use(chimiddleware.RequestID)
-	mux.Use(chimiddleware.RealIP)
 	mux.Use(supporthttp.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MaxBodySize(middleware.DefaultMaxRequestBodySize))
