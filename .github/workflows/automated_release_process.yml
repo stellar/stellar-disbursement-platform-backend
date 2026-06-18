@@ -62,6 +62,10 @@ jobs:
           sed -i "s/^appVersion: \".*\"/appVersion: \"$VERSION\"/" helmchart/sdp/Chart.yaml
           sed -i "/^  image:/,/^  [a-z]/ { s|^    tag: \".*\"|    tag: \"$VERSION\"| }" helmchart/sdp/values.yaml
           sed -i "s|fullName: stellar/stellar-disbursement-platform-frontend:.*|fullName: stellar/stellar-disbursement-platform-frontend:$VERSION|" helmchart/sdp/values.yaml
+          sed -i "s/^tag: ".*"/tag: \"$VERSION\"/" cloudformation/eks/helm/values-mainnet.yaml
+          sed -i "s/^tag: ".*"/tag: \"$VERSION\"/" cloudformation/eks/helm/values-testnet.yaml
+          sed -i "s|fullName: stellar/stellar-disbursement-platform-frontend:.*|fullName: stellar/stellar-disbursement-platform-frontend:$VERSION|" cloudformation/eks/helm/values-mainnet.yaml
+          sed -i "s|fullName: stellar/stellar-disbursement-platform-frontend:.*|fullName: stellar/stellar-disbursement-platform-frontend:$VERSION|" cloudformation/eks/helm/values-testnet.yaml
           git add main.go helmchart/sdp/Chart.yaml helmchart/sdp/values.yaml
 
       - name: Collect release metadata
