@@ -35,6 +35,12 @@ func Test_DistributionWalletManagementService_CreateWallet(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	// Every tenant has a default distribution wallet; multi-wallet eligibility is
+	// derived from its account type. Seed a DB_VAULT default so the eligible path runs.
+	defaultAddr := keypair.MustRandom().Address()
+	_, err = models.DistributionWallets.EnsureDefaultWallet(ctx, dbConnectionPool, &defaultAddr, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive)
+	require.NoError(t, err)
+
 	kek := keypair.MustRandom().Seed()
 	walletKeyService, err := tssSvc.NewDistributionWalletKeyService(dbConnectionPool, kek)
 	require.NoError(t, err)
@@ -156,4 +162,59 @@ func Test_DistributionWalletManagementService_CreateWallet(t *testing.T) {
 		require.NoError(t, cntErr)
 		assert.Equal(t, data.MaxDistributionWalletsPerTenant, count, "no row may be created past the cap")
 	})
+}
+
+// Mixed-custody guard: v1 restricts multi-wallet to DB_VAULT tenants. A tenant whose
+// default distribution account is STELLAR.ENV or CIRCLE must not be able to provision a
+// (DB_VAULT) additional wallet — that would create a mixed-custody tenant and a later
+// promote-to-default would silently flip the tenant's account type + balance source.
+func Test_DistributionWalletManagementService_CreateWallet_eligibility(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	kek := keypair.MustRandom().Seed()
+	walletKeyService, err := tssSvc.NewDistributionWalletKeyService(dbConnectionPool, kek)
+	require.NoError(t, err)
+	hostAccount := schema.NewDefaultHostAccount(keypair.MustRandom().Address())
+
+	newSvc := func(t *testing.T) *DistributionWalletManagementService {
+		t.Helper()
+		sigService, _, distAccResolver := signing.NewMockSignatureService(t)
+		distAccResolver.On("HostDistributionAccount").Return(hostAccount).Maybe()
+		svc, sErr := NewDistributionWalletManagementService(models, engine.SubmitterEngine{
+			HorizonClient:       &horizonclient.MockClient{},
+			SignatureService:    sigService,
+			LedgerNumberTracker: preconditionsMocks.NewMockLedgerNumberTracker(t),
+			MaxBaseFee:          100 * txnbuild.MinBaseFee,
+		}, walletKeyService, 5)
+		require.NoError(t, sErr)
+		return svc
+	}
+
+	for _, ineligible := range []schema.AccountType{
+		schema.DistributionAccountStellarEnv,
+		schema.DistributionAccountCircleDBVault,
+	} {
+		t.Run(fmt.Sprintf("rejects multi-wallet for %s tenants", ineligible), func(t *testing.T) {
+			addr := keypair.MustRandom().Address()
+			_, eErr := models.DistributionWallets.EnsureDefaultWallet(ctx, dbConnectionPool, &addr, ineligible, schema.AccountStatusActive)
+			require.NoError(t, eErr)
+
+			svc := newSvc(t)
+			_, cErr := svc.CreateWallet(ctx, data.DistributionWalletInsert{Name: "program-x"})
+			require.ErrorIs(t, cErr, ErrTenantNotEligibleForMultiWallet)
+
+			// Guard fails before any row/key is created — only the default remains.
+			count, cntErr := models.DistributionWallets.Count(ctx, dbConnectionPool)
+			require.NoError(t, cntErr)
+			assert.Equal(t, 1, count, "no wallet row may be created past the eligibility guard")
+		})
+	}
 }

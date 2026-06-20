@@ -24,6 +24,10 @@ var (
 	// ErrUnsupportedDistributionWalletType is returned for account types that cannot be
 	// provisioned per-wallet in v1.
 	ErrUnsupportedDistributionWalletType = errors.New("only DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT wallets can be created in v1")
+	// ErrTenantNotEligibleForMultiWallet is returned when a tenant whose distribution
+	// account is not STELLAR.DB_VAULT attempts to provision additional wallets. v1
+	// restricts multi-wallet to DB_VAULT tenants to avoid creating mixed-custody tenants.
+	ErrTenantNotEligibleForMultiWallet = errors.New("multi-wallet is only available to tenants on DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT in v1")
 	// ErrCannotArchiveDefaultWallet is returned when archiving the default wallet without
 	// promoting another active wallet first.
 	ErrCannotArchiveDefaultWallet = errors.New("the default wallet cannot be archived: promote another active wallet to default first")
@@ -91,6 +95,21 @@ func (s *DistributionWalletManagementService) CreateWallet(ctx context.Context, 
 	}
 
 	dbPool := s.Models.DBConnectionPool
+
+	// v1 multi-wallet eligibility: only tenants whose distribution account is
+	// STELLAR.DB_VAULT may provision additional wallets. A non-DB_VAULT tenant
+	// (STELLAR.ENV or CIRCLE) would become mixed-custody, and promoting the new
+	// DB_VAULT wallet to default would silently flip the tenant's account type and
+	// break balance aggregation (Circle balances come from the Circle API, Stellar
+	// from Horizon). Relaxing this to STELLAR.ENV is a safe later step; CIRCLE needs
+	// a designed mixed-custody story first.
+	defaultWallet, err := s.Models.DistributionWallets.GetDefault(ctx, dbPool)
+	if err != nil {
+		return nil, fmt.Errorf("resolving tenant multi-wallet eligibility: %w", err)
+	}
+	if defaultWallet.AccountType != schema.DistributionAccountStellarDBVault {
+		return nil, fmt.Errorf("tenant distribution account type is %q: %w", defaultWallet.AccountType, ErrTenantNotEligibleForMultiWallet)
+	}
 
 	count, err := s.Models.DistributionWallets.Count(ctx, dbPool)
 	if err != nil {
