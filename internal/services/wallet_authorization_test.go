@@ -110,3 +110,69 @@ func Test_WalletScopedAuthorization(t *testing.T) {
 			"owner must act on any wallet without membership rows")
 	})
 }
+
+// Test_ResolveWalletReadScope pins the read-visibility contract directly (it was previously
+// only exercised through endpoint tests). The security-critical case is the nil-vs-empty
+// distinction: Owners get nil (tenant-wide, unfiltered), but a non-owner with no memberships
+// MUST get a non-nil empty slice — returning nil there would unfilter their reads and leak
+// every wallet's rows.
+func Test_ResolveWalletReadScope(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	walletA := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	var walletBID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type)
+		VALUES ('scope-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
+
+	member := &auth.User{ID: "user-scope-member", Roles: []string{string(data.ApproverUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, member.ID, walletA.ID, data.ApproverUserRole, nil)
+	require.NoError(t, err)
+
+	t.Run("owner via IsOwner → nil scope (tenant-wide, unfiltered)", func(t *testing.T) {
+		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
+			&auth.User{ID: "owner-flag", IsOwner: true})
+		require.NoError(t, sErr)
+		assert.Nil(t, scope)
+	})
+
+	t.Run("owner via role → nil scope", func(t *testing.T) {
+		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
+			&auth.User{ID: "owner-role", Roles: []string{string(data.OwnerUserRole)}})
+		require.NoError(t, sErr)
+		assert.Nil(t, scope)
+	})
+
+	t.Run("member sees exactly the wallets they hold membership on", func(t *testing.T) {
+		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships, member)
+		require.NoError(t, sErr)
+		assert.ElementsMatch(t, []string{walletA.ID}, scope)
+
+		_, mErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, member.ID, walletBID, data.ApproverUserRole, nil)
+		require.NoError(t, mErr)
+		scope, sErr = ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships, member)
+		require.NoError(t, sErr)
+		assert.ElementsMatch(t, []string{walletA.ID, walletBID}, scope)
+	})
+
+	t.Run("non-owner with no memberships → empty, non-nil scope (sees nothing)", func(t *testing.T) {
+		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
+			&auth.User{ID: "user-no-memberships", Roles: []string{string(data.ApproverUserRole)}})
+		require.NoError(t, sErr)
+		require.NotNil(t, scope, "non-nil empty scope filters reads to nothing; nil would unfilter and leak all wallets")
+		assert.Empty(t, scope)
+	})
+
+	t.Run("nil user is rejected", func(t *testing.T) {
+		_, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships, nil)
+		require.Error(t, sErr)
+	})
+}
