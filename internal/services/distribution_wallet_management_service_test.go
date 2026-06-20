@@ -255,3 +255,55 @@ func Test_DistributionWalletManagementService_ArchiveWallet_guards(t *testing.T)
 		require.ErrorIs(t, aErr, data.ErrRecordNotFound)
 	})
 }
+
+// Happy-path service coverage for archive + promote (previously only the error mapping was
+// tested, via a mock at the handler layer). A model-inserted wallet is ACTIVE by default,
+// so it can be archived/promoted directly without on-chain provisioning.
+func Test_DistributionWalletManagementService_ArchiveAndPromote(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	kek := keypair.MustRandom().Seed()
+	walletKeyService, err := tssSvc.NewDistributionWalletKeyService(dbConnectionPool, kek)
+	require.NoError(t, err)
+	svc, err := NewDistributionWalletManagementService(models, engine.SubmitterEngine{}, walletKeyService, 5)
+	require.NoError(t, err)
+
+	addr := keypair.MustRandom().Address()
+	_, err = models.DistributionWallets.EnsureDefaultWallet(ctx, dbConnectionPool, &addr, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive)
+	require.NoError(t, err)
+
+	t.Run("archives a non-default active wallet", func(t *testing.T) {
+		w, iErr := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+			Name: "to-archive", AccountType: schema.DistributionAccountStellarDBVault,
+		})
+		require.NoError(t, iErr)
+
+		archived, aErr := svc.ArchiveWallet(ctx, w.ID)
+		require.NoError(t, aErr)
+		assert.Equal(t, data.ArchivedDistributionWalletStatus, archived.Status)
+		require.NotNil(t, archived.ArchivedAt)
+	})
+
+	t.Run("promotes a non-default active wallet to default", func(t *testing.T) {
+		w, iErr := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+			Name: "to-promote", AccountType: schema.DistributionAccountStellarDBVault,
+		})
+		require.NoError(t, iErr)
+
+		promoted, pErr := svc.PromoteToDefault(ctx, w.ID)
+		require.NoError(t, pErr)
+		assert.True(t, promoted.IsDefault)
+
+		current, gErr := models.DistributionWallets.GetDefault(ctx, dbConnectionPool)
+		require.NoError(t, gErr)
+		assert.Equal(t, w.ID, current.ID, "the promoted wallet is now the sole default")
+	})
+}
