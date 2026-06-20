@@ -218,3 +218,40 @@ func Test_DistributionWalletManagementService_CreateWallet_eligibility(t *testin
 		})
 	}
 }
+
+// Service-level coverage for the ArchiveWallet guards (previously only exercised through a
+// mock at the handler layer): the default wallet is protected, and unknown ids surface a
+// not-found error rather than a generic failure.
+func Test_DistributionWalletManagementService_ArchiveWallet_guards(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	kek := keypair.MustRandom().Seed()
+	walletKeyService, err := tssSvc.NewDistributionWalletKeyService(dbConnectionPool, kek)
+	require.NoError(t, err)
+
+	// Archive guards are DB-only (no on-chain work), so a minimal engine is sufficient.
+	svc, err := NewDistributionWalletManagementService(models, engine.SubmitterEngine{}, walletKeyService, 5)
+	require.NoError(t, err)
+
+	addr := keypair.MustRandom().Address()
+	def, err := models.DistributionWallets.EnsureDefaultWallet(ctx, dbConnectionPool, &addr, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive)
+	require.NoError(t, err)
+
+	t.Run("the default wallet cannot be archived", func(t *testing.T) {
+		_, aErr := svc.ArchiveWallet(ctx, def.ID)
+		require.ErrorIs(t, aErr, ErrCannotArchiveDefaultWallet)
+	})
+
+	t.Run("archiving an unknown wallet returns not-found", func(t *testing.T) {
+		_, aErr := svc.ArchiveWallet(ctx, "00000000-0000-0000-0000-000000000000")
+		require.ErrorIs(t, aErr, data.ErrRecordNotFound)
+	})
+}
