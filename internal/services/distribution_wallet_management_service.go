@@ -81,6 +81,17 @@ func NewDistributionWalletManagementService(
 	}, nil
 }
 
+// acquireTenantWalletLock serializes wallet-lifecycle mutations (create/archive/promote) per
+// tenant via a transaction-scoped advisory lock keyed on the tenant schema, making the
+// read-modify-write invariants (wallet cap, single-default, zero-active) race-safe against
+// concurrent owner requests. Released at COMMIT; the DB triggers remain the ultimate backstop.
+func acquireTenantWalletLock(ctx context.Context, dbTx db.DBTransaction) error {
+	if _, err := dbTx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext(current_schema())::bigint)"); err != nil {
+		return fmt.Errorf("acquiring per-tenant wallet-lifecycle lock: %w", err)
+	}
+	return nil
+}
+
 // CreateWallet provisions a new, independently funded distribution wallet for the tenant:
 // it reserves the wallet row, generates a fresh keypair stored with per-wallet envelope
 // encryption, funds the account from the host distribution account, and adds trustlines for
@@ -102,8 +113,8 @@ func (s *DistributionWalletManagementService) CreateWallet(ctx context.Context, 
 	// lock is held only for these fast DB ops and released at COMMIT — the on-chain keygen,
 	// funding, and trustline work below deliberately runs OUTSIDE this transaction.
 	wallet, err := db.RunInTransactionWithResult(ctx, dbPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
-		if _, lockErr := dbTx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext(current_schema())::bigint)"); lockErr != nil {
-			return nil, fmt.Errorf("acquiring per-tenant wallet-create lock: %w", lockErr)
+		if lockErr := acquireTenantWalletLock(ctx, dbTx); lockErr != nil {
+			return nil, lockErr
 		}
 
 		// v1 multi-wallet eligibility: only tenants whose distribution account is
@@ -201,40 +212,44 @@ func (s *DistributionWalletManagementService) ListWallets(ctx context.Context, i
 // default wallet cannot be archived (promote another wallet first), and archival never leaves
 // the tenant with zero active wallets. Both rules are independently enforced by the DB.
 func (s *DistributionWalletManagementService) ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error) {
-	dbPool := s.Models.DBConnectionPool
-
-	wallet, err := s.Models.DistributionWallets.Get(ctx, dbPool, id)
-	if err != nil {
-		return nil, fmt.Errorf("loading distribution wallet %q: %w", id, err)
-	}
-	if wallet.IsDefault {
-		return nil, ErrCannotArchiveDefaultWallet
-	}
-
-	activeWallets, err := s.Models.DistributionWallets.GetAll(ctx, dbPool, false)
-	if err != nil {
-		return nil, fmt.Errorf("listing active distribution wallets: %w", err)
-	}
-	remaining := 0
-	for _, w := range activeWallets {
-		if w.ID != id {
-			remaining++
+	archived, err := db.RunInTransactionWithResult(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
+		// Serialize lifecycle mutations so the "not last active" check can't race a concurrent
+		// archive into a zero-active state; all reads + the archive run under one snapshot.
+		if lockErr := acquireTenantWalletLock(ctx, dbTx); lockErr != nil {
+			return nil, lockErr
 		}
-	}
-	if remaining == 0 {
-		return nil, ErrCannotArchiveLastActiveWallet
-	}
 
-	archived, err := db.RunInTransactionWithResult(ctx, dbPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
-		archivedWallet, txErr := s.Models.DistributionWallets.Archive(ctx, dbTx, id)
-		if txErr != nil {
-			return nil, fmt.Errorf("archiving distribution wallet %q: %w", id, txErr)
+		wallet, gErr := s.Models.DistributionWallets.Get(ctx, dbTx, id)
+		if gErr != nil {
+			return nil, fmt.Errorf("loading distribution wallet %q: %w", id, gErr)
+		}
+		if wallet.IsDefault {
+			return nil, ErrCannotArchiveDefaultWallet
+		}
+
+		activeWallets, lErr := s.Models.DistributionWallets.GetAll(ctx, dbTx, false)
+		if lErr != nil {
+			return nil, fmt.Errorf("listing active distribution wallets: %w", lErr)
+		}
+		remaining := 0
+		for _, w := range activeWallets {
+			if w.ID != id {
+				remaining++
+			}
+		}
+		if remaining == 0 {
+			return nil, ErrCannotArchiveLastActiveWallet
+		}
+
+		archivedWallet, aErr := s.Models.DistributionWallets.Archive(ctx, dbTx, id)
+		if aErr != nil {
+			return nil, fmt.Errorf("archiving distribution wallet %q: %w", id, aErr)
 		}
 		// Outbox (W3): wallet.archived, same transaction.
-		if txErr = events.Write(ctx, dbTx, events.WalletArchived, archivedWallet.ID, map[string]any{
+		if eErr := events.Write(ctx, dbTx, events.WalletArchived, archivedWallet.ID, map[string]any{
 			"wallet_id": archivedWallet.ID, "name": archivedWallet.Name, "status": string(archivedWallet.Status),
-		}); txErr != nil {
-			return nil, fmt.Errorf("writing wallet.archived event: %w", txErr)
+		}); eErr != nil {
+			return nil, fmt.Errorf("writing wallet.archived event: %w", eErr)
 		}
 		return archivedWallet, nil
 	})
@@ -252,6 +267,12 @@ func (s *DistributionWalletManagementService) ArchiveWallet(ctx context.Context,
 // the default pointer and the association reassignment.
 func (s *DistributionWalletManagementService) PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error) {
 	promoted, err := db.RunInTransactionWithResult(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
+		// Serialize lifecycle mutations so concurrent promotes can't race the single-default
+		// invariant (the DB constraint is the backstop).
+		if lockErr := acquireTenantWalletLock(ctx, dbTx); lockErr != nil {
+			return nil, lockErr
+		}
+
 		wallet, txErr := s.Models.DistributionWallets.PromoteToDefault(ctx, dbTx, id)
 		if txErr != nil {
 			if errors.Is(txErr, data.ErrRecordNotFound) {
