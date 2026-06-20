@@ -265,6 +265,8 @@ func (h DistributionWalletsHandler) PostDistributionWallet(rw http.ResponseWrite
 			httperror.BadRequest(services.ErrDistributionWalletCapExceeded.Error(), err, nil).Render(rw)
 		case errors.Is(err, services.ErrUnsupportedDistributionWalletType):
 			httperror.BadRequest(services.ErrUnsupportedDistributionWalletType.Error(), err, nil).Render(rw)
+		case errors.Is(err, services.ErrTenantNotEligibleForMultiWallet):
+			httperror.BadRequest(services.ErrTenantNotEligibleForMultiWallet.Error(), err, nil).Render(rw)
 		case errors.Is(err, data.ErrMissingInput):
 			httperror.BadRequest("name is required", err, nil).Render(rw)
 		default:

@@ -109,6 +109,13 @@ func Test_DistributionWalletsHandler_PostDistributionWallet(t *testing.T) {
 			wantContains:   "DB_VAULT",
 		},
 		{
+			name:           "ineligible (non-DB_VAULT) tenant returns 400",
+			reqBody:        `{"name": "program-a"}`,
+			serviceErr:     fmt.Errorf("creating: %w", services.ErrTenantNotEligibleForMultiWallet),
+			wantStatusCode: http.StatusBadRequest,
+			wantContains:   "only available to tenants",
+		},
+		{
 			name:           "missing name returns 400",
 			reqBody:        `{}`,
 			serviceErr:     fmt.Errorf("validating: %w", data.ErrMissingInput),
