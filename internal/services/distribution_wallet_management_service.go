@@ -96,32 +96,43 @@ func (s *DistributionWalletManagementService) CreateWallet(ctx context.Context, 
 
 	dbPool := s.Models.DBConnectionPool
 
-	// v1 multi-wallet eligibility: only tenants whose distribution account is
-	// STELLAR.DB_VAULT may provision additional wallets. A non-DB_VAULT tenant
-	// (STELLAR.ENV or CIRCLE) would become mixed-custody, and promoting the new
-	// DB_VAULT wallet to default would silently flip the tenant's account type and
-	// break balance aggregation (Circle balances come from the Circle API, Stellar
-	// from Horizon). Relaxing this to STELLAR.ENV is a safe later step; CIRCLE needs
-	// a designed mixed-custody story first.
-	defaultWallet, err := s.Models.DistributionWallets.GetDefault(ctx, dbPool)
-	if err != nil {
-		return nil, fmt.Errorf("resolving tenant multi-wallet eligibility: %w", err)
-	}
-	if defaultWallet.AccountType != schema.DistributionAccountStellarDBVault {
-		return nil, fmt.Errorf("tenant distribution account type is %q: %w", defaultWallet.AccountType, ErrTenantNotEligibleForMultiWallet)
-	}
+	// Reserve the wallet row atomically. A per-tenant (per-schema) advisory lock makes the
+	// eligibility + cap checks and the insert one critical section: without it, two concurrent
+	// owner creates could each pass a stale Count() check and exceed the cap (TOCTOU). The
+	// lock is held only for these fast DB ops and released at COMMIT — the on-chain keygen,
+	// funding, and trustline work below deliberately runs OUTSIDE this transaction.
+	wallet, err := db.RunInTransactionWithResult(ctx, dbPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
+		if _, lockErr := dbTx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext(current_schema())::bigint)"); lockErr != nil {
+			return nil, fmt.Errorf("acquiring per-tenant wallet-create lock: %w", lockErr)
+		}
 
-	count, err := s.Models.DistributionWallets.Count(ctx, dbPool)
-	if err != nil {
-		return nil, fmt.Errorf("counting distribution wallets: %w", err)
-	}
-	if count >= data.MaxDistributionWalletsPerTenant {
-		return nil, ErrDistributionWalletCapExceeded
-	}
+		// v1 multi-wallet eligibility: only tenants whose distribution account is
+		// STELLAR.DB_VAULT may provision additional wallets. A non-DB_VAULT tenant
+		// (STELLAR.ENV or CIRCLE) would become mixed-custody, and promoting the new
+		// DB_VAULT wallet to default would silently flip the tenant's account type and
+		// break balance aggregation (Circle balances come from the Circle API, Stellar
+		// from Horizon). Relaxing this to STELLAR.ENV is a safe later step; CIRCLE needs
+		// a designed mixed-custody story first.
+		defaultWallet, defErr := s.Models.DistributionWallets.GetDefault(ctx, dbTx)
+		if defErr != nil {
+			return nil, fmt.Errorf("resolving tenant multi-wallet eligibility: %w", defErr)
+		}
+		if defaultWallet.AccountType != schema.DistributionAccountStellarDBVault {
+			return nil, fmt.Errorf("tenant distribution account type is %q: %w", defaultWallet.AccountType, ErrTenantNotEligibleForMultiWallet)
+		}
 
-	wallet, err := s.Models.DistributionWallets.Insert(ctx, dbPool, insert)
+		count, cntErr := s.Models.DistributionWallets.Count(ctx, dbTx)
+		if cntErr != nil {
+			return nil, fmt.Errorf("counting distribution wallets: %w", cntErr)
+		}
+		if count >= data.MaxDistributionWalletsPerTenant {
+			return nil, ErrDistributionWalletCapExceeded
+		}
+
+		return s.Models.DistributionWallets.Insert(ctx, dbTx, insert)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("inserting distribution wallet: %w", err)
+		return nil, fmt.Errorf("reserving distribution wallet row: %w", err)
 	}
 
 	kp, err := keypair.Random()
