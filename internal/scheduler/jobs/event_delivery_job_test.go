@@ -115,6 +115,26 @@ func Test_EventDeliveryJob(t *testing.T) {
 		_, attempts = eventState(eventID)
 		assert.Equal(t, 2, attempts, "each run retries undelivered events")
 	})
+
+	t.Run("poisoned events (attempts at cap) are never selected, even with a healthy webhook", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		setWebhook(&server.URL)
+
+		eventID := writeEvent()
+		// Drive the event to the poison cap; the delivery SELECT filters on delivery_attempts < max.
+		_, uErr := dbConnectionPool.ExecContext(ctx,
+			`UPDATE events SET delivery_attempts = $2 WHERE id = $1`, eventID, eventDeliveryMaxAttempts)
+		require.NoError(t, uErr)
+
+		require.NoError(t, job.Execute(ctx))
+
+		delivered, attempts := eventState(eventID)
+		assert.False(t, delivered, "a poisoned event must not be delivered even with a healthy webhook")
+		assert.Equal(t, eventDeliveryMaxAttempts, attempts, "a poisoned event must not be retried or incremented past the cap")
+	})
 }
 
 // Test_EventDeliveryJob_retention proves the outbox stays bounded: delivered events past the
