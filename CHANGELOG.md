@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
+
+- Release 6.6.1
+
 ## [6.6.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.5.0...6.6.0))
 
 ### Added
