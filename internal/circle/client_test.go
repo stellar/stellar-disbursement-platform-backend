@@ -302,34 +302,43 @@ func Test_Client_PostRecipient(t *testing.T) {
 		assert.Nil(t, recipient)
 	})
 
-	t.Run("post transfer successful", func(t *testing.T) {
-		cc, cMocks := newClientWithMocks(t)
-		tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
-		ctx = sdpcontext.SetTenantInContext(ctx, tnt)
+	postSuccessStatusCodes := []struct {
+		name       string
+		statusCode int
+	}{
+		{name: "post recipient successful with status 201", statusCode: http.StatusCreated},
+		{name: "post recipient successful with status 200", statusCode: http.StatusOK},
+	}
+	for _, tc := range postSuccessStatusCodes {
+		t.Run(tc.name, func(t *testing.T) {
+			cc, cMocks := newClientWithMocks(t)
+			tnt := &schema.Tenant{ID: "test-id", Name: "test-tenant"}
+			ctx = sdpcontext.SetTenantInContext(ctx, tnt)
 
-		cMocks.httpClientMock.
-			On("Do", mock.Anything).
-			Return(&http.Response{
-				StatusCode: http.StatusCreated,
-				Body:       io.NopCloser(bytes.NewBufferString(`{"data": {"id": "test-id"}}`)),
-			}, nil).
-			Run(func(args mock.Arguments) {
-				req, ok := args.Get(0).(*http.Request)
-				assert.True(t, ok)
+			cMocks.httpClientMock.
+				On("Do", mock.Anything).
+				Return(&http.Response{
+					StatusCode: tc.statusCode,
+					Body:       io.NopCloser(bytes.NewBufferString(`{"data": {"id": "test-id"}}`)),
+				}, nil).
+				Run(func(args mock.Arguments) {
+					req, ok := args.Get(0).(*http.Request)
+					assert.True(t, ok)
 
-				assert.Equal(t, "http://localhost:8080/v1/addressBook/recipients", req.URL.String())
-				assert.Equal(t, http.MethodPost, req.Method)
-				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
-				assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
-			}).
-			Once()
+					assert.Equal(t, "http://localhost:8080/v1/addressBook/recipients", req.URL.String())
+					assert.Equal(t, http.MethodPost, req.Method)
+					assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+					assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+				}).
+				Once()
 
-		setupSuccessMonitorExpectations(cMocks.monitorServiceMock, addressRecipientPath, http.MethodPost, http.StatusCreated, "test-tenant")
+			setupSuccessMonitorExpectations(cMocks.monitorServiceMock, addressRecipientPath, http.MethodPost, tc.statusCode, "test-tenant")
 
-		recipient, err := cc.PostRecipient(ctx, validRecipientReq)
-		assert.NoError(t, err)
-		assert.Equal(t, "test-id", recipient.ID)
-	})
+			recipient, err := cc.PostRecipient(ctx, validRecipientReq)
+			assert.NoError(t, err)
+			assert.Equal(t, "test-id", recipient.ID)
+		})
+	}
 }
 
 func Test_Client_GetRecipientByID(t *testing.T) {

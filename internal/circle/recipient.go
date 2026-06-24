@@ -1,6 +1,7 @@
 package circle
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,6 +84,8 @@ type RecipientResponse struct {
 
 // parseRecipientResponse parses the response from the Circle APIs.
 func parseRecipientResponse(resp *http.Response) (*Recipient, error) {
+	defer utils.DeferredClose(context.Background(), resp.Body, "closing response body")
+
 	var recipientResponse RecipientResponse
 	if err := json.NewDecoder(resp.Body).Decode(&recipientResponse); err != nil {
 		return nil, fmt.Errorf("decoding recipient response: %w", err)
