@@ -6,7 +6,7 @@ global:
 
 sdp:
   image:
-    tag: "6.6.0"
+    tag: "6.6.1"
   route:
     domain: sdp-backend.example.org
     mtnDomain: "*.sdp-backend.example.org"
