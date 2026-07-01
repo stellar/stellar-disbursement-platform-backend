@@ -8,6 +8,22 @@
 
 -- +migrate Up
 
+-- Cutover guard: fail fast with a clear message rather than an opaque NOT NULL violation if the
+-- default-wallet backfill (2026-06-09.1) did not create a default for a real tenant schema that
+-- already holds disbursements (e.g. a soft-deleted-but-lingering tenant, or a schema whose name
+-- doesn't match the 'sdp_<tenant>' convention). Layout-aware: only a real per-tenant schema.
+-- +migrate StatementBegin
+DO $$
+BEGIN
+    IF left(current_schema()::text, 4) = 'sdp_'
+       AND EXISTS (SELECT 1 FROM disbursements)
+       AND NOT EXISTS (SELECT 1 FROM distribution_wallets WHERE is_default) THEN
+        RAISE EXCEPTION 'multi-wallet cutover: schema % has disbursements but no default distribution wallet; the default-wallet backfill (2026-06-09.1) did not run here. Resolve before backfilling source_wallet_id (see docs/multi-wallet/CUTOVER.md).', current_schema();
+    END IF;
+END
+$$;
+-- +migrate StatementEnd
+
 ALTER TABLE disbursements ADD COLUMN source_wallet_id VARCHAR(36);
 
 UPDATE disbursements

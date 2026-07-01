@@ -1,5 +1,5 @@
--- Every payment carries an unambiguous source distribution wallet, completing the W3 routing
--- rule at the data layer:
+-- Every payment carries an unambiguous source distribution wallet, completing the disbursement
+-- routing rule at the data layer:
 -- - disbursement payments INHERIT their disbursement's source wallet (derived by trigger, so
 --   bulk inserts stay unchanged and can never disagree with their disbursement)
 -- - direct payments (no disbursement) must state their source wallet explicitly — the
@@ -8,6 +8,21 @@
 --   BOTH payments and disbursements
 
 -- +migrate Up
+
+-- Cutover guard: fail fast rather than an opaque NOT NULL violation if the default-wallet
+-- backfill (2026-06-09.1) did not create a default for a real tenant schema that already holds
+-- payments. Layout-aware: only fires for a real per-tenant ('sdp_') schema.
+-- +migrate StatementBegin
+DO $$
+BEGIN
+    IF left(current_schema()::text, 4) = 'sdp_'
+       AND EXISTS (SELECT 1 FROM payments)
+       AND NOT EXISTS (SELECT 1 FROM distribution_wallets WHERE is_default) THEN
+        RAISE EXCEPTION 'multi-wallet cutover: schema % has payments but no default distribution wallet; the default-wallet backfill (2026-06-09.1) did not run here. Resolve before backfilling source_wallet_id (see docs/multi-wallet/CUTOVER.md).', current_schema();
+    END IF;
+END
+$$;
+-- +migrate StatementEnd
 
 ALTER TABLE payments ADD COLUMN source_wallet_id VARCHAR(36);
 
