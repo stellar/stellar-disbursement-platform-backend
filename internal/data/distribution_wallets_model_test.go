@@ -116,7 +116,7 @@ func Test_DistributionWalletModel(t *testing.T) {
 	})
 
 	t.Run("GetAll hides archived unless asked; Count includes archived", func(t *testing.T) {
-		// Archive program-3 directly (service-level archive lands in W1.6).
+		// Archive program-3 directly (service-level archive lands in).
 		_, aErr := dbConnectionPool.ExecContext(ctx, `
 			UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW() WHERE name = 'program-3'`)
 		require.NoError(t, aErr)

@@ -81,7 +81,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 		query[3] = "WHERE p.disbursement_id = $1"
 		args = append(args, disbursementID)
 	} else if walletIDs != nil {
-		// Per-wallet visibility (W4): scope statistics to the given distribution wallets.
+		// Per-wallet visibility: scope statistics to the given distribution wallets.
 		query[3] = "WHERE p.source_wallet_id = ANY($1)"
 		args = append(args, pq.Array(walletIDs))
 	}
@@ -214,7 +214,7 @@ func getReceiverWalletsStats(ctx context.Context, sqlExec db.SQLExecuter, disbur
 		query[3] = "WHERE p.disbursement_id = $1"
 		args = append(args, disbursementID)
 	} else if walletIDs != nil {
-		// Per-wallet visibility (W4): scope statistics to the given distribution wallets.
+		// Per-wallet visibility: scope statistics to the given distribution wallets.
 		query[3] = "WHERE p.source_wallet_id = ANY($1)"
 		args = append(args, pq.Array(walletIDs))
 	}
@@ -306,7 +306,7 @@ func getTotalDisbursements(ctx context.Context, sqlExec db.SQLExecuter, walletID
 }
 
 // CalculateStatistics calculate statistics for all disbursements. walletIDs (nil =
-// tenant-wide) scopes every counter to the given distribution wallets (W2/W4 read taxonomy).
+// tenant-wide) scopes every counter to the given distribution wallets (read taxonomy).
 func CalculateStatistics(ctx context.Context, dbConnectionPool db.DBConnectionPool, walletIDs []string) (statistics *GeneralStatistics, err error) {
 	// Start transaction
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)

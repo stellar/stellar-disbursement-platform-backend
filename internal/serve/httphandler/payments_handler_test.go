@@ -1225,7 +1225,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// distAccountResolverMock.
 		//	On("DistributionAccountFromContext", mock.Anything).
 		//	Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-		//	Once()
+		//	Once
 		handler := PaymentsHandler{
 			Models:                      models,
 			DBConnectionPool:            dbConnectionPool,
@@ -1648,7 +1648,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	require.NoError(t, err)
 
 	// Shared test DB: normalize to exactly one ACTIVE (default) distribution wallet so the
-	// X-Wallet-Id single-wallet fallback applies (W3 routing covered by its own suite).
+	// X-Wallet-Id single-wallet fallback applies (routing covered by its own suite).
 	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 	_, err = dbConnectionPool.ExecContext(ctx, `
 		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()

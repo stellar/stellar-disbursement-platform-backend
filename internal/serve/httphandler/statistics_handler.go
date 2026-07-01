@@ -23,7 +23,7 @@ type StatisticsHandler struct {
 	AuthManager      auth.AuthManager
 }
 
-// GetStatistics returns tenant statistics, wallet-aware per the W2/W4 read taxonomy:
+// GetStatistics returns tenant statistics, wallet-aware per the read taxonomy:
 //   - X-Wallet-Id narrows to one wallet (404 outside the caller's scope — no disclosure)
 //   - non-Owners without the header get their membership set aggregated
 //   - Owners without the header get the tenant-wide aggregate (the "all wallets" view)
@@ -59,7 +59,7 @@ func (s StatisticsHandler) GetStatisticsByDisbursement(w http.ResponseWriter, r 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 
-	// Membership-filtered visibility (W2): the disbursement's stats follow its wallet.
+	// Membership-filtered visibility: the disbursement's stats follow its wallet.
 	if httpErr := s.ensureDisbursementVisible(ctx, disbursementID); httpErr != nil {
 		httpErr.Render(w)
 		return

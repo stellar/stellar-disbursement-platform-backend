@@ -1,5 +1,5 @@
 // Package events implements the transactional outbox for the multi-wallet workstream's
-// webhook/internal events (spec: specs/W3-event-types.md, accepted). Event rows are written in
+// webhook/internal events (spec: the event-type spec, accepted). Event rows are written in
 // the same DB transaction as the state change they describe; a scheduler job delivers them.
 package events
 
@@ -52,7 +52,7 @@ var SchemaVersions = map[string]int{
 }
 
 // Envelope is the versioned payload wrapper. Every disbursement.* event carries
-// source_wallet_id (the W3 commitment); wallet.* events carry the wallet in both the
+// source_wallet_id (the commitment); wallet.* events carry the wallet in both the
 // source_wallet_id and data.wallet_id fields. No addresses or key material ever appear in
 // payloads (leak rules apply to webhooks too).
 type Envelope struct {

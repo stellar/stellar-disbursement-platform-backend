@@ -168,9 +168,9 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq 
 		return nil, httperror.BadRequest("asset ID could not be retrieved", err, nil)
 	}
 
-	// W3 routing: the source wallet is explicit via X-Wallet-Id (400 absent on multi-wallet
+	//  routing: the source wallet is explicit via X-Wallet-Id (400 absent on multi-wallet
 	// tenants, 403 unentitled); single-wallet tenants legitimately omit it and use their
-	// default wallet. Entitlement (W2) and archived-status checks happen inside.
+	// default wallet. Entitlement and archived-status checks happen inside.
 	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, httpReq, d.AuthManager, d.Models,
 		data.FinancialControllerUserRole, data.InitiatorUserRole)
 	if walletErr != nil {
@@ -202,7 +202,7 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq 
 		}
 	}
 
-	// Outbox (W3): disbursement.created, same executor as the insert.
+	// Outbox: disbursement.created, same executor as the insert.
 	if err = events.Write(ctx, sqlExec, events.DisbursementCreated, sourceWallet.ID, map[string]any{
 		"disbursement_id": newID,
 		"name":            disbursement.Name,
@@ -254,7 +254,7 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 			return nil, ErrDisbursementStarted
 		}
 
-		// W3: deletion is a state transition — gate on the disbursement's source wallet.
+		// deletion is a state transition — gate on the disbursement's source wallet.
 		if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
 			data.FinancialControllerUserRole, data.InitiatorUserRole); httpErr != nil {
 			return nil, httpErr
@@ -272,7 +272,7 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 			return nil, fmt.Errorf("deleting draft or ready disbursement: %w", err)
 		}
 
-		// Outbox (W3): a deleted draft is a rejected disbursement, same transaction.
+		// Outbox: a deleted draft is a rejected disbursement, same transaction.
 		if err = events.Write(ctx, tx, events.DisbursementRejected, disbursement.SourceWalletID, map[string]any{
 			"disbursement_id": disbursementID,
 			"name":            disbursement.Name,
@@ -321,7 +321,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
-	// Membership-filtered visibility (W2): non-owners see only their wallets' disbursements.
+	// Membership-filtered visibility: non-owners see only their wallets' disbursements.
 	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
 	if scopeErr != nil {
 		scopeErr.Render(w)
@@ -370,7 +370,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if getErr == nil {
-			// W3: instruction upload routes funds from the disbursement's wallet — gate it.
+			// instruction upload routes funds from the disbursement's wallet — gate it.
 			if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
 				data.FinancialControllerUserRole, data.InitiatorUserRole); httpErr != nil {
 				return httpErr
@@ -516,7 +516,7 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Membership-filtered visibility (W2): respond 404 outside the caller's scope —
+	// Membership-filtered visibility: respond 404 outside the caller's scope —
 	// existence is never disclosed (read-leakage rules).
 	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
 	if scopeErr != nil {
@@ -553,7 +553,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	// Membership-filtered visibility (W2): 404 outside the caller's scope.
+	// Membership-filtered visibility: 404 outside the caller's scope.
 	if httpErr := d.ensureDisbursementInReadScope(ctx, disbursementID); httpErr != nil {
 		httpErr.Render(w)
 		return
@@ -695,7 +695,7 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 		return
 	}
 
-	// Membership-filtered visibility (W2): 404 outside the caller's scope.
+	// Membership-filtered visibility: 404 outside the caller's scope.
 	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
 	if scopeErr != nil {
 		scopeErr.Render(w)

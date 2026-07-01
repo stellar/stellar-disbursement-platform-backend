@@ -18,7 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// Test_W3_SourceWalletRouting proves the W3 routing rule at the resolver level:
+// Test_W3_SourceWalletRouting proves the routing rule at the resolver level:
 // explicit X-Wallet-Id honored after entitlement; 400 when omitted on multi-wallet tenants;
 // single-wallet tenants legitimately omit it; 403 without wallet-existence disclosure;
 // archived wallets rejected with 400 only after entitlement.

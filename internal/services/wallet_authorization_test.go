@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// Test_WalletScopedAuthorization proves the W2 acceptance criterion: a user with role X on
+// Test_WalletScopedAuthorization proves the acceptance criterion: a user with role X on
 // Wallet A receives 403 on every action targeting Wallet B unless explicitly granted, while
 // Owners remain tenant-wide. The gate is exercised both directly and through the real
 // disbursement state-transition path.

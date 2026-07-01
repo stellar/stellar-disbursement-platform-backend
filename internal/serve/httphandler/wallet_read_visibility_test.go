@@ -22,7 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// Test_WalletReadVisibility proves the W2 read-endpoint taxonomy for the membership-filtered
+// Test_WalletReadVisibility proves the read-endpoint taxonomy for the membership-filtered
 // bucket: listings filter to the caller's wallets (post-filter totals), individual reads
 // outside the scope return 404 (existence never disclosed), and Owners see everything.
 func Test_WalletReadVisibility(t *testing.T) {

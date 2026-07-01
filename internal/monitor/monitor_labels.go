@@ -18,7 +18,7 @@ type DBQueryLabels struct {
 type DisbursementLabels struct {
 	Asset  string
 	Wallet string
-	// WalletID is the source DISTRIBUTION wallet UUID (W4 per-wallet observability) —
+	// WalletID is the source DISTRIBUTION wallet UUID (per-wallet observability) —
 	// distinct from Wallet, which is the recipient wallet-provider name.
 	WalletID string
 	CommonLabels

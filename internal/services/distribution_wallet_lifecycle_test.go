@@ -21,7 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-// Test_DistributionWallet_lifecycle covers W1's archive-don't-delete, atomic promotion, and
+// Test_DistributionWallet_lifecycle covers the archive-don't-delete, atomic promotion, and
 // zero-active-wallets acceptance criteria at the service + DB layers.
 func Test_DistributionWallet_lifecycle(t *testing.T) {
 	dbt := dbtest.Open(t)

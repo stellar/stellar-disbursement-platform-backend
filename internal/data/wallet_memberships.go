@@ -87,7 +87,7 @@ func (m *WalletMembershipModel) Delete(ctx context.Context, sqlExec db.SQLExecut
 }
 
 // GetWalletIDsForUser returns the distinct wallet IDs where the user holds any membership —
-// the read-filter input for membership-filtered endpoints (W2.0 taxonomy). Archived wallets
+// the read-filter input for membership-filtered endpoints (taxonomy). Archived wallets
 // are included: memberships persist through archival for historical authorization.
 func (m *WalletMembershipModel) GetWalletIDsForUser(ctx context.Context, sqlExec db.SQLExecuter, userID string) ([]string, error) {
 	walletIDs := []string{}

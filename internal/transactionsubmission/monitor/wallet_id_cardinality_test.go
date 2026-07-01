@@ -15,9 +15,9 @@ import (
 // crash that took the TSS transaction submitter down on the first multi-wallet payment:
 //
 //	panic: inconsistent label cardinality: expected 8 label values but got 9 in
-//	       prometheus.Labels{..., "wallet_id":"..."}
+//	 prometheus.Labels{..., "wallet_id":"..."}
 //
-// The W4 observability change added "wallet_id" to the label map emitted by
+// The observability change added "wallet_id" to the label map emitted by
 // buildMetricLabels/buildCommonFields, but the matching prometheus CounterVecs in
 // internal/monitor (paymentLabelNames / walletCreationLabelNames / sponsoredTransactionLabelNames)
 // were not updated in lock-step — so every real payment panicked the submitter, and no
@@ -46,7 +46,7 @@ func Test_TSSMonitor_TransactionMetricLabels_MatchCounterCardinality(t *testing.
 
 	// The exact label map production emits for a TSS transaction metric.
 	labels := ms.buildMetricLabels(tx, txMetadata)
-	require.Contains(t, labels, "wallet_id", "emitted TSS metric labels must carry wallet_id (W4)")
+	require.Contains(t, labels, "wallet_id", "emitted TSS metric labels must carry wallet_id")
 	require.Equal(t, "44444444-4444-4444-4444-444444444444", labels["wallet_id"])
 
 	// Every TSS transaction counter emitted with these labels. Incrementing the real CounterVec

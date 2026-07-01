@@ -12,7 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-// Test_DistributionWalletKeyService_isolation proves the W1 secret-material isolation
+// Test_DistributionWalletKeyService_isolation proves the secret-material isolation
 // acceptance criteria: per-wallet envelopes are fully independent for storage, rotation,
 // and failure.
 func Test_DistributionWalletKeyService_isolation(t *testing.T) {

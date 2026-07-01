@@ -25,7 +25,7 @@ type CreateDirectPaymentRequest struct {
 	Wallet            WalletReference   `json:"wallet" validate:"required"`
 	ExternalPaymentID *string           `json:"external_payment_id,omitempty"`
 	// SourceWalletID is the distribution wallet funding this payment, resolved by the API
-	// layer from X-Wallet-Id (W3 routing — explicit, no silent defaults).
+	// layer from X-Wallet-Id (routing — explicit, no silent defaults).
 	SourceWalletID string `json:"-"`
 }
 

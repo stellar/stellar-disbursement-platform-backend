@@ -21,7 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// Test_W4_WalletAwareDashboards proves the W4 dashboard backend: statistics scope to the
+// Test_W4_WalletAwareDashboards proves the dashboard backend: statistics scope to the
 // caller's wallets (header narrows; Owners aggregate tenant-wide), and the balance endpoints
 // serve per-wallet (membership-scoped) and Owner-only aggregate views.
 func Test_W4_WalletAwareDashboards(t *testing.T) {

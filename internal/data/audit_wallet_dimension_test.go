@@ -11,7 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
-// Test_AuditTables_walletDimension proves the W4 audit requirement: disbursement and payment
+// Test_AuditTables_walletDimension proves the audit requirement: disbursement and payment
 // changes produce immutable audit rows that carry source_wallet_id — the audit log is
 // wallet-attributable for compliance, dispute, and treasury queries.
 func Test_AuditTables_walletDimension(t *testing.T) {

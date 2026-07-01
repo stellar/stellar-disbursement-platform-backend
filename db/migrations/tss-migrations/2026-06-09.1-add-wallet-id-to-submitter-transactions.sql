@@ -1,4 +1,4 @@
--- Per-wallet observability (W4): TSS transactions carry the source distribution wallet so
+-- Per-wallet observability: TSS transactions carry the source distribution wallet so
 -- wallet_id tagging survives API → TSS → channel-account layers (logs + payment-flow metric
 -- labels per the accepted cardinality classification). Nullable: legacy rows and
 -- non-payment transaction types (wallet creation, sponsored) have no distribution wallet.

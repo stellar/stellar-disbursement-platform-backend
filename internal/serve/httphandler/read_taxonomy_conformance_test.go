@@ -19,7 +19,7 @@ import (
 )
 
 // Test_ReadEndpointTaxonomy_Conformance is the executable form of
-// specs/W2-read-endpoint-taxonomy.md: every classified read endpoint must behave per its
+// the read-endpoint taxonomy: every classified read endpoint must behave per its
 // bucket. MEMBERSHIP-FILTERED endpoints return different data to a single-wallet member vs an
 // Owner; TENANT-SCOPED endpoints return identical cross-wallet data to both, gated by tenant
 // role alone. A bucket violation fails this suite.

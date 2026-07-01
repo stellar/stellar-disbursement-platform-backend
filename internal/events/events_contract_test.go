@@ -73,7 +73,7 @@ func Test_EventContract_FullTypeMatrix(t *testing.T) {
 			assert.Equal(t, eventType, envelope.EventType)
 			assert.Equal(t, SchemaVersions[eventType], envelope.SchemaVersion)
 			assert.Equal(t, "contract-tenant", envelope.TenantID)
-			assert.Equal(t, walletID, envelope.SourceWalletID, "every event carries source_wallet_id (the W3 commitment)")
+			assert.Equal(t, walletID, envelope.SourceWalletID, "every event carries source_wallet_id")
 			assert.False(t, envelope.OccurredAt.IsZero())
 			for k := range data {
 				assert.Contains(t, envelope.Data, k)

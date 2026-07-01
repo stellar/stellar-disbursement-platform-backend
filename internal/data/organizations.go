@@ -55,7 +55,7 @@ type Organization struct {
 	MFADisabled                 *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
 	CAPTCHADisabled             *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
 	ReceiverInvitationsDisabled *bool                  `json:"receiver_invitations_disabled" db:"receiver_invitations_disabled"`
-	// WebhookURL is the tenant-configured destination for outbox event delivery (W3);
+	// WebhookURL is the tenant-configured destination for outbox event delivery;
 	// delivery is skipped when unset.
 	WebhookURL *string   `json:"webhook_url,omitempty" db:"webhook_url"`
 	CreatedAt  time.Time `json:"created_at" db:"created_at"`

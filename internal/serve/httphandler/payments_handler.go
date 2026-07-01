@@ -88,8 +88,8 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
 	if err == nil {
-		// Membership-filtered visibility (W2): 404 outside the caller's scope — existence
-		// is never disclosed. Direct payments inherit default-wallet visibility until W3.
+		// Membership-filtered visibility: 404 outside the caller's scope — existence
+		// is never disclosed. Direct payments inherit default-wallet visibility until .
 		scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
 		if scopeErr != nil {
 			scopeErr.Render(w)
@@ -153,7 +153,7 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Membership-filtered visibility (W2): non-owners see only their wallets' payments.
+	// Membership-filtered visibility: non-owners see only their wallets' payments.
 	scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
 	if scopeErr != nil {
 		scopeErr.Render(w)
@@ -206,7 +206,7 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// W3: retrying is a state transition — gate each payment on its source wallet.
+	// retrying is a state transition — gate each payment on its source wallet.
 	for _, retryPaymentID := range reqBody.PaymentIDs {
 		retryPayment, getErr := p.Models.Payment.Get(ctx, retryPaymentID, p.DBConnectionPool)
 		if getErr != nil {
@@ -307,7 +307,7 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	paymentID := chi.URLParam(r, "id")
 
-	// W3: every state transition is gated on the payment's source wallet.
+	// every state transition is gated on the payment's source wallet.
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
@@ -390,7 +390,7 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// W3 routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
+	//  routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
 	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, p.AuthManager, p.Models,
 		data.FinancialControllerUserRole, data.BusinessUserRole)
 	if walletErr != nil {

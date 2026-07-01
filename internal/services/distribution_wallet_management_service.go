@@ -109,7 +109,7 @@ func (s *DistributionWalletManagementService) CreateWallet(ctx context.Context, 
 
 	// Reserve the wallet row atomically. A per-tenant (per-schema) advisory lock makes the
 	// eligibility + cap checks and the insert one critical section: without it, two concurrent
-	// owner creates could each pass a stale Count() check and exceed the cap (TOCTOU). The
+	// owner creates could each pass a stale Count check and exceed the cap (TOCTOU). The
 	// lock is held only for these fast DB ops and released at COMMIT — the on-chain keygen,
 	// funding, and trustline work below deliberately runs OUTSIDE this transaction.
 	wallet, err := db.RunInTransactionWithResult(ctx, dbPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
@@ -177,7 +177,7 @@ func (s *DistributionWalletManagementService) CreateWallet(ctx context.Context, 
 		log.Ctx(ctx).Errorf("adding trustlines for new distribution wallet %q (%s): %v — wallet is funded and ACTIVE; trustlines must be added manually", wallet.ID, kp.Address(), err)
 	}
 
-	// Outbox (W3): wallet.created. Creation is not transactional (it spans on-chain calls),
+	// Outbox: wallet.created. Creation is not transactional (it spans on-chain calls),
 	// so a write failure is logged rather than failing the already-provisioned wallet.
 	if err = events.Write(ctx, dbPool, events.WalletCreated, wallet.ID, map[string]any{
 		"wallet_id": wallet.ID, "name": wallet.Name, "status": string(wallet.Status), "is_default": wallet.IsDefault,
@@ -245,7 +245,7 @@ func (s *DistributionWalletManagementService) ArchiveWallet(ctx context.Context,
 		if aErr != nil {
 			return nil, fmt.Errorf("archiving distribution wallet %q: %w", id, aErr)
 		}
-		// Outbox (W3): wallet.archived, same transaction.
+		// Outbox: wallet.archived, same transaction.
 		if eErr := events.Write(ctx, dbTx, events.WalletArchived, archivedWallet.ID, map[string]any{
 			"wallet_id": archivedWallet.ID, "name": archivedWallet.Name, "status": string(archivedWallet.Status),
 		}); eErr != nil {
@@ -285,7 +285,7 @@ func (s *DistributionWalletManagementService) PromoteToDefault(ctx context.Conte
 			return nil, fmt.Errorf("reassigning default-bound associations for wallet %q: %w", id, syncErr)
 		}
 
-		// Outbox (W3): wallet.promoted_to_default, same transaction as the promotion.
+		// Outbox: wallet.promoted_to_default, same transaction as the promotion.
 		if eventErr := events.Write(ctx, dbTx, events.WalletPromotedToDefault, wallet.ID, map[string]any{
 			"wallet_id": wallet.ID, "name": wallet.Name,
 		}); eventErr != nil {
@@ -373,7 +373,7 @@ func (s *DistributionWalletManagementService) GrantMembership(ctx context.Contex
 		if txErr != nil {
 			return nil, fmt.Errorf("granting membership on wallet %q: %w", walletID, txErr)
 		}
-		// Outbox (W3): membership grant with actor attribution, same transaction.
+		// Outbox: membership grant with actor attribution, same transaction.
 		if txErr = events.Write(ctx, dbTx, events.WalletMembershipGranted, walletID, map[string]any{
 			"membership_id": granted.ID, "wallet_id": walletID, "user_id": userID,
 			"role": string(role), "actor_user_id": grantedBy,
@@ -408,7 +408,7 @@ func (s *DistributionWalletManagementService) RevokeMembership(ctx context.Conte
 		if txErr := s.Models.WalletMemberships.Delete(ctx, dbTx, membershipID); txErr != nil {
 			return fmt.Errorf("revoking membership %q: %w", membershipID, txErr)
 		}
-		// Outbox (W3): membership revocation with actor attribution, same transaction.
+		// Outbox: membership revocation with actor attribution, same transaction.
 		if txErr := events.Write(ctx, dbTx, events.WalletMembershipRevoked, membership.WalletID, map[string]any{
 			"membership_id": membershipID, "wallet_id": membership.WalletID, "user_id": membership.UserID,
 			"role": string(membership.Role), "actor_user_id": revokedBy,

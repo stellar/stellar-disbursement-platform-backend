@@ -49,7 +49,7 @@ type Transaction struct {
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
-	// WalletID is the source distribution wallet for payment transactions (W4 per-wallet
+	// WalletID is the source distribution wallet for payment transactions (per-wallet
 	// observability); empty for non-payment transaction types and legacy rows.
 	WalletID sql.NullString `db:"wallet_id"`
 

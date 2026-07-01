@@ -36,7 +36,7 @@ func (e ExportHandler) ExportDisbursements(rw http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Membership-filtered visibility (W2/W4, flag R4): exports carry only the caller's wallets.
+	// Membership-filtered visibility (, flag R4): exports carry only the caller's wallets.
 	scope, scopeErr := resolveWalletReadScope(ctx, e.AuthManager, e.Models)
 	if scopeErr != nil {
 		scopeErr.Render(rw)
@@ -100,7 +100,7 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Membership-filtered visibility (W2/W4, flag R4): exports carry only the caller's wallets.
+	// Membership-filtered visibility (, flag R4): exports carry only the caller's wallets.
 	scope, scopeErr := resolveWalletReadScope(ctx, e.AuthManager, e.Models)
 	if scopeErr != nil {
 		scopeErr.Render(rw)
@@ -219,7 +219,7 @@ func (e ExportHandler) ExportReceivers(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Membership-filtered visibility (W2/W4, flags R1/R4).
+	// Membership-filtered visibility (, flags R1/R4).
 	scope, scopeErr := resolveWalletReadScope(ctx, e.AuthManager, e.Models)
 	if scopeErr != nil {
 		scopeErr.Render(rw)

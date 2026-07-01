@@ -51,7 +51,7 @@ const (
 	FilterKeySyncAttempts     FilterKey = "sync_attempts"
 	FilterKeyPaymentType      FilterKey = "type"
 	// FilterKeySourceWalletIDs restricts results to the given distribution wallets —
-	// membership-filtered read visibility (W2). Value type: []string.
+	// membership-filtered read visibility. Value type: []string.
 	FilterKeySourceWalletIDs FilterKey = "source_wallet_ids"
 )
 

@@ -12,12 +12,12 @@ import (
 )
 
 // ErrWalletActionForbidden is returned when a user attempts an action on a wallet they hold no
-// qualifying membership on. The API layer maps it to 403 Forbidden. Per the W4 leak matrix,
+// qualifying membership on. The API layer maps it to 403 Forbidden. Per the leak matrix,
 // the public error message must not disclose wallet existence or details.
 var ErrWalletActionForbidden = errors.New("user is not authorized to act on this wallet")
 
 // ResolveWalletReadScope returns the caller's read-visibility scope for membership-filtered
-// endpoints (W2 taxonomy): nil for Owners (tenant-wide — no filter applied), otherwise the
+// endpoints (taxonomy): nil for Owners (tenant-wide — no filter applied), otherwise the
 // exact set of wallet IDs the user holds membership on. An empty non-nil slice means the user
 // sees no per-wallet rows.
 func ResolveWalletReadScope(ctx context.Context, sqlExec db.SQLExecuter, memberships *data.WalletMembershipModel, user *auth.User) ([]string, error) {

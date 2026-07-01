@@ -16,7 +16,7 @@ import (
 )
 
 // resolveWalletReadScope computes the caller's read-visibility scope for
-// membership-filtered endpoints (W2 taxonomy): nil = Owner, no filtering; non-nil = the exact
+// membership-filtered endpoints (taxonomy): nil = Owner, no filtering; non-nil = the exact
 // wallet set the caller may see (possibly empty).
 func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
@@ -45,7 +45,7 @@ func walletInReadScope(scope []string, walletID string) bool {
 }
 
 // ensureWalletActionAllowed gates a state transition on the caller's wallet membership
-// (W2/W3): Owners pass; everyone else needs a qualifying role on the wallet. Returns a 403
+// Owners pass; everyone else needs a qualifying role on the wallet. Returns a 403
 // that discloses no wallet details.
 func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, walletID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
@@ -61,10 +61,10 @@ func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager
 	return nil
 }
 
-// XWalletIDHeader carries the explicit source distribution wallet on write requests (W3).
+// XWalletIDHeader carries the explicit source distribution wallet on write requests.
 const XWalletIDHeader = "X-Wallet-Id"
 
-// resolveSourceWalletForWrite implements the W3 routing rule for fund-moving writes:
+// resolveSourceWalletForWrite implements the routing rule for fund-moving writes:
 //   - explicit X-Wallet-Id is honored after entitlement + status checks
 //   - omitted header: tenants with EXACTLY ONE active wallet (pre-opt-in single-wallet
 //     tenants) legitimately fall back to it per the spec's narrow default semantics; tenants
@@ -120,7 +120,7 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 		return nil, httperror.BadRequest("the wallet is archived and accepts no new disbursements or payments", nil, nil)
 	}
 
-	// Per-wallet observability (W4): wallet_id joins the request's structured-log context.
+	// Per-wallet observability: wallet_id joins the request's structured-log context.
 	log.Set(ctx, log.Ctx(ctx).WithField("wallet_id", wallet.ID))
 
 	return wallet, nil

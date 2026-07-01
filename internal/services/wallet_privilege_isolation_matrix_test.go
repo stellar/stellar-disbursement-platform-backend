@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// Test_CrossWallet_PrivilegeIsolation_Matrix is the W2 acceptance matrix: one test per
+// Test_CrossWallet_PrivilegeIsolation_Matrix is the acceptance matrix: one test per
 // (action × actor × wallet) combination. A user with role X on Wallet A receives 403 on every
 // action targeting Wallet B unless explicitly granted; Owners are tenant-wide; roles that do
 // not qualify for an action are rejected even on their own wallet.

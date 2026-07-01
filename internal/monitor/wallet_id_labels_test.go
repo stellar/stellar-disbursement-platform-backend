@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Test_DisbursementLabels_WalletID asserts the W4 cardinality decision (accepted flag M1/M2):
+// Test_DisbursementLabels_WalletID asserts the cardinality decision (accepted flag M1/M2):
 // the business disbursements counter carries the DISTRIBUTION wallet UUID as `wallet_id`,
 // coexisting with — and distinct from — the legacy `wallet` (recipient-provider name) label.
 func Test_DisbursementLabels_WalletID(t *testing.T) {

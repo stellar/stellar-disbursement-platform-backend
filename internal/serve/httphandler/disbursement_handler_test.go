@@ -2028,7 +2028,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Roles: []string{string(data.ApproverUserRole)},
 		}
 
-		// Wallet-scoped authorization (W2): the approver needs membership on the
+		// Wallet-scoped authorization: the approver needs membership on the
 		// disbursement's source wallet.
 		_, mErr := handler.Models.WalletMemberships.Insert(ctx, dbConnectionPool,
 			approverUser.ID, readyDisbursement.SourceWalletID, data.ApproverUserRole, nil)

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" },
+  "deploy": {
+    "startCommand": "sh -c 'i=0; until ./stellar-disbursement-platform db admin migrate up; do i=$((i+1)); [ $i -gt 40 ] && exit 1; echo waiting-for-db; sleep 3; done; ./stellar-disbursement-platform db tss migrate up && ./stellar-disbursement-platform db auth migrate up --all && ./stellar-disbursement-platform db sdp migrate up --all && { (while true; do echo starting-tss-worker; ./stellar-disbursement-platform tss; echo tss-exited-restarting; sleep 5; done) & ./stellar-disbursement-platform serve; }'",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}

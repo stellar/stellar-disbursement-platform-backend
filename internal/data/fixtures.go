@@ -527,7 +527,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		disbursementID = nil
 	}
 
-	// Direct payments must state their source wallet explicitly (W3); disbursement payments
+	// Direct payments must state their source wallet explicitly; disbursement payments
 	// inherit it at the DB layer. NULLIF lets the derive trigger handle the inherit case.
 	if p.SourceWalletID == "" && disbursementID == nil {
 		p.SourceWalletID = EnsureDefaultDistributionWalletFixture(t, ctx, sqlExec).ID

@@ -11,8 +11,8 @@ import (
 )
 
 // readEndpointInventory is the executable form of the committed leak-vector matrix
-// (specs/W4-cardinality-and-leak-matrix.md): every authenticated GET route is classified.
-// ADDING A READ ENDPOINT WITHOUT CLASSIFYING IT FAILS CI — this is the W4 acceptance gate
+// the cardinality classification: every authenticated GET route is classified.
+// ADDING A READ ENDPOINT WITHOUT CLASSIFYING IT FAILS CI — this is the acceptance gate
 // ("new endpoints cannot ship without a leak-vector inventory entry").
 var readEndpointInventory = map[string]string{
 	// MEMBERSHIP-FILTERED: rows/objects filter to the caller's wallets; individual reads 404
@@ -98,6 +98,6 @@ func Test_ReadEndpointInventory_CIGate(t *testing.T) {
 
 	assert.Empty(t, unclassified,
 		"UNCLASSIFIED READ ENDPOINTS — add each to the leak-vector inventory "+
-			"(specs/W4-cardinality-and-leak-matrix.md) and to readEndpointInventory before shipping: %v",
+			"the cardinality classification and readEndpointInventory before shipping: %v",
 		unclassified)
 }

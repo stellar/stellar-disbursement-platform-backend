@@ -207,7 +207,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 0. Wallet-scoped authorization (W2): an Approver/FC on wallet A cannot start a
+		// 0. Wallet-scoped authorization: an Approver/FC on wallet A cannot start a
 		// disbursement sourced from wallet B. Owners are tenant-wide.
 		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
 			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
@@ -262,7 +262,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// Outbox (W3): approval + hand-off to the TSS pipeline, same transaction.
+		// Outbox: approval + hand-off to the TSS pipeline, same transaction.
 		eventData := map[string]any{
 			"disbursement_id": disbursementID,
 			"name":            disbursement.Name,
@@ -378,7 +378,7 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 0. Wallet-scoped authorization (W2): pausing requires a qualifying role on the
+		// 0. Wallet-scoped authorization: pausing requires a qualifying role on the
 		// disbursement's source wallet. Owners are tenant-wide.
 		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
 			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
@@ -403,7 +403,7 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// Outbox (W3): paused, same transaction.
+		// Outbox: paused, same transaction.
 		if err = events.Write(ctx, dbTx, events.DisbursementPaused, disbursement.SourceWalletID, map[string]any{
 			"disbursement_id": disbursementID,
 			"name":            disbursement.Name,

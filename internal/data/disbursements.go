@@ -348,7 +348,7 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 		qb.AddCondition("d.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
 	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
-		// Membership-filtered visibility (W2): empty scope yields zero rows by design.
+		// Membership-filtered visibility: empty scope yields zero rows by design.
 		qb.AddCondition("d.source_wallet_id = ANY(?)", pq.Array(walletIDs))
 	}
 
@@ -512,7 +512,7 @@ func (d *DisbursementModel) CompleteIfNecessary(ctx context.Context, sqlExec db.
 		SET status         = $1,
 			status_history = array_append(status_history, create_disbursement_status_history(NOW(), $1, ''))
 		WHERE d.status = $2
-		-- disbursement has no payments that are not in a final state. 
+		-- disbursement has no payments that are not in a final state.
 		  AND NOT EXISTS (SELECT 1
 						  FROM payments p
 						  WHERE p.disbursement_id = d.id

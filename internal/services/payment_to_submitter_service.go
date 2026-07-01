@@ -128,7 +128,7 @@ func (s PaymentToSubmitterService) markPaymentsAsFailed(ctx context.Context, sdp
 
 	numUpdated, err := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, failedPayments, data.FailedPaymentStatus)
 	if err == nil {
-		// Outbox (W3): disbursement.failed once per distinct disbursement with a permanently
+		// Outbox: disbursement.failed once per distinct disbursement with a permanently
 		// failed payment, same transaction. Direct payments have no disbursement to fail.
 		seenDisbursements := map[string]bool{}
 		for _, failedPayment := range failedPayments {

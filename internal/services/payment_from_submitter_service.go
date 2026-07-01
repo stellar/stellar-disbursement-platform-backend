@@ -134,7 +134,7 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 		// Update the disbursement to complete if it has all payments in the end state.
 		completedIDs, err := s.sdpModels.Disbursements.CompleteDisbursements(ctx, sdpDBTx, []string{payment.Disbursement.ID})
 		if err == nil {
-			// Outbox (W3): disbursement.completed for each disbursement that actually
+			// Outbox: disbursement.completed for each disbursement that actually
 			// completed, same transaction as the status change.
 			for _, completedID := range completedIDs {
 				if err = events.Write(ctx, sdpDBTx, events.DisbursementCompleted, payment.SourceWalletID, map[string]any{

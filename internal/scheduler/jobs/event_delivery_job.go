@@ -29,7 +29,7 @@ const (
 )
 
 // eventDeliveryJob delivers undelivered outbox events to the tenant's configured webhook URL
-// (W3, accepted spec flags E1/E3): at-least-once, oldest first; consumers deduplicate on
+// (, accepted spec flags E1/E3): at-least-once, oldest first; consumers deduplicate on
 // event_id. Tenants without a webhook URL are skipped.
 type eventDeliveryJob struct {
 	models     *data.Models
