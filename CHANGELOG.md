@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Speed up test DB setup via template cloning to end flaky CI timeout [#1160](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1160) 
+
 ## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
 
 ### Fixed
