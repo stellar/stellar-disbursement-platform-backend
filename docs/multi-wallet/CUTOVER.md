@@ -24,15 +24,18 @@ signing, and wallet-scoped authorization is a no-op — until an Owner creates a
 
 Run [`preflight.sql`](preflight.sql) against a prod replica. It hard-fails on either hazard:
 
-- **Abort risk:** a schema with disbursements/payments but no default wallet → `.2`/`.6` abort at
+- **Abort risk:** a schema with disbursements/payments but **no live `admin.tenants` row**
+  (missing or soft-deleted), so the default-wallet backfill `.1` never runs and `.2`/`.6` abort at
   `SET NOT NULL`. (The `.2`/`.6` migrations now also RAISE a clear error instead of an opaque
-  not-null violation if this slips through.) Fix: ensure the tenant is active and has a provisioned
-  distribution account so `.1` creates its default; or exclude the dead schema from the run.
-- **Lockout risk:** a **non-owner** user whose roles include none of
-  `financial_controller / developer / business / initiator / approver`. The membership backfill
-  grants them nothing, so after cutover every wallet-gated read/write returns empty/403 for them.
-  Fix before or right after cutover by granting them a membership (see Step 4), or confirm those
-  users are inactive.
+  not-null violation if this slips through.) Fix: ensure the tenant is active (not soft-deleted)
+  and has a provisioned distribution account so `.1` creates its default; or exclude the dead
+  schema from the run.
+- **Lockout risk:** a **genuinely non-owner** user (`is_owner=false` **and** no `owner` role)
+  whose roles include none of `financial_controller / developer / business / initiator / approver`.
+  The membership backfill grants them nothing, so after cutover every wallet-gated read/write
+  returns empty/403 for them. Users with the `owner` role are tenant-wide regardless of the
+  `is_owner` flag, so they are **not** at risk. Fix a real case before or right after cutover by
+  granting a membership (see Step 4), or confirm those users are inactive.
 
 ## Step 2 — Migrate
 
