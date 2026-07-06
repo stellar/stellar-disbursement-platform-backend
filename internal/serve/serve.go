@@ -323,11 +323,17 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Middleware
 	mux.Use(middleware.CorsMiddleware(o.CorsAllowedOrigins))
+	mux.Use(chimiddleware.ClientIPFromRemoteAddr)
 	// Rate limits requests made with the pair <IP, endpoint>.
-	mux.Use(httprate.Limit(
+	mux.Use(httprate.LimitBy(
 		rateLimitPer20Seconds,
 		rateLimitWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
+		httprate.JoinKeys(
+			func(r *http.Request) (string, error) {
+				return httprate.CanonicalizeIP(chimiddleware.GetClientIP(r.Context())), nil
+			},
+			httprate.KeyByEndpoint,
+		),
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager, o.SingleTenantMode))
