@@ -8,8 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- Verify automated release cloudformation version migration. [#1158](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1158)
+- Speed up test DB setup via template cloning to end flaky CI timeout [#1160](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1160) 
 - Migrations only soft-delete Vibrant Assist when it has no receiver wallets [#1162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1162)
-
 
 ## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
 
