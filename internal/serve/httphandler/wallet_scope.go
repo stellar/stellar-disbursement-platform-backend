@@ -44,6 +44,37 @@ func walletInReadScope(scope []string, walletID string) bool {
 	return scope == nil || slices.Contains(scope, walletID)
 }
 
+// resolveWalletListScope computes the scope for the membership-filtered LIST/aggregate endpoints
+// (disbursements, payments, receivers, statistics, exports), layering the active account
+// selection on top of read visibility so the per-account view is consistent for everyone:
+//   - no X-Wallet-Id ("All accounts"): full visibility — Owner sees tenant-wide (nil), a member
+//     sees their membership set.
+//   - explicit X-Wallet-Id: narrow to that one account, but never beyond what the caller may
+//     see. Owners can select any account; a member selecting an account they hold no membership
+//     on gets an empty scope (sees nothing) rather than a leak.
+//
+// This is intentionally separate from resolveWalletReadScope, which stays a pure visibility
+// check for the switcher's account list and for single-resource reads (where navigating to a
+// specific item must not be filtered out by the currently-selected account).
+func resolveWalletListScope(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
+	visibility, httpErr := resolveWalletReadScope(ctx, authManager, models)
+	if httpErr != nil {
+		return nil, httpErr
+	}
+
+	headerWalletID := req.Header.Get(XWalletIDHeader)
+	if headerWalletID == "" {
+		return visibility, nil
+	}
+
+	// visibility == nil means Owner (may see every account); otherwise the wallet must be in the
+	// member's set.
+	if visibility == nil || slices.Contains(visibility, headerWalletID) {
+		return []string{headerWalletID}, nil
+	}
+	return []string{}, nil
+}
+
 // ensureWalletActionAllowed gates a state transition on the caller's wallet membership
 // Owners pass; everyone else needs a qualifying role on the wallet. Returns a 403
 // that discloses no wallet details.

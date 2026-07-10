@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -49,6 +50,9 @@ func Test_W4_WalletAwareDashboards(t *testing.T) {
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.On("GetUserByID", mock.Anything, memberA.ID).Return(memberA, nil)
 	authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+	// The disbursements list hydrates created-by/started-by users; fixtures have none.
+	authManagerMock.On("GetUsersByID", mock.Anything, mock.Anything, mock.Anything).
+		Return([]*auth.User{}, nil).Maybe()
 
 	// One disbursement + one DRAFT payment per wallet (amount 10 from A, 25 from B).
 	mkPayment := func(name, walletID, amount string) {
@@ -95,6 +99,50 @@ func Test_W4_WalletAwareDashboards(t *testing.T) {
 		rr = statsAs(memberA.ID, walletBID)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 		assert.NotContains(t, rr.Body.String(), "dash-wallet-b")
+	})
+
+	t.Run("disbursements list: X-Wallet-Id narrows to the selected account, owners included", func(t *testing.T) {
+		disbHandler := DisbursementHandler{
+			Models:                        models,
+			AuthManager:                   authManagerMock,
+			DisbursementManagementService: &services.DisbursementManagementService{Models: models, AuthManager: authManagerMock},
+		}
+		dr := chi.NewRouter()
+		dr.Get("/disbursements", disbHandler.GetDisbursements)
+		listAs := func(userID, headerWalletID string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodGet, "/disbursements", nil)
+			if headerWalletID != "" {
+				req.Header.Set(XWalletIDHeader, headerWalletID)
+			}
+			req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+			rr := httptest.NewRecorder()
+			dr.ServeHTTP(rr, req)
+			return rr
+		}
+
+		// Owner, no header ("All accounts"): sees both accounts' disbursements.
+		rr := listAs(owner.ID, "")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "dash-disb-a")
+		assert.Contains(t, rr.Body.String(), "dash-disb-b")
+
+		// Owner selecting wallet B narrows to wallet B only (the fix — previously saw both).
+		rr = listAs(owner.ID, walletBID)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "dash-disb-a")
+		assert.Contains(t, rr.Body.String(), "dash-disb-b")
+
+		// Member of wallet A, no header: only wallet A.
+		rr = listAs(memberA.ID, "")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "dash-disb-a")
+		assert.NotContains(t, rr.Body.String(), "dash-disb-b")
+
+		// Member of A selecting wallet B (not theirs): sees nothing, no cross-account disclosure.
+		rr = listAs(memberA.ID, walletBID)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "dash-disb-a")
+		assert.NotContains(t, rr.Body.String(), "dash-disb-b")
 	})
 
 	// ===== Balances =====

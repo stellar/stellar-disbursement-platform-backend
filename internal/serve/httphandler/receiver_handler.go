@@ -120,9 +120,9 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Membership-filtered visibility (, flag R1): receivers reachable via the caller's
-	// wallets' payments; Owners see all.
-	scope, scopeErr := resolveWalletReadScope(ctx, rh.AuthManager, rh.Models)
+	// Per-account list scope: receivers reachable via the selected account's payments when
+	// X-Wallet-Id is set, else full visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, rh.AuthManager, rh.Models)
 	if scopeErr != nil {
 		scopeErr.Render(w)
 		return

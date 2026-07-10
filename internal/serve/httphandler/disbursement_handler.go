@@ -321,8 +321,9 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 
-	// Membership-filtered visibility: non-owners see only their wallets' disbursements.
-	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	// Per-account list scope: narrow to the selected account (X-Wallet-Id) when set, else full
+	// visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, d.AuthManager, d.Models)
 	if scopeErr != nil {
 		scopeErr.Render(w)
 		return
