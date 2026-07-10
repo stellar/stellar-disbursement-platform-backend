@@ -35,7 +35,7 @@ func ResolveWalletReadScope(ctx context.Context, sqlExec db.SQLExecuter, members
 	return walletIDs, nil
 }
 
-// EnsureUserCanActOnWallet enforces wallet-scoped action authorization (Workstream 2):
+// EnsureUserCanActOnWallet enforces wallet-scoped action authorization:
 // Owners are always tenant-wide; every other caller must hold at least one of requiredRoles
 // ON the target wallet via wallet_memberships. Role semantics are unchanged — this adds the
 // wallet dimension on top of the route-level tenant-role checks.

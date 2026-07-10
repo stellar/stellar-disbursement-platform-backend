@@ -3,11 +3,13 @@ package httphandler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -89,7 +91,8 @@ func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.R
 
 	totals := map[string]string{}
 	for i := range wallets {
-		if scope != nil && !walletInReadScope(scope, wallets[i].ID) {
+		// walletInReadScope returns true for a nil (owner/tenant-wide) scope, so no extra guard.
+		if !walletInReadScope(scope, wallets[i].ID) {
 			continue
 		}
 		balances, httpErr := h.walletBalances(ctx, &wallets[i])
@@ -98,7 +101,7 @@ func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.R
 			return
 		}
 		for asset, amount := range balances {
-			totals[asset] = sumDecimalStrings(totals[asset], amount)
+			totals[asset] = sumDecimalStrings(ctx, totals[asset], amount)
 		}
 	}
 
@@ -135,13 +138,16 @@ func assetBalanceKey(asset data.Asset) string {
 	return asset.Code + ":" + asset.Issuer
 }
 
-func sumDecimalStrings(a, b string) string {
+func sumDecimalStrings(ctx context.Context, a, b string) string {
 	if a == "" {
 		return b
 	}
 	da, errA := decimal.NewFromString(a)
 	db, errB := decimal.NewFromString(b)
 	if errA != nil || errB != nil {
+		// Inputs come from decimal.String() today so this never fires, but log rather than
+		// silently under-report the aggregated Total Balance if a non-decimal source appears.
+		log.Ctx(ctx).Warnf("sumDecimalStrings: skipping unparseable balance (a=%q, b=%q)", a, b)
 		return a
 	}
 	return da.Add(db).String()
@@ -184,13 +190,31 @@ func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.Res
 		return
 	}
 
+	// Validate the role up front: an unknown role would otherwise pass the service checks, hit
+	// the wallet_memberships CHECK constraint, and surface to the operator as a 500. Owner is
+	// tenant-wide and cannot be granted per wallet.
+	role := data.UserRole(reqBody.Role)
+	if !role.IsValid() || role == data.OwnerUserRole {
+		scopableRoles := make([]data.UserRole, 0)
+		for _, r := range data.GetAllRoles() {
+			if r != data.OwnerUserRole {
+				scopableRoles = append(scopableRoles, r)
+			}
+		}
+		httperror.BadRequest(
+			fmt.Sprintf("unexpected value for role=%q. Expect one of these values: %s", reqBody.Role, scopableRoles),
+			nil, nil,
+		).Render(rw)
+		return
+	}
+
 	grantor, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
 		return
 	}
 
-	membership, err := h.Service.GrantMembership(ctx, walletID, reqBody.UserID, data.UserRole(reqBody.Role), grantor.ID)
+	membership, err := h.Service.GrantMembership(ctx, walletID, reqBody.UserID, role, grantor.ID)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrWalletArchivedForMembership):

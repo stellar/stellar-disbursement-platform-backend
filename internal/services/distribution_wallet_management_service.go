@@ -390,8 +390,8 @@ func (s *DistributionWalletManagementService) GrantMembership(ctx context.Contex
 }
 
 // RevokeMembership revokes one membership on the given wallet. The append-only audit table
-// retains the full grant/revoke history; the revoker is recorded in the structured log until
-// event emission lands in Workstream 3.
+// retains the full grant/revoke history, and a WalletMembershipRevoked event is emitted in the
+// same transaction.
 func (s *DistributionWalletManagementService) RevokeMembership(ctx context.Context, walletID, membershipID, revokedBy string) error {
 	dbPool := s.Models.DBConnectionPool
 

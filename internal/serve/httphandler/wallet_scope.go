@@ -90,7 +90,7 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 		}
 		if len(activeWallets) != 1 {
 			return nil, httperror.BadRequest(
-				"the X-Wallet-Id header is required: this tenant has multiple distribution wallets", nil, nil)
+				"the X-Wallet-Id header is required to select a source distribution wallet", nil, nil)
 		}
 		wallet = &activeWallets[0]
 	} else {
