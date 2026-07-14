@@ -1,0 +1,26 @@
+# Continuous deployment for the multi-wallet PLAYTEST demo (Railway project sdp-mw-playtest).
+# Railway's own push-to-deploy was not firing, so we drive it from Actions: every push to
+# feat/multi-wallet runs `railway up` against the sdp-api service. RAILWAY_TOKEN is a
+# project-scoped token (repo secret), so the CLI needs no `railway link`.
+name: Deploy sdp-api to Railway (playtest)
+
+on:
+  push:
+    branches: [feat/multi-wallet]
+  workflow_dispatch: {}
+
+concurrency:
+  group: railway-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy
+        run: railway up --ci --service sdp-api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
