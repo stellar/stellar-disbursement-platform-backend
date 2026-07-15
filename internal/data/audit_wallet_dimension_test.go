@@ -61,4 +61,24 @@ func Test_AuditTables_walletDimension(t *testing.T) {
 			assert.Equal(t, wallet.ID, id)
 		}
 	})
+
+	t.Run("disbursements_audit is append-only", func(t *testing.T) {
+		_, dbErr := dbConnectionPool.ExecContext(ctx, `
+			UPDATE disbursements_audit SET name = 'tampered' WHERE id = $1`, disbursement.ID)
+		assert.ErrorContains(t, dbErr, "append-only")
+
+		_, dbErr = dbConnectionPool.ExecContext(ctx, `
+			DELETE FROM disbursements_audit WHERE id = $1`, disbursement.ID)
+		assert.ErrorContains(t, dbErr, "append-only")
+	})
+
+	t.Run("payments_audit is append-only", func(t *testing.T) {
+		_, dbErr := dbConnectionPool.ExecContext(ctx, `
+			UPDATE payments_audit SET amount = '0' WHERE id = $1`, payment.ID)
+		assert.ErrorContains(t, dbErr, "append-only")
+
+		_, dbErr = dbConnectionPool.ExecContext(ctx, `
+			DELETE FROM payments_audit WHERE id = $1`, payment.ID)
+		assert.ErrorContains(t, dbErr, "append-only")
+	})
 }
