@@ -47,6 +47,7 @@ type DistributionWalletManagementServiceInterface interface {
 	ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error)
 	PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error)
 	ListMemberships(ctx context.Context, walletID string) ([]data.WalletMembership, error)
+	ListMembershipAudit(ctx context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error)
 	GrantMembership(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error)
 	RevokeMembership(ctx context.Context, walletID, membershipID, revokedBy string) error
 }
@@ -352,6 +353,25 @@ func (s *DistributionWalletManagementService) ListMemberships(ctx context.Contex
 		return nil, fmt.Errorf("listing memberships for wallet %q: %w", walletID, err)
 	}
 	return memberships, nil
+}
+
+// membershipAuditLimit caps the audit read; pagination is a follow-up design decision.
+const membershipAuditLimit = 100
+
+// ListMembershipAudit returns a wallet's membership-change history (grants and revokes) from
+// the append-only audit table, newest first. Archived wallets remain queryable.
+func (s *DistributionWalletManagementService) ListMembershipAudit(ctx context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error) {
+	dbPool := s.Models.DBConnectionPool
+
+	if _, err := s.Models.DistributionWallets.Get(ctx, dbPool, walletID); err != nil {
+		return nil, fmt.Errorf("loading distribution wallet %q: %w", walletID, err)
+	}
+
+	entries, err := s.Models.WalletMemberships.ListAuditByWallet(ctx, dbPool, walletID, membershipAuditLimit)
+	if err != nil {
+		return nil, fmt.Errorf("listing membership audit for wallet %q: %w", walletID, err)
+	}
+	return entries, nil
 }
 
 // GrantMembership grants a wallet-scoped role to a user, recording the grantor. Grants on

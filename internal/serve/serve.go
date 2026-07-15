@@ -625,6 +625,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				)).Group(func(r chi.Router) {
 					r.Get("/{id}", distributionWalletsHandler.GetDistributionWallet)
 					r.Get("/{id}/memberships", distributionWalletsHandler.GetDistributionWalletMemberships)
+					r.Get("/{id}/audit", distributionWalletsHandler.GetDistributionWalletAudit)
 				})
 
 				// Membership-scoped reads (the dashboard picker + Total Balance tile): any

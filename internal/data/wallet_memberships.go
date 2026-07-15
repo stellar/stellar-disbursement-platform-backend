@@ -157,3 +157,30 @@ func (m *WalletMembershipModel) Get(ctx context.Context, sqlExec db.SQLExecuter,
 	}
 	return &membership, nil
 }
+
+// WalletMembershipAuditEntry is one append-only audit row: the membership columns as they
+// stood at the time of the change, plus the operation (INSERT = grant, DELETE = revoke) and
+// when it happened. Rows are trigger-protected against UPDATE/DELETE.
+type WalletMembershipAuditEntry struct {
+	WalletMembership
+	Operation string    `json:"operation" db:"operation"`
+	ChangedAt time.Time `json:"changed_at" db:"changed_at"`
+}
+
+// ListAuditByWallet returns a wallet's membership audit history (grants and revokes),
+// newest first, capped at limit.
+func (m *WalletMembershipModel) ListAuditByWallet(ctx context.Context, sqlExec db.SQLExecuter, walletID string, limit int) ([]WalletMembershipAuditEntry, error) {
+	query := fmt.Sprintf(`
+		SELECT %s, operation, changed_at
+		FROM wallet_memberships_audit
+		WHERE wallet_id = $1
+		ORDER BY changed_at DESC
+		LIMIT $2
+	`, walletMembershipColumns)
+
+	entries := []WalletMembershipAuditEntry{}
+	if err := sqlExec.SelectContext(ctx, &entries, query, walletID, limit); err != nil {
+		return nil, fmt.Errorf("listing membership audit for wallet %q: %w", walletID, err)
+	}
+	return entries, nil
+}

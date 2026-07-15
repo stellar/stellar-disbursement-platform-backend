@@ -178,6 +178,26 @@ func (h DistributionWalletsHandler) GetDistributionWalletMemberships(rw http.Res
 	httpjson.Render(rw, memberships, httpjson.JSON)
 }
 
+// GetDistributionWalletAudit returns a wallet's membership-change history (grants and
+// revokes) from the append-only audit table, newest first (admin/audit surface — archived
+// wallets remain queryable).
+func (h DistributionWalletsHandler) GetDistributionWalletAudit(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	walletID := chi.URLParam(req, "id")
+
+	entries, err := h.Service.ListMembershipAudit(ctx, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("distribution wallet not found", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot list wallet membership audit", err, nil).Render(rw)
+		return
+	}
+
+	httpjson.Render(rw, entries, httpjson.JSON)
+}
+
 // PostDistributionWalletMembership grants a wallet-scoped role. Grants on archived wallets
 // return 409 Conflict per the spec — an inert grant would only add audit-log noise.
 func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.ResponseWriter, req *http.Request) {

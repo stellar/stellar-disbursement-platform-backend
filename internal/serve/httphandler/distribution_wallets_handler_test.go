@@ -27,6 +27,7 @@ type mockDistributionWalletService struct {
 	archiveFn         func(ctx context.Context, id string) (*data.DistributionWallet, error)
 	promoteFn         func(ctx context.Context, id string) (*data.DistributionWallet, error)
 	listMembershipsFn func(ctx context.Context, walletID string) ([]data.WalletMembership, error)
+	listAuditFn       func(ctx context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error)
 	grantFn           func(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error)
 	revokeFn          func(ctx context.Context, walletID, membershipID, revokedBy string) error
 }
@@ -37,6 +38,10 @@ func (m *mockDistributionWalletService) ArchiveWallet(ctx context.Context, id st
 
 func (m *mockDistributionWalletService) ListMemberships(ctx context.Context, walletID string) ([]data.WalletMembership, error) {
 	return m.listMembershipsFn(ctx, walletID)
+}
+
+func (m *mockDistributionWalletService) ListMembershipAudit(ctx context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error) {
+	return m.listAuditFn(ctx, walletID)
 }
 
 func (m *mockDistributionWalletService) GrantMembership(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error) {

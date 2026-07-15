@@ -140,6 +140,40 @@ func Test_WalletMembershipModel(t *testing.T) {
 		require.ErrorIs(t, m.Delete(ctx, dbConnectionPool, granted.ID), ErrRecordNotFound)
 	})
 
+	t.Run("ListAuditByWallet returns the wallet's grant/revoke history, newest first", func(t *testing.T) {
+		// The previous subtest granted+revoked Bob on the default wallet, so its audit trail
+		// already has entries; add one more grant (a role Alice doesn't hold yet on this
+		// wallet) so ordering is observable.
+		granted, gErr := m.Insert(ctx, dbConnectionPool, userAlice, defaultWallet.ID, ApproverUserRole, nil)
+		require.NoError(t, gErr)
+
+		entries, aErr := m.ListAuditByWallet(ctx, dbConnectionPool, defaultWallet.ID, 100)
+		require.NoError(t, aErr)
+		require.GreaterOrEqual(t, len(entries), 3, "INSERT+DELETE from the revoke subtest and this grant's INSERT")
+
+		// Newest first, wallet-scoped, and the latest entry is this grant.
+		for i := 1; i < len(entries); i++ {
+			assert.False(t, entries[i-1].ChangedAt.Before(entries[i].ChangedAt))
+		}
+		for _, e := range entries {
+			assert.Equal(t, defaultWallet.ID, e.WalletID)
+		}
+		assert.Equal(t, granted.ID, entries[0].ID)
+		assert.Equal(t, "INSERT", entries[0].Operation)
+
+		// Another wallet's audit history is not mixed in (walletB only ever saw Bob's grant).
+		otherEntries, aErr := m.ListAuditByWallet(ctx, dbConnectionPool, walletB, 100)
+		require.NoError(t, aErr)
+		for _, e := range otherEntries {
+			assert.Equal(t, walletB, e.WalletID)
+		}
+
+		// The limit caps the read.
+		capped, aErr := m.ListAuditByWallet(ctx, dbConnectionPool, defaultWallet.ID, 1)
+		require.NoError(t, aErr)
+		require.Len(t, capped, 1)
+	})
+
 	t.Run("wallet referenced by memberships cannot be hard-deleted", func(t *testing.T) {
 		_, dErr := dbConnectionPool.ExecContext(ctx, `DELETE FROM distribution_wallets WHERE id = $1`, walletB)
 		require.Error(t, dErr)
