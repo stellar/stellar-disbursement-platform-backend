@@ -96,6 +96,7 @@ func (c *DistributionAccountCommand) Command(cmdService DistAccCmdServiceInterfa
 	}
 
 	distributionAccountCmd.AddCommand(c.RotateCommand(cmdService))
+	distributionAccountCmd.AddCommand(c.RotateWalletDEKCommand())
 
 	return distributionAccountCmd
 }
