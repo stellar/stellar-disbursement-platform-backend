@@ -36,9 +36,9 @@ func main() {
 	}
 }
 
-// preConfigureLogger will set the log level to Trace, so logs works from the
-// start. This will eventually be overwritten in cmd/root.go
+// preConfigureLogger will set the log level to Info, so logs work from the
+// start. This will eventually be overwritten in cmd/root.go by the --log-level option.
 func preConfigureLogger() {
 	log.DefaultLogger = log.New()
-	log.DefaultLogger.SetLevel(logrus.TraceLevel)
+	log.DefaultLogger.SetLevel(logrus.InfoLevel)
 }

@@ -22,7 +22,7 @@ func rootCmd() *cobra.Command {
 			Name:           "log-level",
 			Usage:          `The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC".`,
 			OptType:        types.String,
-			FlagDefault:    "TRACE",
+			FlagDefault:    "INFO",
 			ConfigKey:      &globalOptions.LogLevel,
 			CustomSetValue: cmdUtils.SetConfigOptionLogLevel,
 			Required:       true,

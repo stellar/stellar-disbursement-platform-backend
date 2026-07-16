@@ -372,23 +372,22 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 			},
 		},
 		{
-			name:               "with preexisting tx_hash and XDRSent",
+			// xdr_sent / xdr_received are intentionally NOT attached to the per-job context logger
+			// (they would repeat the full envelope on every line); only tx_hash is carried.
+			name:               "with preexisting tx_hash and XDRSent (XDR not attached to ctx logger)",
 			preexistingTxHash:  "tx_hash_123",
 			preexistingXDRSent: "xdr_sent_123",
 			additionalLogrusFields: logrus.Fields{
-				"tx_hash":  "tx_hash_123",
-				"xdr_sent": "xdr_sent_123",
+				"tx_hash": "tx_hash_123",
 			},
 		},
 		{
-			name:                   "with preexisting tx_hash and XDR data (sent and received)",
+			name:                   "with preexisting tx_hash and XDR data (XDR not attached to ctx logger)",
 			preexistingTxHash:      "tx_hash_123",
 			preexistingXDRSent:     "xdr_sent_123",
 			preexistingXDRReceived: "xdr_received_123",
 			additionalLogrusFields: logrus.Fields{
-				"tx_hash":      "tx_hash_123",
-				"xdr_sent":     "xdr_sent_123",
-				"xdr_received": "xdr_received_123",
+				"tx_hash": "tx_hash_123",
 			},
 		},
 	}
@@ -447,6 +446,7 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 				"created_at":      txJob.Transaction.CreatedAt.String(),
 				"event_id":        transactionWorker.jobUUID,
 				"git_commit_hash": "gitCommitHash0x",
+				"payment_id":      txJob.Transaction.ExternalID,
 				"tenant_id":       txJob.Transaction.TenantID,
 				"tx_id":           txJob.Transaction.ID,
 				"updated_at":      txJob.Transaction.UpdatedAt.String(),
