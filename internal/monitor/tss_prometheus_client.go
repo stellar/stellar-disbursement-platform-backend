@@ -46,7 +46,14 @@ func (p *tssPrometheusClient) GetMetricHTTPHandler() http.Handler {
 }
 
 func (p *tssPrometheusClient) MonitorHTTPRequestDuration(duration time.Duration, labels HTTPRequestLabels) {
-	SummaryTSSVecMetrics[HTTPRequestDurationTag].With(prometheus.Labels{
+	// Guard against a nil map entry: if the HTTP duration metric is ever not registered, drop the
+	// observation and log rather than panicking (a nil .With() would take the TSS submitter down).
+	summary, ok := SummaryTSSVecMetrics[HTTPRequestDurationTag]
+	if !ok {
+		log.Errorf("metric not registered in TSS prometheus metrics: %s", HTTPRequestDurationTag)
+		return
+	}
+	summary.With(prometheus.Labels{
 		"status": labels.Status,
 		"route":  labels.Route,
 		"method": labels.Method,

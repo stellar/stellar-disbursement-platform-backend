@@ -42,12 +42,26 @@ var SummaryVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 	SuccessfulQueryDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: DefaultNamespace, Subsystem: string(DBSubservice), Name: string(SuccessfulQueryDurationTag),
 		Help: "Successful DB query durations",
+		// Match the HTTP summary's objectives so DB p50/p90/p95/p99 latency is chartable in Grafana
+		// (previously only _sum/_count were exported, so no percentiles were available).
+		Objectives: map[float64]float64{
+			0.5:  0.05,
+			0.9:  0.01,
+			0.95: 0.01,
+			0.99: 0.001,
+		},
 	},
 		[]string{"query_type"},
 	),
 	FailureQueryDurationTag: prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace: DefaultNamespace, Subsystem: string(DBSubservice), Name: string(FailureQueryDurationTag),
 		Help: "Failure DB query durations",
+		Objectives: map[float64]float64{
+			0.5:  0.05,
+			0.9:  0.01,
+			0.95: 0.01,
+			0.99: 0.001,
+		},
 	},
 		[]string{"query_type"},
 	),

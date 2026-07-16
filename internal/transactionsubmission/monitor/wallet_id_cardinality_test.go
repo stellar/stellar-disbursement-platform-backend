@@ -49,6 +49,13 @@ func Test_TSSMonitor_TransactionMetricLabels_MatchCounterCardinality(t *testing.
 	require.Contains(t, labels, "wallet_id", "emitted TSS metric labels must carry wallet_id")
 	require.Equal(t, "44444444-4444-4444-4444-444444444444", labels["wallet_id"])
 
+	// Unbounded, per-transaction identifiers must NEVER be metric labels (they explode the TSDB);
+	// they belong in logs. This locks in the cardinality fix.
+	for _, forbidden := range []string{"event_id", "tx_id", "event_time"} {
+		require.NotContains(t, labels, forbidden,
+			"%q is high-cardinality and must not be a TSS metric label", forbidden)
+	}
+
 	// Every TSS transaction counter emitted with these labels. Incrementing the real CounterVec
 	// with the real emitted labels panics on any label-cardinality / label-name drift.
 	txCounterTags := []sdpMonitor.MetricTag{

@@ -68,13 +68,32 @@ func (ms *TSSMonitorService) LogAndMonitorTransaction(ctx context.Context, tx st
 	ms.logTransactionEvent(logEntry, tx, metricTag, txMetadata, logMessage)
 }
 
-// buildMetricLabels creates the label map used for the TSS transaction CounterVecs. The keys here
-// MUST stay in lock-step with the CounterVec label sets declared in internal/monitor
-// (paymentLabelNames / walletCreationLabelNames / sponsoredTransactionLabelNames); prometheus panics
-// on any drift. High-cardinality correlation identifiers (e.g. payment_id) deliberately live in the
-// logs (buildCommonFields), never here.
+// buildMetricLabels creates the label map used for the TSS transaction CounterVecs. Only
+// LOW-cardinality labels belong here: event_id, tx_id and event_time are UNBOUNDED (unique per
+// transaction) and would explode the Prometheus TSDB, so they live in the logs (buildCommonFields)
+// instead — where an operator can still correlate them via the shared event_id. The keys here MUST
+// stay in lock-step with the CounterVec label sets declared in internal/monitor (paymentLabelNames /
+// walletCreationLabelNames / sponsoredTransactionLabelNames); prometheus panics on any drift.
 func (ms *TSSMonitorService) buildMetricLabels(tx store.Transaction, txMetadata TxMetadata) map[string]string {
 	return map[string]string{
+		// Instance info
+		"app_version":     ms.Version,
+		"git_commit_hash": ms.GitCommitHash,
+		// Event info
+		"event_type": txMetadata.TransactionEventType,
+		// Transaction info
+		"tenant_id":       tx.TenantID,
+		"wallet_id":       tx.WalletID.String,
+		"channel_account": txMetadata.SrcChannelAcc,
+	}
+}
+
+// buildCommonFields creates the fields attached to the transaction log entry. Logs keep the full
+// per-event detail — including the high-cardinality identifiers (event_id, tx_id, event_time) that
+// are deliberately kept OUT of the metric labels — plus payment_id (the SDP Transaction.ExternalID),
+// the field an operator uses to correlate a TSS log line back to the originating SDP payment.
+func (ms *TSSMonitorService) buildCommonFields(tx store.Transaction, txMetadata TxMetadata) map[string]string {
+	fields := map[string]string{
 		// Instance info
 		"app_version":     ms.Version,
 		"git_commit_hash": ms.GitCommitHash,
@@ -88,14 +107,6 @@ func (ms *TSSMonitorService) buildMetricLabels(tx store.Transaction, txMetadata 
 		"wallet_id":       tx.WalletID.String,
 		"channel_account": txMetadata.SrcChannelAcc,
 	}
-}
-
-// buildCommonFields creates the fields attached to the transaction log entry: the metric labels plus
-// log-only correlation fields that would be too high-cardinality to use as metric labels. Most
-// importantly payment_id (the SDP Transaction.ExternalID) — the field an operator uses to correlate
-// a TSS log line back to the originating SDP payment.
-func (ms *TSSMonitorService) buildCommonFields(tx store.Transaction, txMetadata TxMetadata) map[string]string {
-	fields := ms.buildMetricLabels(tx, txMetadata)
 	if tx.ExternalID != "" {
 		fields["payment_id"] = tx.ExternalID
 	}
