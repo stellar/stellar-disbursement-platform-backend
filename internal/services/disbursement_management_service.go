@@ -39,13 +39,16 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound        = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
+	ErrDisbursementNotFound             = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart      = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause      = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementNotReadyToApprove    = errors.New("disbursement is not ready to be approved")
+	ErrDisbursementNotReadyToSubmit     = errors.New("disbursement is not ready to be submitted")
+	ErrDisbursementWalletDisabled       = errors.New("disbursement wallet is disabled")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
+	ErrDisbursementApprovedByCreator   = errors.New("disbursement can't be approved by its creator")
 )
 
 type InsufficientBalanceError struct {
@@ -372,6 +375,98 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 		// 3. Update disbursement status to `paused`
 		err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
 		if err != nil {
+			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		return nil
+	})
+}
+
+// ApproveDisbursement approves a ready disbursement (transition to APPROVED).
+func (s *DisbursementManagementService) ApproveDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		disbursement, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return ErrDisbursementNotFound
+			} else {
+				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
+			}
+		}
+
+		// 1. Verify Transition is Possible (READY -> APPROVED)
+		err = disbursement.Status.TransitionTo(data.ApprovedDisbursementStatus)
+		if err != nil {
+			return ErrDisbursementNotReadyToApprove
+		}
+
+		// 2. Check if approval Workflow is enabled for this organization
+		organization, err := s.Models.Organizations.Get(ctx)
+		if err != nil {
+			return fmt.Errorf("error getting organization: %w", err)
+		}
+
+		if organization.IsApprovalRequired {
+			// check that the user approving the disbursement isn't the same as the one who created it or uploaded instructions
+			for _, sh := range disbursement.StatusHistory {
+				if sh.UserID == user.ID && (sh.Status == data.DraftDisbursementStatus || sh.Status == data.ReadyDisbursementStatus) {
+					return ErrDisbursementApprovedByCreator
+				}
+			}
+		}
+
+		// 3. Update disbursement status to `approved`
+		if err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.ApprovedDisbursementStatus); err != nil {
+			return fmt.Errorf("error updating disbursement status to approved for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		return nil
+	})
+}
+
+// SubmitDisbursement submits an approved disbursement to Stellar (transition to STARTED).
+func (s *DisbursementManagementService) SubmitDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionAccount *schema.TransactionAccount) error {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		disbursement, err := s.Models.Disbursements.GetWithStatistics(ctx, disbursementID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return ErrDisbursementNotFound
+			} else {
+				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
+			}
+		}
+
+		// 1. Verify Wallet is Enabled
+		if !disbursement.Wallet.Enabled {
+			return ErrDisbursementWalletDisabled
+		}
+
+		// 2. Verify Transition is Possible (APPROVED -> STARTED)
+		err = disbursement.Status.TransitionTo(data.StartedDisbursementStatus)
+		if err != nil {
+			return ErrDisbursementNotReadyToSubmit
+		}
+
+		// 3. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
+		err = s.validateBalanceForDisbursement(ctx, dbTx, distributionAccount, disbursement)
+		if err != nil {
+			return fmt.Errorf("validating balance for disbursement: %w", err)
+		}
+
+		// 4. Update all correct payment status to `ready`
+		err = s.Models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
+		if err != nil {
+			return fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// 5. Update all receiver_wallets from `draft` to `ready`
+		err = s.Models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
+		if err != nil {
+			return fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// 6. Update disbursement status to `started`
+		if err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus); err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 

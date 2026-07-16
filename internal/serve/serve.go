@@ -436,10 +436,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				r.Get("/{id}/instructions", handler.GetDisbursementInstructions)
 			})
 
-			// Group CREATE/EDIT operations (accessible to initiators)
+			// Group CREATE/EDIT operations (accessible to uploaders and initiators)
 			r.With(middleware.RequirePermission(
 				data.WriteDisbursements,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole, data.UploaderUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", handler.PostDisbursement)
 				r.Delete("/{id}", handler.DeleteDisbursement)
@@ -452,6 +452,22 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole),
 			)).Group(func(r chi.Router) {
 				r.Patch("/{id}/status", handler.PatchDisbursementStatus)
+			})
+
+			// Group APPROVE operations (accessible to approvers)
+			r.With(middleware.RequirePermission(
+				data.WriteDisbursements,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole),
+			)).Group(func(r chi.Router) {
+				r.Patch("/{id}/approve", handler.ApproveDisbursement)
+			})
+
+			// Group SUBMIT operations (accessible to finance officers)
+			r.With(middleware.RequirePermission(
+				data.WriteDisbursements,
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.FinanceOfficerUserRole),
+			)).Group(func(r chi.Router) {
+				r.Patch("/{id}/submit", handler.SubmitDisbursement)
 			})
 		})
 

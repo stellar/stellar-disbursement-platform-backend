@@ -585,6 +585,81 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
 
+// ApproveDisbursement approves a ready disbursement (transition to APPROVED)
+func (d DisbursementHandler) ApproveDisbursement(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	disbursementID := chi.URLParam(r, "id")
+
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
+		return
+	}
+
+	err = d.DisbursementManagementService.ApproveDisbursement(ctx, disbursementID, user)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrDisbursementNotFound):
+			httperror.NotFound(services.ErrDisbursementNotFound.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementNotReadyToApprove):
+			httperror.BadRequest(services.ErrDisbursementNotReadyToApprove.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementApprovedByCreator):
+			httperror.Forbidden("Disbursement can't be approved by its creator. Approval by another user is required.", err, nil).Render(w)
+		default:
+			msg := fmt.Sprintf("Cannot approve disbursementID=%s: %v", disbursementID, err)
+			httperror.InternalError(ctx, msg, err, nil).Render(w)
+		}
+		return
+	}
+
+	response := map[string]string{"message": "Disbursement approved"}
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+}
+
+// SubmitDisbursement submits an approved disbursement to Stellar (transition to STARTED)
+func (d DisbursementHandler) SubmitDisbursement(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	disbursementID := chi.URLParam(r, "id")
+
+	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
+		return
+	}
+
+	var distributionAccount schema.TransactionAccount
+	if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
+		httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
+		return
+	}
+
+	err = d.DisbursementManagementService.SubmitDisbursement(ctx, disbursementID, user, &distributionAccount)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrDisbursementNotFound):
+			httperror.NotFound(services.ErrDisbursementNotFound.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementNotReadyToSubmit):
+			httperror.BadRequest(services.ErrDisbursementNotReadyToSubmit.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementWalletDisabled):
+			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
+		case errors.Is(err, services.InsufficientBalanceError{}):
+			var insufficientBalanceErr services.InsufficientBalanceError
+			errors.As(err, &insufficientBalanceErr)
+			log.Ctx(ctx).Error(insufficientBalanceErr)
+			httperror.Conflict(insufficientBalanceErr.Error(), err, nil).Render(w)
+		default:
+			msg := fmt.Sprintf("Cannot submit disbursementID=%s: %v", disbursementID, err)
+			httperror.InternalError(ctx, msg, err, nil).Render(w)
+		}
+		return
+	}
+
+	response := map[string]string{"message": "Disbursement submitted to Stellar"}
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+}
+
 func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
