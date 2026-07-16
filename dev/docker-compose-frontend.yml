@@ -1,7 +1,9 @@
 version: '3.8'
 services:
   sdp-frontend:
-    image: stellar/stellar-disbursement-platform-frontend:edge
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:80"
     volumes:
