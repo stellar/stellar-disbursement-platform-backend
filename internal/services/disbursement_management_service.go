@@ -319,9 +319,13 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 	}
 
 	totalPendingAmount := decimal.Zero
+	// Scoped to this disbursement's OWN source wallet: pending commitments on other wallets
+	// don't compete for THIS wallet's balance. Without this, a busy Haiti/Venezuela account
+	// could wrongly block a valid disbursement on HQ (or vice versa) by tenant-wide coincidence.
 	incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]interface{}{
-			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+			data.FilterKeyStatus:          data.PaymentInProgressStatuses(),
+			data.FilterKeySourceWalletIDs: []string{disbursement.SourceWalletID},
 		},
 	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {

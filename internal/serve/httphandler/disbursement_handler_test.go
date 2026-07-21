@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -1857,7 +1856,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
 	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
-	distAcc := schema.NewStellarEnvTransactionAccount(defaultTenantDistAcc)
 	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
 	handler := &DisbursementHandler{
@@ -1921,14 +1919,14 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("cannot get distribution account", func(t *testing.T) {
+		// The disbursement's source wallet is resolved directly (not via
+		// DistributionAccountFromContext / the tenant's legacy single account) so the balance
+		// check always targets THIS disbursement's own funding account, never a different one.
+		// draftDisbursement's source wallet is the shared default fixture, which has no
+		// on-chain address yet -- exercising that failure mode naturally.
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 
 		httpRouter := chi.NewRouter()
@@ -1942,19 +1940,31 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		rr := httptest.NewRecorder()
 		httpRouter.ServeHTTP(rr, req)
 
-		require.Equal(t, http.StatusInternalServerError, rr.Code)
-		require.Contains(t, rr.Body.String(), "Cannot get distribution account")
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "the disbursement's source wallet has no funded distribution account yet")
 	})
+
+	// Fund the shared default wallet's on-chain address now (it has none by default) so the
+	// remaining "Started" sub-tests below can reach their intended business-rule checks instead
+	// of failing earlier on "no funded distribution account yet".
+	fundedSourceWallet, fundErr := handler.Models.DistributionWallets.Get(ctx, dbConnectionPool, draftDisbursement.SourceWalletID)
+	require.NoError(t, fundErr)
+	_, fundErr = dbConnectionPool.ExecContext(ctx,
+		`UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2`,
+		defaultTenantDistAcc, fundedSourceWallet.ID)
+	require.NoError(t, fundErr)
+	fundedSourceWallet, fundErr = handler.Models.DistributionWallets.Get(ctx, dbConnectionPool, fundedSourceWallet.ID)
+	require.NoError(t, fundErr)
+	resolvedDistAcc := schema.TransactionAccount{
+		Address: *fundedSourceWallet.Address,
+		Type:    fundedSourceWallet.AccountType,
+		Status:  fundedSourceWallet.AccountStatus,
+	}
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
 			Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -1982,11 +1992,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
 			Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -2042,12 +2047,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(approverUser, nil).
 			Once()
 
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
-			Once()
-
-		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
+		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
 			Return(decimal.NewFromFloat(10000.0), nil).Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -2069,12 +2069,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(user, nil).
 			Twice()
 
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
-			Once()
-
-		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
+		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
 			Return(decimal.NewFromFloat(10000.0), nil).Once()
 
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -2170,11 +2165,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
 			Once()
 
 		id := "5e1f1c7f5b6c9c0001c1b1b1"

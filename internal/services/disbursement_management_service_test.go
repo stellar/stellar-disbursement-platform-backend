@@ -640,6 +640,108 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	})
 }
 
+// Test_DisbursementManagementService_StartDisbursement_multiWalletIsolation is a regression
+// test for a real bug found live: validateBalanceForDisbursement's "pending amount" query had
+// no wallet filter at all, so a busy/over-committed wallet A could wrongly block a disbursement
+// on a completely separate, healthy wallet B just by tenant-wide coincidence. Two wallets, two
+// disbursements: wallet A is deliberately over-committed and must fail; wallet B has ample
+// headroom and must succeed even though wallet A's pending amount alone would exceed it.
+func Test_DisbursementManagementService_StartDisbursement_multiWalletIsolation(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	user := &auth.User{ID: "owner-user", Email: "owner@test.com", IsOwner: true}
+
+	walletAAddress := "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV"
+	walletBAddress := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
+
+	distWalletA, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+		Name: "Wallet A (over-committed)", AccountType: schema.DistributionAccountStellarDBVault,
+	})
+	require.NoError(t, err)
+	distWalletA, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWalletA.ID, walletAAddress)
+	require.NoError(t, err)
+
+	distWalletB, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+		Name: "Wallet B (healthy)", AccountType: schema.DistributionAccountStellarDBVault,
+	})
+	require.NoError(t, err)
+	distWalletB, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWalletB.ID, walletBAddress)
+	require.NoError(t, err)
+
+	// Wallet A: an existing in-progress payment (80) already commits most of its balance (100).
+	disbursementA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "wallet A - existing commitment", Status: data.StartedDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWalletA.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: disbursementA, Asset: *asset,
+		Amount: "80", Status: data.PendingPaymentStatus,
+	})
+	newDisbursementA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "wallet A - new (should fail)", Status: data.ReadyDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWalletA.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: newDisbursementA, Asset: *asset,
+		Amount: "30", Status: data.ReadyPaymentStatus,
+	})
+
+	// Wallet B: no pre-existing commitments; a modest new disbursement fits comfortably.
+	newDisbursementB := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "wallet B - new (should succeed)", Status: data.ReadyDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWalletB.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: newDisbursementB, Asset: *asset,
+		Amount: "25", Status: data.ReadyPaymentStatus,
+	})
+
+	mockDistAccSvc := mocks.NewMockDistributionAccountService(t)
+	// Wallet A holds 100; Wallet B holds 100 too - but only A has a pre-existing 80 commitment.
+	mockDistAccSvc.On("GetBalance", mock.Anything,
+		mock.MatchedBy(func(a *schema.TransactionAccount) bool { return a.Address == walletAAddress }),
+		mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(100), nil)
+	mockDistAccSvc.On("GetBalance", mock.Anything,
+		mock.MatchedBy(func(a *schema.TransactionAccount) bool { return a.Address == walletBAddress }),
+		mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(100), nil)
+
+	service := &DisbursementManagementService{
+		Models:                     models,
+		DistributionAccountService: mockDistAccSvc,
+	}
+
+	accountA := &schema.TransactionAccount{Address: walletAAddress, Type: schema.DistributionAccountStellarDBVault}
+	accountB := &schema.TransactionAccount{Address: walletBAddress, Type: schema.DistributionAccountStellarDBVault}
+
+	t.Run("wallet A: over-committed, correctly fails", func(t *testing.T) {
+		err := service.StartDisbursement(ctx, newDisbursementA.ID, user, accountA)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "insufficient")
+		require.ErrorContains(t, err, walletAAddress)
+	})
+
+	t.Run("wallet B: healthy, succeeds even though wallet A alone is already over its own balance", func(t *testing.T) {
+		err := service.StartDisbursement(ctx, newDisbursementB.ID, user, accountB)
+		require.NoError(t, err)
+	})
+}
+
 func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

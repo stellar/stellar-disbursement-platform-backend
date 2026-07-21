@@ -641,10 +641,35 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		var distributionAccount schema.TransactionAccount
-		if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
-			httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
+		// The balance check must run against THIS disbursement's own source wallet, not the
+		// tenant's legacy single distribution account (DistributionAccountFromContext) - on a
+		// multi-wallet tenant those are frequently different accounts, and checking the wrong
+		// one either wrongly blocks a valid disbursement or (worse) validates against an
+		// account with no relation to the funds actually being spent.
+		disbursement, getErr := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
+		if getErr != nil {
+			if errors.Is(getErr, data.ErrRecordNotFound) {
+				httperror.NotFound("disbursement not found", getErr, nil).Render(w)
+				return
+			}
+			httperror.InternalError(ctx, "Cannot get disbursement", getErr, nil).Render(w)
 			return
+		}
+
+		sourceWallet, walletErr := d.Models.DistributionWallets.Get(ctx, d.Models.DBConnectionPool, disbursement.SourceWalletID)
+		if walletErr != nil {
+			httperror.InternalError(ctx, "Cannot get distribution account", walletErr, nil).Render(w)
+			return
+		}
+		if sourceWallet.Address == nil || *sourceWallet.Address == "" {
+			httperror.BadRequest("the disbursement's source wallet has no funded distribution account yet", nil, nil).Render(w)
+			return
+		}
+
+		distributionAccount := schema.TransactionAccount{
+			Address: *sourceWallet.Address,
+			Type:    sourceWallet.AccountType,
+			Status:  sourceWallet.AccountStatus,
 		}
 
 		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, &distributionAccount)
