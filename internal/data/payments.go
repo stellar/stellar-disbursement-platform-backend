@@ -436,6 +436,38 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 	return nil
 }
 
+// CancelAllDraftForDisbursement cancels every DRAFT payment belonging to a disbursement. It's
+// intentionally scoped to DRAFT (rather than going through UpdateStatusByDisbursementID / the
+// general PaymentStatus state machine's CanceledPaymentStatus.SourceStatuses(), which only
+// allows READY -> CANCELED): a disbursement's payments only reach DRAFT before the disbursement
+// itself is ever started, which is exactly the scope for canceling a whole disbursement (DRAFT
+// or READY status; a STARTED disbursement is never canceled this way, and its payments are
+// never DRAFT). Deliberately NOT adding DRAFT -> CANCELED to the general payment state machine
+// keeps the existing single-payment PATCH /payments/{id}/status endpoint's behavior unchanged -
+// it must keep rejecting a DRAFT payment as "not ready to cancel".
+func (p *PaymentModel) CancelAllDraftForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
+	query := `
+		UPDATE payments
+		SET status = $1,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, NULL))
+		WHERE disbursement_id = $2
+		AND status = $3
+	`
+
+	result, err := sqlExec.ExecContext(ctx, query, CanceledPaymentStatus, disbursementID, DraftPaymentStatus)
+	if err != nil {
+		return fmt.Errorf("error canceling draft payments for disbursement %s: %w", disbursementID, err)
+	}
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
+
+	log.Ctx(ctx).Infof("Canceled %d draft payments for disbursement %s", numRowsAffected, disbursementID)
+
+	return nil
+}
+
 var getReadyPaymentsBaseQuery = basePaymentQuery + `
 	WHERE
 		p.status = $1 -- 'READY'::payment_status

@@ -677,6 +677,9 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 	case data.PausedDisbursementStatus:
 		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement paused"
+	case data.CanceledDisbursementStatus:
+		err = d.DisbursementManagementService.CancelDisbursement(ctx, disbursementID, user)
+		response.Message = "Disbursement canceled"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
 	}
@@ -690,6 +693,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementNotReadyToStart.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementNotReadyToPause):
 			httperror.BadRequest(services.ErrDisbursementNotReadyToPause.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementNotReadyToCancel):
+			httperror.BadRequest(services.ErrDisbursementNotReadyToCancel.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStatusCantBeChanged):
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):

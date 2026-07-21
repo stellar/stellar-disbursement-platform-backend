@@ -670,7 +670,7 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 				"status": "invalid_status",
 			},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedResponse:   `{"error":"request invalid", "extras":{"status":"invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed"}}`,
+			expectedResponse:   `{"error":"request invalid", "extras":{"status":"invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed, canceled"}}`,
 		},
 		{
 			name: "returns error when created_at_after is invalid",
@@ -2140,6 +2140,72 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotReadyToPause.Error())
+	})
+
+	t.Run("disbursement canceled", func(t *testing.T) {
+		authManagerMock.
+			On("GetUserByID", mock.Anything, userID).
+			Return(user, nil).
+			Once()
+
+		cancelableDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:   "disbursement to cancel",
+			Status: data.ReadyDisbursementStatus,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   cancelableDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
+		})
+
+		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", cancelableDisbursement.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Contains(t, rr.Body.String(), "Disbursement canceled")
+
+		disbursement, err := handler.Models.Disbursements.Get(context.Background(), models.DBConnectionPool, cancelableDisbursement.ID)
+		require.NoError(t, err)
+		require.Equal(t, data.CanceledDisbursementStatus, disbursement.Status)
+
+		gotPayment, err := handler.Models.Payment.Get(context.Background(), payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		require.Equal(t, data.CanceledPaymentStatus, gotPayment.Status)
+	})
+
+	t.Run("disbursement can't be canceled", func(t *testing.T) {
+		authManagerMock.
+			On("GetUserByID", mock.Anything, userID).
+			Return(user, nil).
+			Once()
+
+		startedForCancelAttempt := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:   "started disbursement can't be canceled",
+			Status: data.StartedDisbursementStatus,
+		})
+
+		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", startedForCancelAttempt.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotReadyToCancel.Error())
 	})
 
 	t.Run("disbursement status can't be changed", func(t *testing.T) {

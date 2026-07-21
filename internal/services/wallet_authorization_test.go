@@ -82,19 +82,37 @@ func Test_WalletScopedAuthorization(t *testing.T) {
 		sErr := svc.StartDisbursement(ctx, disbursementFromB.ID, approverOnA, nil)
 		require.ErrorIs(t, sErr, ErrWalletActionForbidden)
 
+		// A separate, not-yet-started disbursement sourced from wallet B, to exercise cancel.
+		cancelableFromB := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:           "authz-cancelable-disbursement-from-b",
+			Status:         data.ReadyDisbursementStatus,
+			SourceWalletID: walletBID,
+		})
+
+		// …or cancel it (gate fires before any transition logic here too).
+		cErr := svc.CancelDisbursement(ctx, cancelableFromB.ID, approverOnA)
+		require.ErrorIs(t, cErr, ErrWalletActionForbidden)
+
 		// State unchanged.
 		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, disbursementFromB.ID)
 		require.NoError(t, gErr)
 		assert.Equal(t, data.StartedDisbursementStatus, got.Status)
+		got, gErr = models.Disbursements.Get(ctx, dbConnectionPool, cancelableFromB.ID)
+		require.NoError(t, gErr)
+		assert.Equal(t, data.ReadyDisbursementStatus, got.Status)
 
-		// Explicit grant on B unlocks the action: pause now succeeds fully.
+		// Explicit grant on B unlocks the action: pause and cancel now succeed fully.
 		_, mErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, approverOnA.ID, walletBID, data.ApproverUserRole, nil)
 		require.NoError(t, mErr)
 		require.NoError(t, svc.PauseDisbursement(ctx, disbursementFromB.ID, approverOnA))
+		require.NoError(t, svc.CancelDisbursement(ctx, cancelableFromB.ID, approverOnA))
 
 		got, gErr = models.Disbursements.Get(ctx, dbConnectionPool, disbursementFromB.ID)
 		require.NoError(t, gErr)
 		assert.Equal(t, data.PausedDisbursementStatus, got.Status)
+		got, gErr = models.Disbursements.Get(ctx, dbConnectionPool, cancelableFromB.ID)
+		require.NoError(t, gErr)
+		assert.Equal(t, data.CanceledDisbursementStatus, got.Status)
 	})
 
 	t.Run("owner is tenant-wide on every wallet's transitions", func(t *testing.T) {

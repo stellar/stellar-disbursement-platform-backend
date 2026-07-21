@@ -40,10 +40,11 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound        = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
+	ErrDisbursementNotFound         = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart  = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause  = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementNotReadyToCancel = errors.New("disbursement is not ready to be canceled")
+	ErrDisbursementWalletDisabled   = errors.New("disbursement wallet is disabled")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
@@ -414,6 +415,68 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 			"actor_user_id":   user.ID,
 		}); err != nil {
 			return fmt.Errorf("writing disbursement.paused event: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// CancelDisbursement cancels a disbursement that hasn't been started yet (DRAFT or READY) and
+// all of its payments, releasing any capacity the payments would otherwise reserve against the
+// source wallet's balance. Once a disbursement is STARTED, real on-chain submissions may already
+// be in flight, so this transition is intentionally not offered from STARTED/PAUSED - PauseDisbursement
+// is the correct action there instead.
+func (s *DisbursementManagementService) CancelDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		disbursement, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return ErrDisbursementNotFound
+			} else {
+				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
+			}
+		}
+
+		// 0. Wallet-scoped authorization: canceling requires a qualifying role on the
+		// disbursement's source wallet. Owners are tenant-wide.
+		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
+			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
+			return err
+		}
+
+		// 1. Verify Transition is Possible
+		err = disbursement.Status.TransitionTo(data.CanceledDisbursementStatus)
+		if err != nil {
+			return ErrDisbursementNotReadyToCancel
+		}
+
+		// 2. Cancel all of the disbursement's payments. Since it's never been started, they are
+		// all in DRAFT status - see CancelAllDraftForDisbursement for why this doesn't go through
+		// the general payment state machine (which only allows READY -> CANCELED, used by the
+		// single-payment PATCH /payments/{id}/status endpoint).
+		err = s.Models.Payment.CancelAllDraftForDisbursement(ctx, dbTx, disbursementID)
+		if err != nil {
+			return fmt.Errorf("error updating payment status to canceled for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// 3. Update disbursement status to `canceled`
+		err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.CanceledDisbursementStatus)
+		if err != nil {
+			return fmt.Errorf("error updating disbursement status to canceled for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// Outbox: a canceled disbursement is a rejected one (same category DeleteDisbursement
+		// already uses for a deleted draft) - there is no dedicated "canceled" event type in the
+		// frozen v1 event-type list (internal/events/events.go), and adding one is explicitly
+		// called out there as "a spec change order". Reusing DisbursementRejected with a distinct
+		// "reason" keeps this within the existing contract; see ACTION-ITEMS.md for the write-up.
+		if err = events.Write(ctx, dbTx, events.DisbursementRejected, disbursement.SourceWalletID, map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"actor_user_id":   user.ID,
+			"reason":          "canceled",
+		}); err != nil {
+			return fmt.Errorf("writing disbursement.rejected event: %w", err)
 		}
 
 		return nil

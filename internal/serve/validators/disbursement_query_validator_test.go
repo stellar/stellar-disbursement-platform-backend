@@ -34,7 +34,7 @@ func Test_DisbursementQueryValidator_ValidateDisbursementFilters(t *testing.T) {
 		validator.ValidateAndGetDisbursementFilters(filters)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed", validator.Errors["status"])
+		assert.Equal(t, "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed, canceled", validator.Errors["status"])
 	})
 
 	t.Run("Invalid date", func(t *testing.T) {
@@ -70,7 +70,7 @@ func Test_DisbursementQueryValidator_ValidateDisbursementFilters(t *testing.T) {
 func Test_DisbursementQueryValidator_ValidateAndGetDisbursementStatuses(t *testing.T) {
 	t.Run("Valid status", func(t *testing.T) {
 		validator := NewDisbursementQueryValidator()
-		validStatus := []data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus, data.StartedDisbursementStatus, data.PausedDisbursementStatus, data.CompletedDisbursementStatus}
+		validStatus := []data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus, data.StartedDisbursementStatus, data.PausedDisbursementStatus, data.CompletedDisbursementStatus, data.CanceledDisbursementStatus}
 		for _, status := range validStatus {
 			assert.Equal(t, []data.DisbursementStatus{status}, validator.validateAndGetDisbursementStatuses(string(status)))
 		}
@@ -83,7 +83,7 @@ func Test_DisbursementQueryValidator_ValidateAndGetDisbursementStatuses(t *testi
 		actual := validator.validateAndGetDisbursementStatuses(invalidStatus)
 		assert.Empty(t, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed", validator.Errors["status"])
+		assert.Equal(t, "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed, canceled", validator.Errors["status"])
 	})
 
 	t.Run("mix of valid and invalid statuses", func(t *testing.T) {
@@ -94,7 +94,7 @@ func Test_DisbursementQueryValidator_ValidateAndGetDisbursementStatuses(t *testi
 		assert.Equal(t, 1, len(actual))
 		assert.Equal(t, []data.DisbursementStatus{data.DraftDisbursementStatus}, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed", validator.Errors["status"])
+		assert.Equal(t, "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed, canceled", validator.Errors["status"])
 	})
 
 	t.Run("valid comma separated list of statuses", func(t *testing.T) {
