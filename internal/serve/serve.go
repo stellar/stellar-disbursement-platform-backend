@@ -55,6 +55,14 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 	supporthttp.Run(conf)
 }
 
+// LogFlusher is implemented by an optional log-shipping side-channel (e.g.
+// the Loki hook in internal/observability) so this package can flush any
+// buffered-but-not-yet-sent log entries during a graceful shutdown without
+// needing to import that concrete type.
+type LogFlusher interface {
+	Close() error
+}
+
 type ServeOptions struct {
 	Environment                    string
 	GitCommit                      string
@@ -96,6 +104,10 @@ type ServeOptions struct {
 	DisableMFA                     bool
 	DisableReCAPTCHA               bool
 	PasswordValidator              *authUtils.PasswordValidator
+	// LogShippingHook, if set, is flushed during graceful shutdown so
+	// in-flight buffered logs destined for the Loki shipping side-channel
+	// aren't lost. Nil when log shipping (LOG_SHIPPING_URL) isn't configured.
+	LogShippingHook LogFlusher
 
 	tenantManager               tenant.ManagerInterface
 	DistributionAccountService  services.DistributionAccountServiceInterface
@@ -329,6 +341,14 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 			}
 
 			log.Info("Stopping SDP (Stellar Disbursement Platform) Server")
+
+			// Flush the log-shipping side-channel last, so this "Stopping..."
+			// line itself has a chance to reach Loki before the process exits.
+			if opts.LogShippingHook != nil {
+				if flushErr := opts.LogShippingHook.Close(); flushErr != nil {
+					log.Errorf("error flushing log shipping hook: %v", flushErr)
+				}
+			}
 		},
 	}
 	httpServer.Run(serverConfig)

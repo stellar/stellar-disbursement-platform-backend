@@ -10,11 +10,42 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/observability"
 )
 
 // globalOptions is a variable that holds the global CLI options that can be
 // applied to any command or subcommand.
 var globalOptions cmdUtils.GlobalOptionsType
+
+// lokiHook is the process-wide Loki log-shipping hook, non-nil only when
+// LOG_SHIPPING_URL is set. It's populated once by registerLogShippingHook
+// (called from rootCmd's PersistentPreRun, right alongside where LOG_LEVEL is
+// applied) and read by the "serve" subcommand so it can be flushed on
+// graceful shutdown -- see ServeCommand.Command in cmd/serve.go.
+var lokiHook *observability.LokiHook
+
+// registerLogShippingHook wires the app's logs to also ship directly to a
+// Loki-compatible HTTP push endpoint (e.g. a Grafana Alloy loki.source.api
+// receiver reachable over Railway's private network), bypassing Railway's
+// stdout capture entirely. This matters because Railway has no log-drain /
+// log-forwarding feature of its own (per Railway's docs), so without this the
+// structured fields the app already logs (payment_id, wallet_id, Horizon
+// error codes, ...) never reach Grafana/Loki in production.
+//
+// It's a no-op when globalOptions.LogShippingURL is empty, which is the
+// default -- local dev and any deployment that doesn't set LOG_SHIPPING_URL
+// are completely unaffected.
+func registerLogShippingHook() {
+	if globalOptions.LogShippingURL == "" || lokiHook != nil {
+		return
+	}
+
+	lokiHook = observability.NewLokiHook(observability.LokiHookConfig{
+		PushURL: globalOptions.LogShippingURL,
+	})
+	log.DefaultLogger.AddHook(lokiHook)
+	log.Infof("Log shipping enabled: streaming structured logs to %s", globalOptions.LogShippingURL)
+}
 
 func rootCmd() *cobra.Command {
 	configOpts := config.ConfigOptions{
@@ -32,6 +63,15 @@ func rootCmd() *cobra.Command {
 			Usage:     "The DSN (client key) of the Sentry project. If not provided, Sentry will not be used.",
 			OptType:   types.String,
 			ConfigKey: &globalOptions.SentryDSN,
+			Required:  false,
+		},
+		{
+			Name: "log-shipping-url",
+			Usage: "The Loki-compatible push endpoint (e.g. a Grafana Alloy loki.source.api receiver) that " +
+				"structured logs are shipped to directly over HTTP, in addition to normal stdout logging. " +
+				"If not provided, log shipping is disabled.",
+			OptType:   types.String,
+			ConfigKey: &globalOptions.LogShippingURL,
 			Required:  false,
 		},
 		{
@@ -89,6 +129,8 @@ func rootCmd() *cobra.Command {
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
 			}
+
+			registerLogShippingHook()
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
