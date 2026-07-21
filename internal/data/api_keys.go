@@ -196,6 +196,30 @@ func (a *APIKey) IsExpired() bool {
 	return time.Now().UTC().After(*a.ExpiryDate)
 }
 
+// VerifySecret reports whether secret is the raw secret that hashes (with this
+// key's stored salt) to this key's stored KeyHash. Used both for the initial
+// DB-backed validation and for re-checking a cache-hit APIKey without a DB round trip.
+func (a *APIKey) VerifySecret(secret string) bool {
+	h := sha256.New()
+	h.Write([]byte(a.Salt))
+	h.Write([]byte(secret))
+	computed := hex.EncodeToString(h.Sum(nil))
+	return subtle.ConstantTimeCompare([]byte(computed), []byte(a.KeyHash)) == 1
+}
+
+// ParseRawAPIKey splits a raw "SDP_<id>.<secret>" bearer token into its ID and secret parts.
+func ParseRawAPIKey(raw string) (id, secret string, err error) {
+	if !strings.HasPrefix(raw, APIKeyPrefix) {
+		return "", "", fmt.Errorf("invalid API key prefix")
+	}
+	payload := raw[len(APIKeyPrefix):]
+	parts := strings.Split(payload, ".")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid API key format")
+	}
+	return parts[0], parts[1], nil
+}
+
 // IsAllowedIP checks if an IP falls within AllowedIPs (or none means open)
 func (a *APIKey) IsAllowedIP(ipStr string) bool {
 	if len(a.AllowedIPs) == 0 {
@@ -359,17 +383,11 @@ func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKe
 
 // ValidateRawKeyAndUpdateLastUsed validates an API key and updates last_used_at in a single DB call
 func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw string) (*APIKey, error) {
-	if !strings.HasPrefix(raw, APIKeyPrefix) {
-		return nil, fmt.Errorf("invalid API key prefix")
-	}
-
 	// 1) Strip prefix and split into "<id>.<secret>"
-	payload := raw[len(APIKeyPrefix):]
-	parts := strings.Split(payload, ".")
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid API key format")
+	id, secret, err := ParseRawAPIKey(raw)
+	if err != nil {
+		return nil, err
 	}
-	id, secret := parts[0], parts[1]
 
 	result, err := db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(tx db.DBTransaction) (*APIKey, error) {
 		// 2) Fetch data and update last_used_at
@@ -397,11 +415,7 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 		}
 
 		// 3) Verify hash
-		h := sha256.New()
-		h.Write([]byte(a.Salt))
-		h.Write([]byte(secret))
-		computed := hex.EncodeToString(h.Sum(nil))
-		if subtle.ConstantTimeCompare([]byte(computed), []byte(a.KeyHash)) != 1 {
+		if !a.VerifySecret(secret) {
 			return nil, fmt.Errorf("invalid API key")
 		}
 

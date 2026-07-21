@@ -487,6 +487,103 @@ func Test_handleHTTP_APIKeySpecificPermissions(t *testing.T) {
 	}
 }
 
+// Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately reproduces (and
+// guards against regressing) a bug where the API-key auth cache kept serving a
+// key's pre-PATCH permissions/allowed_ips: a revoked scope kept being accepted
+// and a newly-granted one kept being rejected, for as long as the cache entry's
+// TTL window lasted, unless the exact same PATCH was resubmitted a second time.
+//
+// This exercises the real, fully-wired mux (handleHTTP) so the PATCH goes
+// through the same APIKeyAuthenticator instance that authenticates every other
+// request - a test that only called the model/handler layer directly could not
+// have caught the missing cache invalidation.
+func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) {
+	res := setupAPIKeyTestResources(t)
+
+	authMock := &auth.AuthManagerMock{}
+	usr := &auth.User{ID: res.TestUserID, Email: "inquisitor.fiscus@ordo-hereticus.gov", IsOwner: true}
+	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
+
+	monitorMock := monitorMocks.NewMockMonitorService(t)
+	monitorMock.
+		On("MonitorCounters", mock.Anything, mock.AnythingOfType("map[string]string")).
+		Return(nil).
+		Maybe()
+	monitorMock.
+		On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mock.AnythingOfType("monitor.HTTPRequestLabels")).
+		Return(nil).
+		Maybe()
+
+	mux := createHandler(t, res, authMock, monitorMock)
+
+	// adminKey only exists to authenticate the PATCH call itself. In production
+	// this would be an owner's JWT session; an API key with WriteAll satisfies
+	// the same RequirePermission check and keeps this test self-contained.
+	adminKey := createTestAPIKey(t, res.DBPool, "Ordo Fiscus Admin Key",
+		[]data.APIKeyPermission{data.WriteAll}, nil, 30, res.TestUserID)
+
+	// The key under test: starts with read:statistics only, and an allowed_ips
+	// restriction that will be reverted back to its original value later.
+	targetKey := createTestAPIKey(t, res.DBPool, "Rotatable Munitorum Key",
+		[]data.APIKeyPermission{data.ReadStatistics}, []string{"192.168.1.0"}, 30, res.TestUserID)
+
+	// Sanity check before any PATCH: granted scope works, ungranted scope doesn't.
+	resp := executeRequest(t, mux, http.MethodGet, "/statistics", nil, targetKey.Key)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "granted read:statistics should work before the PATCH")
+
+	resp = executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode, "not-yet-granted read:receivers should be rejected before the PATCH")
+
+	t.Run("permission change enforced on the very next request", func(t *testing.T) {
+		// Revoke read:statistics, grant read:receivers instead - in a single PATCH.
+		patchResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
+			"permissions": []string{"read:receivers"},
+			"allowed_ips": []string{"192.168.1.0"},
+		}, adminKey.Key)
+		body, readErr := io.ReadAll(patchResp.Body)
+		require.NoError(t, readErr)
+		require.Equal(t, http.StatusOK, patchResp.StatusCode, "PATCH /api-keys/%s failed: %s", targetKey.ID, string(body))
+
+		// No sleep, no retry, no second identical PATCH: the very next request
+		// using this exact key must already reflect the change.
+		oldScopeResp := executeRequest(t, mux, http.MethodGet, "/statistics", nil, targetKey.Key)
+		assert.Equal(t, http.StatusForbidden, oldScopeResp.StatusCode,
+			"revoked read:statistics must be rejected on the very next request, not after a cache TTL window or a duplicate PATCH")
+
+		newScopeResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+		assert.Equal(t, http.StatusOK, newScopeResp.StatusCode,
+			"newly granted read:receivers must be accepted on the very next request")
+	})
+
+	t.Run("allowed_ips revert enforced on the very next request", func(t *testing.T) {
+		// Tighten the allowlist to an IP that won't match the test's RemoteAddr...
+		tightenResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
+			"permissions": []string{"read:receivers"},
+			"allowed_ips": []string{"10.10.10.10"},
+		}, adminKey.Key)
+		require.Equal(t, http.StatusOK, tightenResp.StatusCode)
+
+		blockedResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+		require.Equal(t, http.StatusForbidden, blockedResp.StatusCode,
+			"the tightened allowed_ips must be enforced on the very next request")
+
+		// ...then immediately revert it back to the original value. This is the
+		// exact "revert to original value" case from the live repro: a second,
+		// different-looking PATCH, not a duplicate of the previous one.
+		revertResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
+			"permissions": []string{"read:receivers"},
+			"allowed_ips": []string{"192.168.1.0"},
+		}, adminKey.Key)
+		require.Equal(t, http.StatusOK, revertResp.StatusCode)
+
+		// No sleep, no duplicate PATCH: access from the original, now-restored IP
+		// must work again immediately.
+		restoredResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+		assert.Equal(t, http.StatusOK, restoredResp.StatusCode,
+			"the reverted allowed_ips must be enforced on the very next request, not after a cache TTL window or a duplicate PATCH")
+	})
+}
+
 func createTestReceiver(t *testing.T, dbPool db.DBConnectionPool) (*data.Receiver, error) {
 	t.Helper()
 

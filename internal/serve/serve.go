@@ -386,8 +386,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Authenticated Routes
 	authManager := o.authManager
+	// Constructed once and shared between the API-key auth middleware and the API
+	// key management handler below, so that PATCH/DELETE on /api-keys/{id} can
+	// evict the exact cache entry it just changed (see APIKeyAuthenticator.Invalidate).
+	apiKeyAuthenticator := middleware.NewAPIKeyAuthenticator(o.Models.APIKeys)
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.APIKeyOrJWTAuthenticate(o.Models.APIKeys, middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
+		r.Use(apiKeyAuthenticator.Middleware(middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
 		r.Use(middleware.EnsureTenantMiddleware)
 
 		// API Key management endpoints
@@ -396,7 +400,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 		)).Route("/api-keys", func(r chi.Router) {
 			apiKeyHandler := httphandler.APIKeyHandler{
-				Models: o.Models,
+				Models:           o.Models,
+				CacheInvalidator: apiKeyAuthenticator,
 			}
 			r.Get("/{id}", apiKeyHandler.GetAPIKeyByID)
 			r.Get("/", apiKeyHandler.GetAllAPIKeys)

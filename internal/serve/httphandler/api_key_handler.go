@@ -16,8 +16,19 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 )
 
+// APIKeyCacheInvalidator is implemented by whatever caches validated API keys in
+// front of the DB (see middleware.APIKeyAuthenticator). It lets this handler force
+// an immediate cache eviction whenever it changes a key's permissions/allowed_ips
+// or deletes the key outright, so the change is enforced on the very next request.
+type APIKeyCacheInvalidator interface {
+	Invalidate(id string)
+}
+
 type APIKeyHandler struct {
 	Models *data.Models
+	// CacheInvalidator is optional. If nil, no cache invalidation is attempted
+	// (e.g. in tests that exercise the handler without the auth middleware's cache).
+	CacheInvalidator APIKeyCacheInvalidator
 }
 
 type CreateAPIKeyRequest struct {
@@ -174,6 +185,13 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The permissions/allowed_ips just written must be enforced on the very next
+	// request that uses this key, not whenever the auth cache's TTL happens to
+	// expire - so evict it now.
+	if h.CacheInvalidator != nil {
+		h.CacheInvalidator.Invalidate(keyID)
+	}
+
 	httpjson.RenderStatus(w, http.StatusOK, updated, httpjson.JSON)
 }
 
@@ -194,6 +212,12 @@ func (h APIKeyHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 			httperror.InternalError(ctx, "Failed to delete API key", err, nil).Render(w)
 		}
 		return
+	}
+
+	// A deleted key must stop working on the very next request too - a cached,
+	// pre-delete validation result must not keep authorizing it.
+	if h.CacheInvalidator != nil {
+		h.CacheInvalidator.Invalidate(keyID)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
