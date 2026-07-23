@@ -27,11 +27,18 @@ import (
 const apiKeyCacheTTL = 10 * time.Second
 
 // APIKeyAuthenticator authenticates SDP_-prefixed bearer tokens and caches
-// validated keys (keyed by API key ID, never by the raw secret) so most
-// requests avoid a DB round trip. Callers that mutate an API key's
-// permissions, allowed IPs, or existence (update/delete) MUST call
-// Invalidate(id) as part of that operation, or the cache can keep
-// authorizing requests against the stale, pre-change permission set.
+// validated keys - keyed by "<tenant ID>:<API key ID>", never by the raw
+// secret and never by ID alone - so most requests avoid a DB round trip.
+// Tenant-scoping the cache key prevents a raw key that is only valid for one
+// tenant's schema from being served out of a cache entry warmed by a
+// different tenant's context: the request's tenant comes from the
+// attacker-controlled SDP-Tenant-Name header, so without this scoping a
+// replayed key could ride another tenant's cached validation and bypass the
+// schema-scoped DB lookup that is the sole mechanism binding a key to its
+// tenant. Callers that mutate an API key's permissions, allowed IPs, or
+// existence (update/delete) MUST call Invalidate(ctx, id) as part of that
+// operation, or the cache can keep authorizing requests against the stale,
+// pre-change permission set.
 type APIKeyAuthenticator struct {
 	model *data.APIKeyModel
 	cache *ristretto.Cache
@@ -57,50 +64,81 @@ func NewAPIKeyAuthenticator(model *data.APIKeyModel) *APIKeyAuthenticator {
 	}
 }
 
-// Invalidate evicts any cached validation result for the API key with the given ID.
-// It must be called whenever that key's permissions or allowed_ips are updated, or
-// when the key is deleted, so the very next request using it is forced to re-fetch
-// current authorization data from the DB instead of serving a stale cache hit.
-func (a *APIKeyAuthenticator) Invalidate(id string) {
+// cacheKeyFor builds the tenant-scoped cache key for the API key with the
+// given ID, using the tenant resolved from ctx. ok is false (and key empty)
+// when the tenant can't be resolved, in which case the cache must not be
+// consulted at all - see validate for why.
+func cacheKeyFor(ctx context.Context, id string) (key string, ok bool) {
+	tenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil || tenant == nil || tenant.ID == "" {
+		return "", false
+	}
+	return tenant.ID + ":" + id, true
+}
+
+// Invalidate evicts any cached validation result for the API key with the
+// given ID, scoped to the tenant resolved from ctx (the same tenant the
+// request that is updating/deleting the key is itself running under). It
+// must be called whenever that key's permissions or allowed_ips are updated,
+// or when the key is deleted, so the very next request using it is forced to
+// re-fetch current authorization data from the DB instead of serving a stale
+// cache hit.
+func (a *APIKeyAuthenticator) Invalidate(ctx context.Context, id string) {
 	if a == nil || a.cache == nil {
 		return
 	}
-	a.cache.Del(id)
+	if cacheKey, ok := cacheKeyFor(ctx, id); ok {
+		a.cache.Del(cacheKey)
+	}
 }
 
 func (a *APIKeyAuthenticator) validate(ctx context.Context, rawKey string) (*data.APIKey, error) {
-	if a.cache == nil {
+	// The cache is keyed by "<tenant ID>:<API key ID>" rather than the raw
+	// secret:
+	//  - Tenant-scoping closes a cross-tenant cache-poisoning hole (see the
+	//    type doc above): without it, a key cached while serving tenant A
+	//    could be replayed under tenant B's name and served straight out of
+	//    cache, bypassing the schema-scoped DB lookup that binds a key to
+	//    its tenant.
+	//  - Keying on the ID (not the secret) is what lets the /api-keys/{id}
+	//    update/delete handlers evict exactly this entry: the raw secret is
+	//    never persisted after creation, so those handlers have no way to
+	//    derive it, only the ID.
+	// The secret is still verified against the cached hash on every request
+	// (cache hit or not), so a cache hit never skips authentication - it
+	// only skips the DB round trip.
+	id, secret, parseErr := data.ParseRawAPIKey(rawKey)
+
+	var cacheKey string
+	cacheable := false
+	if parseErr == nil {
+		cacheKey, cacheable = cacheKeyFor(ctx, id)
+	}
+
+	if a.cache == nil || !cacheable {
 		apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 		if err != nil {
-			return nil, fmt.Errorf("validating API key (cacheless) %w", err)
+			return nil, fmt.Errorf("validating API key (cacheless): %w", err)
 		}
 		return apiKey, nil
 	}
 
-	// The cache is keyed by API key ID rather than the raw secret: the ID is
-	// stable and known to the /api-keys/{id} update/delete handlers, which lets
-	// them evict exactly this entry. The secret itself is still verified against
-	// the cached hash on every request (cache hit or not), so a cache hit never
-	// skips authentication - it only skips the DB round trip.
-	id, secret, parseErr := data.ParseRawAPIKey(rawKey)
-	if parseErr == nil {
-		if cached, found := a.cache.Get(id); found {
-			if apiKey, ok := cached.(*data.APIKey); ok &&
-				!apiKey.IsExpired() &&
-				apiKey.VerifySecret(secret) {
-				return apiKey, nil
-			}
-			a.cache.Del(id)
+	if cached, found := a.cache.Get(cacheKey); found {
+		if apiKey, ok := cached.(*data.APIKey); ok &&
+			!apiKey.IsExpired() &&
+			apiKey.VerifySecret(secret) {
+			return apiKey, nil
 		}
+		a.cache.Del(cacheKey)
 	}
 
 	apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 	if err != nil {
-		return nil, fmt.Errorf("validating API key %w", err)
+		return nil, fmt.Errorf("validating API key: %w", err)
 	}
 
 	if !apiKey.IsExpired() {
-		a.cache.SetWithTTL(apiKey.ID, apiKey, 1, apiKeyCacheTTL)
+		a.cache.SetWithTTL(cacheKey, apiKey, 1, apiKeyCacheTTL)
 	}
 
 	return apiKey, nil

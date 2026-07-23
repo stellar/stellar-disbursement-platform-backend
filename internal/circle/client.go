@@ -191,7 +191,7 @@ func (client *Client) PostRecipient(ctx context.Context, recipientRequest Recipi
 		return nil, fmt.Errorf("making request: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)
 		if handleErr != nil {
 			return nil, fmt.Errorf("handling API response error: %w", handleErr)

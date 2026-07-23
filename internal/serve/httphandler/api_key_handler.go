@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -20,8 +21,10 @@ import (
 // front of the DB (see middleware.APIKeyAuthenticator). It lets this handler force
 // an immediate cache eviction whenever it changes a key's permissions/allowed_ips
 // or deletes the key outright, so the change is enforced on the very next request.
+// ctx is passed through so the invalidator can scope the cache entry to the
+// request's tenant, matching how it was originally cached.
 type APIKeyCacheInvalidator interface {
-	Invalidate(id string)
+	Invalidate(ctx context.Context, id string)
 }
 
 type APIKeyHandler struct {
@@ -189,7 +192,7 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	// request that uses this key, not whenever the auth cache's TTL happens to
 	// expire - so evict it now.
 	if h.CacheInvalidator != nil {
-		h.CacheInvalidator.Invalidate(keyID)
+		h.CacheInvalidator.Invalidate(ctx, keyID)
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, updated, httpjson.JSON)
@@ -217,7 +220,7 @@ func (h APIKeyHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	// A deleted key must stop working on the very next request too - a cached,
 	// pre-delete validation result must not keep authorizing it.
 	if h.CacheInvalidator != nil {
-		h.CacheInvalidator.Invalidate(keyID)
+		h.CacheInvalidator.Invalidate(ctx, keyID)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

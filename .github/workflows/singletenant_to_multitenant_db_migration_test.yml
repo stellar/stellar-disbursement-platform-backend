@@ -30,7 +30,7 @@ jobs:
     environment: "Receiver Registration - E2E Integration Tests (Stellar)"
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Cleanup data
         working-directory: internal/integrationtests/docker
