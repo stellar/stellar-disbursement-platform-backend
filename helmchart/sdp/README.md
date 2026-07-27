@@ -411,3 +411,27 @@ Configuration parameters for the Dashboard. This is the user interface administr
 | `dashboard.httpRoute.gateway.listeners[0].port`     | Listener port.                                                                                                                                                                                                                                                                              | `80`                                                   |
 | `dashboard.httpRoute.gateway.annotations`           | Extra annotations added to the Gateway object.                                                                                                                                                                                                                                              | `{}`                                                   |
 | `dashboard.httpRoute.gateway.labels`                | Extra labels added to the Gateway object.                                                                                                                                                                                                                                                   | `{}`                                                   |
+
+### Observability
+
+Optional Prometheus/Grafana wiring for scraping the SDP + TSS metrics endpoints.
+The metrics Services (SDP port `metrics`/8002, TSS port `metrics`/9002) are always
+published, but nothing is scraped or provisioned until one of the flags below is
+enabled. Every flag defaults to OFF so existing installs are unaffected, and the
+hosting choice (Prometheus Operator vs. annotation-based scrape vs. external stack)
+is intentionally left open.
+
+| Name                                 | Description                                                                                                                                                                           | Value      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `serviceMonitor`                     | Prometheus-Operator ServiceMonitor for the SDP + TSS metrics ports. Requires the monitoring.coreos.com/v1 CRDs to be installed in the cluster.                                        |            |
+| `serviceMonitor.enabled`             | If true, render a ServiceMonitor selecting the SDP and TSS metrics Services.                                                                                                          | `false`    |
+| `serviceMonitor.interval`            | Scrape interval for the metrics endpoints.                                                                                                                                            | `30s`      |
+| `serviceMonitor.scrapeTimeout`       | Per-scrape timeout. Must be less than or equal to the interval.                                                                                                                       | `10s`      |
+| `serviceMonitor.path`                | HTTP path that exposes Prometheus metrics on the metrics port.                                                                                                                        | `/metrics` |
+| `serviceMonitor.additionalLabels`    | Extra labels for the ServiceMonitor metadata. Many Operator installs only discover ServiceMonitors carrying a specific release label (e.g. `release: kube-prometheus-stack`).         | `{}`       |
+| `metricsScrapeAnnotations`           | Annotation-based scraping for plain (non-Operator) Prometheus setups that rely on kubernetes_sd pod discovery.                                                                        |            |
+| `metricsScrapeAnnotations.enabled`   | If true, inject `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` annotations onto the SDP + TSS pods.                                                            | `false`    |
+| `metricsScrapeAnnotations.path`      | HTTP path advertised via the `prometheus.io/path` annotation.                                                                                                                         | `/metrics` |
+| `grafanaDashboards`                  | Provision the committed Grafana dashboards (resources/grafana/*.json, vendored under the chart's dashboards/ directory) as a ConfigMap for the kube-prometheus-stack Grafana sidecar. |            |
+| `grafanaDashboards.enabled`          | If true, create a ConfigMap labeled `grafana_dashboard: "1"` embedding the vendored dashboard JSON files.                                                                             | `false`    |
+| `grafanaDashboards.additionalLabels` | Extra labels for the dashboards ConfigMap (e.g. a sidecar folder label).                                                                                                              | `{}`       |

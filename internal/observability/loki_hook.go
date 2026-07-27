@@ -300,7 +300,11 @@ func (h *LokiHook) send(ctx context.Context, batch []logLine) {
 		return
 	}
 
-	payload := h.buildPayload(batch)
+	payload, err := h.buildPayload(batch)
+	if err != nil {
+		h.warnSendFailure(fmt.Errorf("marshaling loki payload: %w", err))
+		return
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.cfg.PushURL, bytes.NewReader(payload))
 	if err != nil {
@@ -314,8 +318,15 @@ func (h *LokiHook) send(ctx context.Context, batch []logLine) {
 		h.warnSendFailure(err)
 		return
 	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body) // drain for connection reuse
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			h.warnSendFailure(fmt.Errorf("closing loki response body: %w", closeErr))
+		}
+	}()
+
+	if _, copyErr := io.Copy(io.Discard, resp.Body); copyErr != nil { // drain for connection reuse
+		h.warnSendFailure(fmt.Errorf("draining loki response body: %w", copyErr))
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		h.warnSendFailure(fmt.Errorf("loki push endpoint returned status %d", resp.StatusCode))
@@ -360,7 +371,7 @@ type lokiStream struct {
 //     the life of this product (new NGOs onboard over time), so it does not
 //     have the "small and bounded" property that makes wallet_id safe to
 //     promote. It stays in the log line body only.
-func (h *LokiHook) buildPayload(batch []logLine) []byte {
+func (h *LokiHook) buildPayload(batch []logLine) ([]byte, error) {
 	streamsByLevel := make(map[string]*lokiStream, 8)
 	order := make([]string, 0, 8)
 
@@ -384,11 +395,11 @@ func (h *LokiHook) buildPayload(batch []logLine) []byte {
 		req.Streams = append(req.Streams, *streamsByLevel[level])
 	}
 
-	// Marshaling a well-formed static struct; an error here would be a bug in
-	// this file, not a runtime/network condition, so there's nothing useful
-	// to do with it besides ship an (empty-streams) request.
-	b, _ := json.Marshal(req)
-	return b
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 func (h *LokiHook) warnSendFailure(err error) {
