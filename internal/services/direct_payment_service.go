@@ -186,7 +186,7 @@ func (s *DirectPaymentService) CreateDirectPayment(
 		}
 
 		// 5. Validate balance
-		if err = s.validateBalance(ctx, dbTx, distributionAccount, asset, req.Amount); err != nil {
+		if err = s.validateBalance(ctx, dbTx, distributionAccount, asset, req.Amount, req.SourceWalletID); err != nil {
 			return err
 		}
 
@@ -329,6 +329,7 @@ func (s *DirectPaymentService) validateBalance(
 	distributionAccount *schema.TransactionAccount,
 	asset *data.Asset,
 	amount string,
+	sourceWalletID string,
 ) error {
 	requestedAmount, err := decimal.NewFromString(amount)
 	if err != nil {
@@ -364,7 +365,7 @@ func (s *DirectPaymentService) validateBalance(
 	}
 
 	// Step 3: Calculate pending amounts and validate sufficient balance
-	totalPending, err := s.calculatePendingAmountForAsset(ctx, dbTx, *asset)
+	totalPending, err := s.calculatePendingAmountForAsset(ctx, dbTx, *asset, sourceWalletID)
 	if err != nil {
 		return fmt.Errorf("calculating pending amounts: %w", err)
 	}
@@ -386,10 +387,15 @@ func (s *DirectPaymentService) calculatePendingAmountForAsset(
 	ctx context.Context,
 	dbTx db.DBTransaction,
 	targetAsset data.Asset,
+	sourceWalletID string,
 ) (decimal.Decimal, error) {
+	// Scoped to this payment's OWN source wallet: pending commitments on other wallets don't
+	// compete for THIS wallet's balance (mirrors disbursement_management_service.go's
+	// validateBalanceForDisbursement).
 	pendingPayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]any{
-			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+			data.FilterKeyStatus:          data.PaymentInProgressStatuses(),
+			data.FilterKeySourceWalletIDs: []string{sourceWalletID},
 		},
 	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {

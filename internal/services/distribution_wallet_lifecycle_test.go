@@ -52,6 +52,10 @@ func Test_DistributionWallet_lifecycle(t *testing.T) {
 		addr := keypair.MustRandom().Address()
 		w, iErr = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, w.ID, addr)
 		require.NoError(t, iErr)
+		// Insert leaves the wallet PENDING (see CreateWallet); this suite is about
+		// archive/promote, which only operate on ACTIVE wallets.
+		w, iErr = models.DistributionWallets.Activate(ctx, dbConnectionPool, w.ID)
+		require.NoError(t, iErr)
 		return w
 	}
 	walletB := insertWallet("wallet-b")
@@ -241,6 +245,8 @@ func Test_DistributionWallet_promotion_reassigns_tenant_account(t *testing.T) {
 	require.NoError(t, err)
 	candidateAddr := keypair.MustRandom().Address()
 	candidate, err = models.DistributionWallets.UpdateAddress(ctx, tenantPool, candidate.ID, candidateAddr)
+	require.NoError(t, err)
+	candidate, err = models.DistributionWallets.Activate(ctx, tenantPool, candidate.ID)
 	require.NoError(t, err)
 
 	readTenantAccount := func() string {

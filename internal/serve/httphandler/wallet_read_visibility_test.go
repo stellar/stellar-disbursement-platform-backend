@@ -70,6 +70,13 @@ func Test_WalletReadVisibility(t *testing.T) {
 	paymentB := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet: receiverWallet, Disbursement: disbursementB, Asset: *disbursementB.Asset, Amount: "10", Status: data.DraftPaymentStatus,
 	})
+	// Direct payment (no disbursement) routed explicitly to wallet B — the case the
+	// COALESCE-to-default-wallet regression missed entirely, since it has no Disbursement
+	// to fall through to.
+	paymentC := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet, Type: data.PaymentTypeDirect, SourceWalletID: walletBID,
+		Asset: *disbursementB.Asset, Amount: "10", Status: data.DraftPaymentStatus,
+	})
 
 	disbursementHandler := DisbursementHandler{
 		Models:      models,
@@ -146,6 +153,18 @@ func Test_WalletReadVisibility(t *testing.T) {
 		rr = doAs(owner.ID, "/payments")
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), paymentB.ID)
+	})
+
+	t.Run("direct payments follow their own explicit source wallet, not the default", func(t *testing.T) {
+		rr := doAs(memberA.ID, "/payments")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.NotContains(t, rr.Body.String(), paymentC.ID, "member A has no membership on wallet B")
+
+		rr = doAs(memberA.ID, fmt.Sprintf("/payments/%s", paymentC.ID))
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+
+		rr = doAs(owner.ID, fmt.Sprintf("/payments/%s", paymentC.ID))
+		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
 	t.Run("member with zero memberships sees nothing", func(t *testing.T) {

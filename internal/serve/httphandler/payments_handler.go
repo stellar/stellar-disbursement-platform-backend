@@ -89,29 +89,16 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
 	if err == nil {
 		// Membership-filtered visibility: 404 outside the caller's scope — existence
-		// is never disclosed. Direct payments inherit default-wallet visibility until .
+		// is never disclosed. payment.SourceWalletID is the payment's own persisted source
+		// wallet (guaranteed non-empty for both disbursement and direct payments).
 		scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
 		if scopeErr != nil {
 			scopeErr.Render(w)
 			return
 		}
-		if scope != nil {
-			sourceWalletID := ""
-			if payment.Disbursement != nil {
-				sourceWalletID = payment.Disbursement.SourceWalletID
-			}
-			if sourceWalletID == "" {
-				defaultWallet, dwErr := p.Models.DistributionWallets.GetDefault(ctx, p.DBConnectionPool)
-				if dwErr != nil {
-					httperror.InternalError(ctx, "Cannot resolve wallet visibility", dwErr, nil).Render(w)
-					return
-				}
-				sourceWalletID = defaultWallet.ID
-			}
-			if !walletInReadScope(scope, sourceWalletID) {
-				httperror.NotFound("payment not found", nil, nil).Render(w)
-				return
-			}
+		if scope != nil && !walletInReadScope(scope, payment.SourceWalletID) {
+			httperror.NotFound("payment not found", nil, nil).Render(w)
+			return
 		}
 	}
 	if err != nil {
@@ -385,13 +372,7 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		ExternalPaymentID: validatedReq.ExternalPaymentID,
 	}
 
-	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "resolving distribution account", err, nil).Render(w)
-		return
-	}
-
-	//  routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
+	// Routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
 	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, p.AuthManager, p.Models,
 		data.FinancialControllerUserRole, data.BusinessUserRole)
 	if walletErr != nil {
@@ -399,6 +380,21 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	serviceReq.SourceWalletID = sourceWallet.ID
+
+	// The balance/trustline check must run against THIS payment's own source wallet, not the
+	// tenant's legacy single distribution account (DistributionAccountFromContext) - on a
+	// multi-wallet tenant those are frequently different accounts, and checking the wrong one
+	// either wrongly blocks a valid payment or (worse) validates against an account with no
+	// relation to the funds actually being spent.
+	if sourceWallet.Address == nil || *sourceWallet.Address == "" {
+		httperror.BadRequest("the source wallet has no funded distribution account yet", nil, nil).Render(w)
+		return
+	}
+	distAccount := schema.TransactionAccount{
+		Address: *sourceWallet.Address,
+		Type:    sourceWallet.AccountType,
+		Status:  sourceWallet.AccountStatus,
+	}
 
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, serviceReq, user, &distAccount)
 	if err != nil {

@@ -672,7 +672,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			total, err := service.calculatePendingAmountForAsset(ctx, tx, *tc.targetAsset)
+			total, err := service.calculatePendingAmountForAsset(ctx, tx, *tc.targetAsset, disbursement.SourceWalletID)
 			require.NoError(t, err)
 
 			assert.True(t, tc.expectedAmount.Equal(total), "expected %s, got %s", tc.expectedAmount.String(), total.String())

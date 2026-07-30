@@ -1649,10 +1649,17 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 	// Shared test DB: normalize to exactly one ACTIVE (default) distribution wallet so the
 	// X-Wallet-Id single-wallet fallback applies (routing covered by its own suite).
-	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	sharedDefaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 	_, err = dbConnectionPool.ExecContext(ctx, `
 		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
 		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+	// PostDirectPayment now builds the transaction account from the resolved source wallet
+	// (not DistributionAccountFromContext, which it no longer calls), so the shared default
+	// wallet needs a real address for subtests that reach the balance/trustline check.
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2",
+		"GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA", sharedDefaultWallet.ID)
 	require.NoError(t, err)
 
 	t.Run("successful direct payment creation", func(t *testing.T) {
@@ -1690,6 +1697,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 		stellarDistAccount := schema.TransactionAccount{
 			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 			Address: distributionAccPubKey,
 		}
 
@@ -1698,8 +1706,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			Email:   "commander.dante@baal.imperium",
 			IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
 
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
 			AccountID: distributionAccPubKey,
@@ -1757,59 +1763,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		horizonClientMock.AssertExpectations(t)
 	})
 
-	t.Run("distribution account resolution fails", func(t *testing.T) {
-		t.Cleanup(func() {
-			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
-		})
-
-		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ADAMANT", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
-		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
-		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-			Email: "dante.invalid.asset@baal.imperium",
-		})
-
-		requestBody := fmt.Sprintf(`{
-			"amount": "100.00",
-			"asset": {"id": %q},
-			"receiver": {"id": %q},
-			"wallet": {"id": %q}
-		}`, asset.ID, receiver.ID, wallet.ID)
-
-		authMock := &auth.AuthManagerMock{}
-		distResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-		distServiceMock := &mocks.MockDistributionAccountService{}
-
-		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID:      "user-test",
-			IsOwner: true,
-		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{}, errors.New("resolution failed"))
-
-		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
-
-		handler := &PaymentsHandler{
-			Models:                      models,
-			DBConnectionPool:            dbConnectionPool,
-			AuthManager:                 authMock,
-			DistributionAccountResolver: distResolverMock,
-			DirectPaymentService:        directPaymentService,
-		}
-		var req *http.Request
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
-			strings.NewReader(requestBody))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
-		rr := httptest.NewRecorder()
-		handler.PostDirectPayment(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		assert.JSONEq(t, `{"error": "resolving distribution account"}`, rr.Body.String())
-	})
-
 	t.Run("asset not found", func(t *testing.T) {
 		t.Cleanup(func() {
 			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
@@ -1834,9 +1787,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			ID:      "user-test",
 			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
 
 		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 
@@ -1893,6 +1843,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 		stellarDistAccount := schema.TransactionAccount{
 			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 			Address: distributionAccPubKey,
 		}
 
@@ -1900,8 +1851,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			ID:      "user-test",
 			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
 
 		// Mock horizon client for trustline validation
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
@@ -1987,9 +1936,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			IsOwner: true,
 		}, nil)
 
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
-
 		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 
 		handler := &PaymentsHandler{
@@ -2050,6 +1996,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 		stellarDistAccount := schema.TransactionAccount{
 			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 			Address: distributionAccPubKey,
 		}
 
@@ -2058,8 +2005,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			Email:   "test@imperium.gov",
 			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
 
 		// Mock horizon client for trustline validation
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
@@ -2145,9 +2090,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 			IsOwner: true,
 		}, nil)
 
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
-
 		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 
 		handler := &PaymentsHandler{
@@ -2181,10 +2123,16 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Shared test DB: normalize to one ACTIVE (default) wallet for the single-wallet fallback.
-	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	sharedDefaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 	_, err = dbConnectionPool.ExecContext(ctx, `
 		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
 		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+	// PostDirectPayment now builds the transaction account from the resolved source wallet, so
+	// it needs a real address before any of these validation-error cases can even be reached.
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2",
+		"GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA", sharedDefaultWallet.ID)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -2205,9 +2153,6 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 		ID: "user-horus", Email: "horus@warmaster.imperium",
 		IsOwner: true,
 	}, nil)
-
-	distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-		schema.TransactionAccount{}, nil)
 
 	directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 

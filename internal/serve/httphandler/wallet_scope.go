@@ -21,6 +21,9 @@ import (
 func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return nil, httperror.Unauthorized("", err, nil)
+		}
 		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
 
@@ -81,6 +84,9 @@ func resolveWalletListScope(ctx context.Context, req *http.Request, authManager 
 func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, walletID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return httperror.Unauthorized("", err, nil)
+		}
 		return httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
 	if err := services.EnsureUserCanActOnWallet(ctx, models.DBConnectionPool, models.WalletMemberships, user, walletID, requiredRoles...); err != nil {
@@ -107,6 +113,9 @@ const XWalletIDHeader = "X-Wallet-Id"
 func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models, requiredRoles ...data.UserRole) (*data.DistributionWallet, *httperror.HTTPError) {
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return nil, httperror.Unauthorized("", err, nil)
+		}
 		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
 
@@ -147,8 +156,8 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 		return nil, httperror.InternalError(ctx, "Cannot authorize wallet action", authzErr, nil)
 	}
 
-	if wallet.Status == data.ArchivedDistributionWalletStatus {
-		return nil, httperror.BadRequest("the wallet is archived and accepts no new disbursements or payments", nil, nil)
+	if wallet.Status != data.ActiveDistributionWalletStatus {
+		return nil, httperror.BadRequest("the wallet is not active and accepts no new disbursements or payments", nil, nil)
 	}
 
 	// Per-wallet observability: wallet_id joins the request's structured-log context.

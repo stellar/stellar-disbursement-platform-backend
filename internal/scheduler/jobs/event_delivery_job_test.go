@@ -2,6 +2,9 @@ package jobs
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -52,7 +55,13 @@ func Test_EventDeliveryJob(t *testing.T) {
 		return id
 	}
 
-	job := NewEventDeliveryJob(models)
+	// Constructed directly (bypassing NewEventDeliveryJob's SSRF-hardened client) so these
+	// subtests can deliver to a local httptest.Server — real production wiring always goes
+	// through NewEventDeliveryJob, which refuses to dial loopback/private addresses.
+	job := &eventDeliveryJob{models: models, httpClient: &http.Client{Timeout: eventDeliveryHTTPTimeout}}
+
+	var webhookSecret string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &webhookSecret, `SELECT webhook_secret FROM organizations LIMIT 1`))
 
 	t.Run("no webhook configured → skipped, untouched", func(t *testing.T) {
 		setWebhook(nil)
@@ -63,9 +72,10 @@ func Test_EventDeliveryJob(t *testing.T) {
 		assert.Zero(t, attempts)
 	})
 
-	t.Run("successful delivery posts the intact envelope and marks delivered", func(t *testing.T) {
+	t.Run("successful delivery posts the intact envelope, signed, and marks delivered", func(t *testing.T) {
 		var received atomic.Int32
 		var lastBody []byte
+		var lastSignature string
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, readErr := io.ReadAll(r.Body)
 			if readErr != nil {
@@ -73,6 +83,7 @@ func Test_EventDeliveryJob(t *testing.T) {
 				return
 			}
 			lastBody = body
+			lastSignature = r.Header.Get("X-SDP-Signature")
 			received.Add(1)
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -91,6 +102,11 @@ func Test_EventDeliveryJob(t *testing.T) {
 		require.NoError(t, json.Unmarshal(lastBody, &envelope))
 		assert.Equal(t, events.WalletCreated, envelope.EventType)
 		assert.Equal(t, wallet.ID, envelope.SourceWalletID)
+
+		mac := hmac.New(sha256.New, []byte(webhookSecret))
+		mac.Write(lastBody)
+		assert.Equal(t, "sha256="+hex.EncodeToString(mac.Sum(nil)), lastSignature,
+			"consumers must be able to verify the delivery actually came from SDP")
 
 		// Idempotence: a second run has nothing to deliver.
 		before := received.Load()
@@ -135,6 +151,44 @@ func Test_EventDeliveryJob(t *testing.T) {
 		assert.False(t, delivered, "a poisoned event must not be delivered even with a healthy webhook")
 		assert.Equal(t, eventDeliveryMaxAttempts, attempts, "a poisoned event must not be retried or incremented past the cap")
 	})
+}
+
+// Test_EventDeliveryJob_SSRFGuard proves the REAL production constructor (NewEventDeliveryJob,
+// not the plain-client bypass the other tests use) actually refuses to dial a loopback address —
+// the concrete SSRF vector a malicious or compromised webhook_url could otherwise exploit to
+// reach internal services.
+func Test_EventDeliveryJob_SSRFGuard(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+
+	var received atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		received.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	_, err = dbConnectionPool.ExecContext(ctx, `UPDATE organizations SET webhook_url = $1`, server.URL)
+	require.NoError(t, err)
+
+	require.NoError(t, events.Write(ctx, dbConnectionPool, events.WalletCreated, wallet.ID, map[string]any{"wallet_id": wallet.ID}))
+
+	job := NewEventDeliveryJob(models)
+	require.NoError(t, job.Execute(ctx))
+
+	assert.Zero(t, received.Load(), "the SSRF guard must refuse to dial a loopback address")
+
+	var attempts int
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &attempts, `SELECT delivery_attempts FROM events ORDER BY created_at DESC LIMIT 1`))
+	assert.Equal(t, 1, attempts, "the blocked attempt must still count toward the poison cap")
 }
 
 // Test_EventDeliveryJob_retention proves the outbox stays bounded: delivered events past the

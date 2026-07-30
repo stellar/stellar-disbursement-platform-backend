@@ -230,6 +230,10 @@ func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.Res
 
 	grantor, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
 		return
 	}
@@ -263,6 +267,10 @@ func (h DistributionWalletsHandler) DeleteDistributionWalletMembership(rw http.R
 
 	revoker, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
 		return
 	}

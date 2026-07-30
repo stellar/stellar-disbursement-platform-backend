@@ -59,6 +59,7 @@ type PatchOrganizationProfileRequest struct {
 	ReceiverRegistrationMessageTemplate *string `json:"receiver_registration_message_template"`
 	OTPMessageTemplate                  *string `json:"otp_message_template"`
 	PrivacyPolicyLink                   *string `json:"privacy_policy_link"`
+	WebhookURL                          *string `json:"webhook_url"`
 	MFADisabled                         *bool   `json:"mfa_disabled"`
 	CAPTCHADisabled                     *bool   `json:"captcha_disabled"`
 	ReceiverInvitationsDisabled         *bool   `json:"receiver_invitations_disabled"`
@@ -164,6 +165,11 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		}
 		validator.CheckError(utils.ValidateURLScheme(*reqBody.PrivacyPolicyLink, schemes...), "privacy_policy_link", "")
 	}
+	if reqBody.WebhookURL != nil && *reqBody.WebhookURL != "" {
+		// Unlike PrivacyPolicyLink, this is a security-sensitive outbound delivery target
+		// carrying a signed payload — https is required unconditionally, even on testnet.
+		validator.CheckError(utils.ValidateURLScheme(*reqBody.WebhookURL, "https"), "webhook_url", "")
+	}
 	if reqBody.ReceiverRegistrationMessageTemplate != nil {
 		validator.CheckError(utils.ValidateNoHTML(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
 		if *reqBody.ReceiverRegistrationMessageTemplate != "" {
@@ -192,6 +198,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		ReceiverInvitationResendIntervalDays: reqBody.ReceiverInvitationResendInterval,
 		PaymentCancellationPeriodDays:        reqBody.PaymentCancellationPeriodDays,
 		PrivacyPolicyLink:                    reqBody.PrivacyPolicyLink,
+		WebhookURL:                           reqBody.WebhookURL,
 		MFADisabled:                          reqBody.MFADisabled,
 		CAPTCHADisabled:                      reqBody.CAPTCHADisabled,
 		ReceiverInvitationsDisabled:          reqBody.ReceiverInvitationsDisabled,
@@ -377,6 +384,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"receiver_invitation_resend_interval_days": 0,
 		"payment_cancellation_period_days":         0,
 		"privacy_policy_link":                      org.PrivacyPolicyLink,
+		"webhook_url":                              org.WebhookURL,
 		"message_channel_priority":                 org.MessageChannelPriority,
 		"mfa_disabled":                             org.MFADisabled,
 		"captcha_disabled":                         org.CAPTCHADisabled,
@@ -401,6 +409,10 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	if org.PrivacyPolicyLink != nil {
 		resp["privacy_policy_link"] = *org.PrivacyPolicyLink
+	}
+
+	if org.WebhookURL != nil {
+		resp["webhook_url"] = *org.WebhookURL
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)

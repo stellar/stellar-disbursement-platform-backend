@@ -213,6 +213,18 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Non-owner users need a wallet membership to see anything (empty lists/403s otherwise).
+	// Owners are tenant-wide by definition and never get membership rows.
+	role := reqBody.Roles[0]
+	var defaultWallet *data.DistributionWallet
+	if role != data.OwnerUserRole {
+		defaultWallet, err = h.Models.DistributionWallets.GetDefault(ctx, h.Models.DBConnectionPool)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot resolve default wallet for new user", err, nil).Render(rw)
+			return
+		}
+	}
+
 	newUser := auth.User{
 		FirstName: strings.TrimSpace(reqBody.FirstName),
 		LastName:  strings.TrimSpace(reqBody.LastName),
@@ -229,6 +241,13 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 		httperror.InternalError(ctx, "Cannot create user", err, nil).Render(rw)
 		return
+	}
+
+	if role != data.OwnerUserRole {
+		if _, err = h.Models.WalletMemberships.Insert(ctx, h.Models.DBConnectionPool, u.ID, defaultWallet.ID, role, &authenticatedUserID); err != nil {
+			httperror.InternalError(ctx, "Cannot grant default wallet membership to new user", err, nil).Render(rw)
+			return
+		}
 	}
 
 	err = services.SendInvitationMessage(ctx, h.MessengerClient, h.Models,

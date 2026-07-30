@@ -57,9 +57,12 @@ type Organization struct {
 	ReceiverInvitationsDisabled *bool                  `json:"receiver_invitations_disabled" db:"receiver_invitations_disabled"`
 	// WebhookURL is the tenant-configured destination for outbox event delivery;
 	// delivery is skipped when unset.
-	WebhookURL *string   `json:"webhook_url,omitempty" db:"webhook_url"`
-	CreatedAt  time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
+	WebhookURL *string `json:"webhook_url,omitempty" db:"webhook_url"`
+	// WebhookSecret HMAC-signs outbox event deliveries (see event_delivery_job.go deliver());
+	// never exposed via the API.
+	WebhookSecret string    `json:"-" db:"webhook_secret"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type OrganizationUpdate struct {
@@ -76,6 +79,7 @@ type OrganizationUpdate struct {
 	ReceiverRegistrationMessageTemplate *string `json:",omitempty"`
 	OTPMessageTemplate                  *string `json:",omitempty"`
 	PrivacyPolicyLink                   *string `json:",omitempty"`
+	WebhookURL                          *string `json:",omitempty"`
 
 	// MFA and CAPTCHA settings
 	MFADisabled     *bool `json:",omitempty"`
@@ -132,6 +136,15 @@ func (ou *OrganizationUpdate) validate() error {
 		_, err := url.ParseRequestURI(*ou.PrivacyPolicyLink)
 		if err != nil {
 			return fmt.Errorf("invalid privacy policy link: %w", err)
+		}
+	}
+
+	// Unlike PrivacyPolicyLink (a link merely displayed to users, which allows http on
+	// testnet), WebhookURL is a security-sensitive outbound delivery target carrying a signed
+	// payload — https is required unconditionally so it can never be sent in the clear.
+	if ou.WebhookURL != nil && *ou.WebhookURL != "" {
+		if err := utils.ValidateURLScheme(*ou.WebhookURL, "https"); err != nil {
+			return fmt.Errorf("invalid webhook url: %w", err)
 		}
 	}
 
@@ -246,6 +259,18 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 			args = append(args, link.String())
 		} else {
 			fields = append(fields, "privacy_policy_link = NULL")
+		}
+	}
+
+	if ou.WebhookURL != nil {
+		if *ou.WebhookURL != "" {
+			if err := utils.ValidateURLScheme(*ou.WebhookURL, "https"); err != nil {
+				return fmt.Errorf("invalid webhook url: %w", err)
+			}
+			fields = append(fields, "webhook_url = ?")
+			args = append(args, *ou.WebhookURL)
+		} else {
+			fields = append(fields, "webhook_url = NULL")
 		}
 	}
 

@@ -42,6 +42,34 @@ func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Conte
 	return r0, r1
 }
 
+// DistributionAccountForWallet provides a mock function with given fields: ctx, tenantID, walletID
+func (_m *MockDistributionAccountResolver) DistributionAccountForWallet(ctx context.Context, tenantID string, walletID string) (schema.TransactionAccount, error) {
+	ret := _m.Called(ctx, tenantID, walletID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DistributionAccountForWallet")
+	}
+
+	var r0 schema.TransactionAccount
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (schema.TransactionAccount, error)); ok {
+		return rf(ctx, tenantID, walletID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) schema.TransactionAccount); ok {
+		r0 = rf(ctx, tenantID, walletID)
+	} else {
+		r0 = ret.Get(0).(schema.TransactionAccount)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, tenantID, walletID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // DistributionAccountFromContext provides a mock function with given fields: ctx
 func (_m *MockDistributionAccountResolver) DistributionAccountFromContext(ctx context.Context) (schema.TransactionAccount, error) {
 	ret := _m.Called(ctx)

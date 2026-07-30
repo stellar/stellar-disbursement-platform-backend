@@ -1,7 +1,7 @@
--- Transactional outbox for webhook/internal events (, accepted spec flag E1): event rows are
--- written in the SAME transaction as the state change they describe, so an event exists iff
--- the change committed. A scheduler job delivers undelivered rows to the tenant's configured
--- webhook URL (at-least-once; consumers deduplicate on event id).
+-- Transactional outbox for webhook/internal events: event rows are written in the SAME
+-- transaction as the state change they describe, so an event exists iff the change committed.
+-- A scheduler job delivers undelivered rows to the tenant's configured webhook URL
+-- (at-least-once; consumers deduplicate on event id).
 
 -- +migrate Up
 

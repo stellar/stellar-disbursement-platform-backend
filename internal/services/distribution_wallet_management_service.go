@@ -171,6 +171,17 @@ func (s *DistributionWalletManagementService) CreateWallet(ctx context.Context, 
 		return nil, fmt.Errorf("funding distribution wallet %q: %w", wallet.ID, err)
 	}
 
+	// Only now — funded on-chain — does the wallet become usable. Before this point it stays
+	// PENDING (never ACTIVE), so a wallet mid-provisioning can never be picked as a source for
+	// disbursements/payments (see wallet_scope.go resolveSourceWalletForWrite and
+	// DistributionWallets.GetAll, both of which now only surface ACTIVE wallets).
+	activatedWallet, err := s.Models.DistributionWallets.Activate(ctx, dbPool, wallet.ID)
+	if err != nil {
+		s.cleanupWallet(ctx, wallet.ID, kp.Address())
+		return nil, fmt.Errorf("activating distribution wallet %q: %w", wallet.ID, err)
+	}
+	wallet = activatedWallet
+
 	// Trustlines are best-effort: the wallet is already live and funded on-chain, so a
 	// trustline failure must not orphan it. Missing trustlines only block non-native assets
 	// and can be re-attempted by operations.

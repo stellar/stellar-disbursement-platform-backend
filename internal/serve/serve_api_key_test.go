@@ -43,9 +43,19 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 		ON CONFLICT (id) DO NOTHING`, "00000000-0000-0000-0000-000000000000")
 	require.NoError(t, seedErr)
 
+	// A deactivated creator: GetUser's is_active=true filter makes this user invisible to
+	// GetUserFromContext, so any request made with a key this user created should 401 rather
+	// than 500 (deactivation is normal offboarding, not an internal error).
+	_, seedErr = dbConnectionPool.ExecContext(context.Background(), `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles, is_active)
+		VALUES ($1, 'x', 'api-key-auth-deactivated@test.com', 'Deactivated', 'Owner', TRUE, ARRAY['owner'], FALSE)
+		ON CONFLICT (id) DO NOTHING`, "00000000-0000-0000-0000-000000000099")
+	require.NoError(t, seedErr)
+
 	handlerMux := handleHTTP(serveOptions)
 
 	testUserID := "00000000-0000-0000-0000-000000000000"
+	deactivatedUserID := "00000000-0000-0000-0000-000000000099"
 
 	validAPIKey := createTestAPIKey(t, dbConnectionPool, "Valid Admin Key",
 		[]data.APIKeyPermission{data.ReadAll, data.WriteAll}, nil, 30, testUserID)
@@ -61,6 +71,9 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 
 	disbursementOnlyAPIKey := createTestAPIKey(t, dbConnectionPool, "Disbursement Only Key",
 		[]data.APIKeyPermission{data.ReadDisbursements, data.WriteDisbursements}, nil, 30, testUserID)
+
+	deactivatedCreatorAPIKey := createTestAPIKey(t, dbConnectionPool, "Deactivated Creator Key",
+		[]data.APIKeyPermission{data.ReadAll, data.WriteAll}, nil, 30, deactivatedUserID)
 
 	testCases := []struct {
 		name           string
@@ -118,6 +131,13 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 			method:         http.MethodGet,
 			path:           "/disbursements",
 			apiKey:         "SDP_INVALID_KEY",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "key whose creator was deactivated is rejected, not a 500",
+			method:         http.MethodGet,
+			path:           "/disbursements",
+			apiKey:         deactivatedCreatorAPIKey.Key,
 			expectedStatus: http.StatusUnauthorized,
 		},
 	}

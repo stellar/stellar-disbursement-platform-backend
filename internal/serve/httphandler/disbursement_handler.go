@@ -103,6 +103,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
 		return
 	}
@@ -357,6 +361,10 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 
 	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		msg := fmt.Sprintf("Cannot get user from context token when processing instructions for disbursement with ID %s", disbursementID)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
@@ -635,6 +643,10 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
 		return
 	}

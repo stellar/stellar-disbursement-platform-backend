@@ -508,6 +508,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	// CreateUser now grants non-owner users a default-wallet membership, so every subtest here
+	// (all use a non-owner role) needs a real default wallet to insert against.
+	data.EnsureDefaultDistributionWalletFixture(t, context.Background(), dbConnectionPool)
+
 	r := chi.NewRouter()
 
 	authManagerMock := &auth.AuthManagerMock{}
@@ -879,7 +883,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		expectedUser := &auth.User{
-			ID:        "user-id",
+			ID:        "user-id-2",
 			FirstName: u.FirstName,
 			LastName:  u.LastName,
 			Email:     u.Email,
@@ -925,7 +929,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"id": "user-id",
+				"id": "user-id-2",
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "email@email.com",
@@ -954,7 +958,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		expectedUser := &auth.User{
-			ID:        "user-id",
+			ID:        "user-id-3",
 			FirstName: u.FirstName,
 			LastName:  u.LastName,
 			Email:     u.Email,
@@ -1020,7 +1024,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"id": "user-id",
+				"id": "user-id-3",
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "email@email.com",
@@ -1033,7 +1037,13 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "[CreateUserAccount] - User ID authenticated-user-id created user with account ID user-id")
+		require.Contains(t, buf.String(), "[CreateUserAccount] - User ID authenticated-user-id created user with account ID user-id-3")
+
+		// validate the new user actually got a default-wallet membership, proving they won't
+		// see empty lists/403s on first login (the bug this fix closes)
+		walletIDs, membershipErr := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, "user-id-3")
+		require.NoError(t, membershipErr)
+		require.Len(t, walletIDs, 1)
 	})
 
 	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {

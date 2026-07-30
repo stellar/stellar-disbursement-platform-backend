@@ -502,7 +502,11 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 			Debug("built and signed fee-bump transaction")
 	}()
 
-	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	var walletID string
+	if txJob.Transaction.WalletID.Valid {
+		walletID = txJob.Transaction.WalletID.String
+	}
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccountForWallet(ctx, txJob.Transaction.TenantID, walletID)
 	if err != nil {
 		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
 	} else if !distributionAccount.IsStellar() {
@@ -552,7 +556,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {
 	log.Ctx(ctx).WithField("tx_hash", txJob.Transaction.StellarTransactionHash.String).
-		Info("submitted transaction to Horizon, awaiting result")
+		Info("submitting transaction to Horizon, awaiting result")
 
 	submitStart := time.Now()
 	resp, err := tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
@@ -593,7 +597,11 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 // archived SAC balance entry. Only restores the balance entry; if other footprint entries
 // (e.g. SAC contract instance) are also archived, restoration won't be sufficient.
 func (tw *TransactionWorker) restoreArchivedEntries(ctx context.Context, txJob *TxJob) error {
-	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	var walletID string
+	if txJob.Transaction.WalletID.Valid {
+		walletID = txJob.Transaction.WalletID.String
+	}
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccountForWallet(ctx, txJob.Transaction.TenantID, walletID)
 	if err != nil {
 		return fmt.Errorf("resolving distribution account: %w", err)
 	}

@@ -42,7 +42,7 @@ func Test_DistributionWalletModel(t *testing.T) {
 		})
 		require.NoError(t, iErr)
 		assert.NotEmpty(t, created.ID)
-		assert.Equal(t, ActiveDistributionWalletStatus, created.Status)
+		assert.Equal(t, PendingDistributionWalletStatus, created.Status, "not usable until Activate() succeeds")
 		assert.False(t, created.IsDefault)
 		assert.Nil(t, created.Address)
 
@@ -64,6 +64,23 @@ func Test_DistributionWalletModel(t *testing.T) {
 			AccountType: schema.DistributionAccountStellarDBVault,
 		})
 		require.ErrorIs(t, iErr, ErrRecordAlreadyExists)
+	})
+
+	t.Run("Activate only succeeds on a PENDING wallet", func(t *testing.T) {
+		created, iErr := m.Insert(ctx, dbConnectionPool, DistributionWalletInsert{
+			Name:        "program-activate",
+			AccountType: schema.DistributionAccountStellarDBVault,
+		})
+		require.NoError(t, iErr)
+		require.Equal(t, PendingDistributionWalletStatus, created.Status)
+
+		activated, aErr := m.Activate(ctx, dbConnectionPool, created.ID)
+		require.NoError(t, aErr)
+		assert.Equal(t, ActiveDistributionWalletStatus, activated.Status)
+
+		// Not re-activatable: it's already ACTIVE, not PENDING.
+		_, aErr = m.Activate(ctx, dbConnectionPool, created.ID)
+		require.ErrorIs(t, aErr, ErrRecordNotFound)
 	})
 
 	t.Run("UpdateAddress sets the address exactly once", func(t *testing.T) {
@@ -116,8 +133,16 @@ func Test_DistributionWalletModel(t *testing.T) {
 	})
 
 	t.Run("GetAll hides archived unless asked; Count includes archived", func(t *testing.T) {
+		// program-2 is still PENDING (never activated) — activate it so this subtest's actual
+		// target (archived-exclusion) isn't conflated with pending-exclusion, which has its own
+		// coverage above.
+		program2, gErr := m.GetByName(ctx, dbConnectionPool, "program-2")
+		require.NoError(t, gErr)
+		_, aErr := m.Activate(ctx, dbConnectionPool, program2.ID)
+		require.NoError(t, aErr)
+
 		// Archive program-3 directly (service-level archive lands in).
-		_, aErr := dbConnectionPool.ExecContext(ctx, `
+		_, aErr = dbConnectionPool.ExecContext(ctx, `
 			UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW() WHERE name = 'program-3'`)
 		require.NoError(t, aErr)
 

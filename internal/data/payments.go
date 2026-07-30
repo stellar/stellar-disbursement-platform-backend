@@ -701,9 +701,11 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 		addArrayOrSingleCondition[PaymentStatus](qb, "p.status", queryParams.Filters[FilterKeyStatus])
 	}
 	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
-		// Membership-filtered visibility. Direct payments (no disbursement) carry no
-		// explicit source wallet until and inherit default-wallet visibility.
-		qb.AddCondition("COALESCE(d.source_wallet_id, (SELECT dw.id FROM distribution_wallets dw WHERE dw.is_default)) = ANY(?)", pq.Array(walletIDs))
+		// Membership-filtered visibility. p.source_wallet_id is persisted and NOT NULL on every
+		// payment row: disbursement payments inherit it from their disbursement via the
+		// derive_payment_source_wallet trigger, and direct payments must state it explicitly
+		// (the trigger rejects the insert otherwise) — no default-wallet fallback needed.
+		qb.AddCondition("p.source_wallet_id = ANY(?)", pq.Array(walletIDs))
 	}
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])

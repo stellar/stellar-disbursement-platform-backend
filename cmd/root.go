@@ -24,13 +24,11 @@ var globalOptions cmdUtils.GlobalOptionsType
 // graceful shutdown -- see ServeCommand.Command in cmd/serve.go.
 var lokiHook *observability.LokiHook
 
-// registerLogShippingHook wires the app's logs to also ship directly to a
-// Loki-compatible HTTP push endpoint (e.g. a Grafana Alloy loki.source.api
-// receiver reachable over Railway's private network), bypassing Railway's
-// stdout capture entirely. This matters because Railway has no log-drain /
-// log-forwarding feature of its own (per Railway's docs), so without this the
-// structured fields the app already logs (payment_id, wallet_id, Horizon
-// error codes, ...) never reach Grafana/Loki in production.
+// registerLogShippingHook ships logs directly to a Loki-compatible push
+// endpoint (e.g. a Grafana Alloy loki.source.api receiver), for platforms
+// where no log collector can read the container's stdout (PaaS environments
+// without a log-drain feature). On Kubernetes, prefer a collector DaemonSet
+// reading stdout instead of enabling this.
 //
 // It's a no-op when globalOptions.LogShippingURL is empty, which is the
 // default -- local dev and any deployment that doesn't set LOG_SHIPPING_URL

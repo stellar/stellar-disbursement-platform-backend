@@ -107,15 +107,29 @@ func Test_W3_SourceWalletRouting(t *testing.T) {
 		_, aErr := models.DistributionWallets.Archive(ctx, dbConnectionPool, walletBID)
 		require.NoError(t, aErr)
 
-		// Entitled (owner) → 400 archived.
+		// Entitled (owner) → 400 not active.
 		_, code, msg := resolve(owner.ID, walletBID)
 		assert.Equal(t, http.StatusBadRequest, code)
-		assert.Contains(t, msg, "archived")
+		assert.Contains(t, msg, "not active")
 
-		// Unentitled member still sees 403, not the archived detail.
+		// Unentitled member still sees 403, not the not-active detail.
 		_, code, msg = resolve(initiatorOnA.ID, walletBID)
 		assert.Equal(t, http.StatusForbidden, code)
-		assert.NotContains(t, msg, "archived")
+		assert.NotContains(t, msg, "not active")
+	})
+
+	t.Run("pending (unfunded, mid-provisioning) wallet → 400, same as archived", func(t *testing.T) {
+		pending, iErr := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+			Name: "w3-wallet-pending", AccountType: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+		})
+		require.NoError(t, iErr)
+		require.Equal(t, data.PendingDistributionWalletStatus, pending.Status, "Insert leaves a wallet PENDING until CreateWallet funds and activates it")
+		_, mErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, owner.ID, pending.ID, data.FinancialControllerUserRole, nil)
+		require.NoError(t, mErr)
+
+		_, code, msg := resolve(owner.ID, pending.ID)
+		assert.Equal(t, http.StatusBadRequest, code, "a PENDING wallet must be rejected exactly like an archived one — it has no funded account yet")
+		assert.Contains(t, msg, "not active")
 	})
 
 	t.Run("payments inherit and direct payments require the wallet at the DB layer", func(t *testing.T) {

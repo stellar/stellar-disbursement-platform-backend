@@ -285,6 +285,8 @@ func Test_DistributionWalletManagementService_ArchiveAndPromote(t *testing.T) {
 			Name: "to-archive", AccountType: schema.DistributionAccountStellarDBVault,
 		})
 		require.NoError(t, iErr)
+		w, iErr = models.DistributionWallets.Activate(ctx, dbConnectionPool, w.ID)
+		require.NoError(t, iErr)
 
 		archived, aErr := svc.ArchiveWallet(ctx, w.ID)
 		require.NoError(t, aErr)
@@ -296,6 +298,8 @@ func Test_DistributionWalletManagementService_ArchiveAndPromote(t *testing.T) {
 		w, iErr := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
 			Name: "to-promote", AccountType: schema.DistributionAccountStellarDBVault,
 		})
+		require.NoError(t, iErr)
+		w, iErr = models.DistributionWallets.Activate(ctx, dbConnectionPool, w.ID)
 		require.NoError(t, iErr)
 
 		promoted, pErr := svc.PromoteToDefault(ctx, w.ID)

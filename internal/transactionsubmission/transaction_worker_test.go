@@ -66,6 +66,10 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
 		Return(distAccount, nil).
 		Maybe()
+	mDistAccResolver.
+		On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).
+		Return(distAccount, nil).
+		Maybe()
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -1066,7 +1070,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 
 		// Set up engine with mocked Horizon and real signing
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
+		mDistAccResolver.On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).Return(distAccount, nil)
 
 		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 		sigService, sigErr := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -1133,7 +1137,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 
 		// Set up engine — restore tx submission will fail, but tx should still be reprocessed
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
+		mDistAccResolver.On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).Return(distAccount, nil)
 
 		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 		sigService, sigErr := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -1869,7 +1873,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
-		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		On("DistributionAccountForWallet", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(distAccount, nil)
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
@@ -1990,7 +1994,7 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
-		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		On("DistributionAccountForWallet", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(distAccount, nil)
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()

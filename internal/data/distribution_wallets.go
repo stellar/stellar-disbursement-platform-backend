@@ -20,6 +20,10 @@ type DistributionWalletStatus string
 const (
 	ActiveDistributionWalletStatus   DistributionWalletStatus = "ACTIVE"
 	ArchivedDistributionWalletStatus DistributionWalletStatus = "ARCHIVED"
+	// PendingDistributionWalletStatus marks a wallet reserved by CreateWallet whose on-chain
+	// keypair has not yet been generated and funded — it is not usable and must not be treated
+	// as available (see wallet_scope.go resolveSourceWalletForWrite).
+	PendingDistributionWalletStatus DistributionWalletStatus = "PENDING"
 )
 
 // DefaultDistributionWalletName is the reserved name of the implicit wallet that mirrors the
@@ -83,13 +87,13 @@ func (m *DistributionWalletModel) Insert(ctx context.Context, sqlExec db.SQLExec
 	}
 
 	query := fmt.Sprintf(`
-		INSERT INTO distribution_wallets (name, description, distribution_account_type)
-		VALUES ($1, $2, $3)
+		INSERT INTO distribution_wallets (name, description, distribution_account_type, status)
+		VALUES ($1, $2, $3, $4)
 		RETURNING %s
 	`, distributionWalletColumns)
 
 	var wallet DistributionWallet
-	err := sqlExec.GetContext(ctx, &wallet, query, insert.Name, insert.Description, insert.AccountType)
+	err := sqlExec.GetContext(ctx, &wallet, query, insert.Name, insert.Description, insert.AccountType, PendingDistributionWalletStatus)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -134,12 +138,13 @@ func (m *DistributionWalletModel) GetByName(ctx context.Context, sqlExec db.SQLE
 }
 
 // GetAll returns the tenant's distribution wallets, default first then by creation time.
-// Archived wallets are excluded unless includeArchived is true: operational surfaces (pickers,
-// dropdowns, filters) hide archived wallets; audit/admin views include them.
+// Non-active wallets (ARCHIVED, or PENDING mid-provisioning) are excluded unless
+// includeArchived is true: operational surfaces (pickers, dropdowns, filters) show only usable
+// wallets; audit/admin views include everything regardless of status.
 func (m *DistributionWalletModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, includeArchived bool) ([]DistributionWallet, error) {
 	query := fmt.Sprintf(`SELECT %s FROM distribution_wallets`, distributionWalletColumns)
 	if !includeArchived {
-		query += ` WHERE status != 'ARCHIVED'`
+		query += ` WHERE status = 'ACTIVE'`
 	}
 	query += ` ORDER BY is_default DESC, created_at ASC`
 
@@ -198,6 +203,28 @@ func (m *DistributionWalletModel) UpdateAddress(ctx context.Context, sqlExec db.
 			return nil, fmt.Errorf("updating address of distribution wallet %q (missing, or address already set): %w", id, ErrRecordNotFound)
 		}
 		return nil, fmt.Errorf("updating address of distribution wallet %q: %w", id, err)
+	}
+
+	return &wallet, nil
+}
+
+// Activate promotes a PENDING wallet to ACTIVE once its on-chain account has been generated and
+// funded. Only a PENDING wallet can be activated — this is not a general status-flip method.
+func (m *DistributionWalletModel) Activate(ctx context.Context, sqlExec db.SQLExecuter, id string) (*DistributionWallet, error) {
+	query := fmt.Sprintf(`
+		UPDATE distribution_wallets
+		SET status = 'ACTIVE'
+		WHERE id = $1 AND status = 'PENDING'
+		RETURNING %s
+	`, distributionWalletColumns)
+
+	var wallet DistributionWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("activating distribution wallet %q (missing or not pending): %w", id, ErrRecordNotFound)
+		}
+		return nil, fmt.Errorf("activating distribution wallet %q: %w", id, err)
 	}
 
 	return &wallet, nil
