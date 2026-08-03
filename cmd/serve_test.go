@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -152,6 +153,7 @@ func Test_serve(t *testing.T) {
 		EC256PrivateKey:                "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:             []string{"*"},
 		SEP24JWTSecret:                 "jwt_secret_ducrCcqnKmIqG6mYG48Hqlf9TWb7CJh4",
+		SEP24JWTExpirationSeconds:      sepauth.DefaultSEP24JWTExpirationSeconds,
 		BaseURL:                        "https://sdp-backend.stellar.org",
 		ResetTokenExpirationHours:      24,
 		NetworkPassphrase:              network.TestNetworkPassphrase,
@@ -266,6 +268,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DATABASE_URL", dbt.DSN)
 	t.Setenv("EC256_PRIVATE_KEY", serveOpts.EC256PrivateKey)
 	t.Setenv("SEP24_JWT_SECRET", serveOpts.SEP24JWTSecret)
+	t.Setenv("SEP24_JWT_EXPIRATION_SECONDS", fmt.Sprintf("%d", serveOpts.SEP24JWTExpirationSeconds))
 	t.Setenv("SEP10_SIGNING_PUBLIC_KEY", serveOpts.Sep10SigningPublicKey)
 	t.Setenv("SEP10_SIGNING_PRIVATE_KEY", serveOpts.Sep10SigningPrivateKey)
 	t.Setenv("SEP45_CONTRACT_ID", serveOpts.Sep45ContractID)

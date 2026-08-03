@@ -11,6 +11,11 @@ import (
 
 var ErrInvalidToken = fmt.Errorf("invalid token")
 
+const (
+	DefaultSEP24JWTExpirationSeconds        = 300
+	MaxRecommendedSEP24JWTExpirationSeconds = 60 * 60
+)
+
 type Sep10JWTClaims struct {
 	jwt.RegisteredClaims
 	ClientDomain string `json:"client_domain,omitempty"`
