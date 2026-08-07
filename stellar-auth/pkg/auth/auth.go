@@ -399,16 +399,15 @@ func (am *defaultAuthManager) GetMFACode(ctx context.Context, deviceID, userID s
 }
 
 func (am *defaultAuthManager) AuthenticateMFA(ctx context.Context, deviceID, code string, rememberMe bool) (string, error) {
-	if rememberMe {
-		err := am.mfaManager.RememberDevice(ctx, deviceID, code)
-		if err != nil {
-			return "", fmt.Errorf("error remembering device ID %s: %w", deviceID, err)
-		}
-	}
-
 	userID, err := am.mfaManager.ValidateMFACode(ctx, deviceID, code)
 	if err != nil {
 		return "", fmt.Errorf("error validating MFA code: %w", err)
+	}
+	
+	if rememberMe {
+		if err := am.mfaManager.RememberDevice(ctx, deviceID, userID); err != nil {
+			return "", fmt.Errorf("error remembering device ID %s: %w", deviceID, err)
+		}
 	}
 
 	user, err := am.authenticator.GetUser(ctx, userID)

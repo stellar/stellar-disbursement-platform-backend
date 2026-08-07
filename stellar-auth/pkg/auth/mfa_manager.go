@@ -18,7 +18,7 @@ type MFAManager interface {
 	MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error)
 	GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error)
 	ValidateMFACode(ctx context.Context, deviceID, code string) (string, error)
-	RememberDevice(ctx context.Context, deviceID, code string) error
+	RememberDevice(ctx context.Context, deviceID, userID string) error
 }
 
 // defaultMFAManager
@@ -121,10 +121,10 @@ func (m *defaultMFAManager) ValidateMFACode(ctx context.Context, deviceID, code 
 }
 
 // RememberDevice updates the device expiry for the device.
-func (m *defaultMFAManager) RememberDevice(ctx context.Context, deviceID, code string) error {
-	err := m.resetDeviceExpiry(ctx, deviceID, code)
+func (m *defaultMFAManager) RememberDevice(ctx context.Context, deviceID, userID string) error {
+	err := m.resetDeviceExpiry(ctx, deviceID, userID)
 	if err != nil {
-		return fmt.Errorf("error updating device expiry for device ID %s and code %s: %w", deviceID, code, err)
+		return fmt.Errorf("error updating device expiry for device ID %s and user ID %s: %w", deviceID, userID, err)
 	}
 	return nil
 }
@@ -239,18 +239,18 @@ func (m *defaultMFAManager) upsertMFACode(ctx context.Context, deviceID, userID,
 }
 
 // resetDeviceExpiry resets the device expiry for the user and device.
-func (m *defaultMFAManager) resetDeviceExpiry(ctx context.Context, deviceID, code string) error {
-	if deviceID == "" || code == "" {
-		return fmt.Errorf("device ID and code are required")
+func (m *defaultMFAManager) resetDeviceExpiry(ctx context.Context, deviceID, userID string) error {
+	if deviceID == "" || userID == "" {
+		return fmt.Errorf("device ID and user ID are required")
 	}
 	const query = `
-		UPDATE auth_user_mfa_codes 
-		SET device_expires_at = $1 
-		WHERE device_id = $2 AND code = $3
+		UPDATE auth_user_mfa_codes
+		SET device_expires_at = $1
+		WHERE device_id = $2 AND auth_user_id = $3
 	`
-	_, err := m.dbConnectionPool.ExecContext(ctx, query, time.Now().Add(mfaDeviceExpiryHours), deviceID, code)
+	_, err := m.dbConnectionPool.ExecContext(ctx, query, time.Now().Add(mfaDeviceExpiryHours), deviceID, userID)
 	if err != nil {
-		return fmt.Errorf("error updating device expiry for device ID %s and code %s: %w", deviceID, code, err)
+		return fmt.Errorf("error updating device expiry for device ID %s and user ID %s: %w", deviceID, userID, err)
 	}
 	return nil
 }

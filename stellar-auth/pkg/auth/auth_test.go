@@ -1499,3 +1499,110 @@ func Test_AuthManager_GetUserID(t *testing.T) {
 	jwtManagerMock.AssertExpectations(t)
 	roleManagerMock.AssertExpectations(t)
 }
+
+func Test_AuthManager_AuthenticateMFA(t *testing.T) {
+	ctx := context.Background()
+	deviceID, code := "device-id", "123456"
+
+	t.Run("returns error and does not remember the device when the code is invalid", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authManager := NewAuthManager(WithCustomMFAManagerOption(mfaManagerMock))
+
+		mfaManagerMock.
+			On("ValidateMFACode", ctx, deviceID, code).
+			Return("", ErrMFACodeInvalid).
+			Once()
+
+		mfaManagerMock.On("RememberDevice", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, true)
+		require.ErrorIs(t, err, ErrMFACodeInvalid)
+		assert.Empty(t, token)
+
+		mfaManagerMock.AssertNotCalled(t, "RememberDevice", mock.Anything, mock.Anything, mock.Anything)
+		mfaManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("remembers the device only after validation, keyed on the user ID", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authenticatorMock := &AuthenticatorMock{}
+		jwtManagerMock := &JWTManagerMock{}
+		roleManagerMock := &RoleManagerMock{}
+		authManager := NewAuthManager(
+			WithCustomMFAManagerOption(mfaManagerMock),
+			WithCustomAuthenticatorOption(authenticatorMock),
+			WithCustomJWTManagerOption(jwtManagerMock),
+			WithCustomRoleManagerOption(roleManagerMock),
+		)
+
+		userID := "user-id"
+		user := &User{ID: userID, Email: "email@email.com"}
+		roles := []string{"role1"}
+		expectedUser := &User{ID: userID, Email: "email@email.com", Roles: roles}
+		expectedToken := "mytoken"
+
+		validateCall := mfaManagerMock.
+			On("ValidateMFACode", ctx, deviceID, code).
+			Return(userID, nil).
+			Once()
+		rememberCall := mfaManagerMock.
+			On("RememberDevice", ctx, deviceID, userID).
+			Return(nil).
+			Once()
+		mock.InOrder(validateCall, rememberCall)
+
+		authenticatorMock.On("GetUser", ctx, userID).Return(user, nil).Once()
+		roleManagerMock.On("GetUserRoles", ctx, user).Return(roles, nil).Once()
+		jwtManagerMock.
+			On("GenerateToken", ctx, expectedUser, mock.AnythingOfType("time.Time")).
+			Return(expectedToken, nil).
+			Once()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, true)
+		require.NoError(t, err)
+		assert.Equal(t, expectedToken, token)
+
+		mfaManagerMock.AssertExpectations(t)
+		authenticatorMock.AssertExpectations(t)
+		jwtManagerMock.AssertExpectations(t)
+		roleManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("does not remember the device when rememberMe is false", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authenticatorMock := &AuthenticatorMock{}
+		jwtManagerMock := &JWTManagerMock{}
+		roleManagerMock := &RoleManagerMock{}
+		authManager := NewAuthManager(
+			WithCustomMFAManagerOption(mfaManagerMock),
+			WithCustomAuthenticatorOption(authenticatorMock),
+			WithCustomJWTManagerOption(jwtManagerMock),
+			WithCustomRoleManagerOption(roleManagerMock),
+		)
+
+		userID := "user-id"
+		user := &User{ID: userID, Email: "email@email.com"}
+		roles := []string{"role1"}
+		expectedUser := &User{ID: userID, Email: "email@email.com", Roles: roles}
+		expectedToken := "mytoken"
+
+		mfaManagerMock.On("ValidateMFACode", ctx, deviceID, code).Return(userID, nil).Once()
+		mfaManagerMock.On("RememberDevice", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		authenticatorMock.On("GetUser", ctx, userID).Return(user, nil).Once()
+		roleManagerMock.On("GetUserRoles", ctx, user).Return(roles, nil).Once()
+		jwtManagerMock.
+			On("GenerateToken", ctx, expectedUser, mock.AnythingOfType("time.Time")).
+			Return(expectedToken, nil).
+			Once()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, false)
+		require.NoError(t, err)
+		assert.Equal(t, expectedToken, token)
+
+		mfaManagerMock.AssertNotCalled(t, "RememberDevice", mock.Anything, mock.Anything, mock.Anything)
+		mfaManagerMock.AssertExpectations(t)
+		authenticatorMock.AssertExpectations(t)
+		jwtManagerMock.AssertExpectations(t)
+		roleManagerMock.AssertExpectations(t)
+	})
+}

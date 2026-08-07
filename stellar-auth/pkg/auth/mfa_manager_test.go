@@ -65,9 +65,9 @@ func Test_defaultMFAManager_MFADeviceRemembered(t *testing.T) {
 		defer cleanup(t, ctx, dbConnectionPool)
 
 		// Generate code for device and remember device
-		code, err := m.GenerateMFACode(ctx, "deviceID", randUser.ID)
+		_, err := m.GenerateMFACode(ctx, "deviceID", randUser.ID)
 		require.NoError(t, err)
-		err = m.RememberDevice(ctx, "deviceID", code)
+		err = m.RememberDevice(ctx, "deviceID", randUser.ID)
 		require.NoError(t, err)
 
 		// Validate device
@@ -255,13 +255,13 @@ func Test_defaultMFAManager_RememberDevice(t *testing.T) {
 
 	m := newDefaultMFAManager(withMFADatabaseConnectionPool(dbConnectionPool))
 
-	t.Run("Test error when deviceID or code is empty", func(t *testing.T) {
+	t.Run("Test error when deviceID or userID is empty", func(t *testing.T) {
 		err := m.RememberDevice(ctx, "", "")
-		require.ErrorContains(t, err, "device ID and code are required")
+		require.ErrorContains(t, err, "device ID and user ID are required")
 		err = m.RememberDevice(ctx, "deviceID", "")
-		require.ErrorContains(t, err, "device ID and code are required")
-		err = m.RememberDevice(ctx, "", "code")
-		require.ErrorContains(t, err, "device ID and code are required")
+		require.ErrorContains(t, err, "device ID and user ID are required")
+		err = m.RememberDevice(ctx, "", "userID")
+		require.ErrorContains(t, err, "device ID and user ID are required")
 	})
 
 	t.Run("Test updating device expiry", func(t *testing.T) {
@@ -272,7 +272,7 @@ func Test_defaultMFAManager_RememberDevice(t *testing.T) {
             VALUES ($1, $2, $3, NOW() - INTERVAL '1 hour', NOW() + INTERVAL '1 hour')`, testDeviceID, testCode, randUser.ID)
 		require.NoError(t, err)
 
-		err = m.RememberDevice(ctx, testDeviceID, testCode)
+		err = m.RememberDevice(ctx, testDeviceID, randUser.ID)
 		require.NoError(t, err)
 
 		mc, err := m.getByDeviceAndUser(ctx, testDeviceID, randUser.ID)
@@ -313,7 +313,7 @@ func Test_defaultMFAManager_ForgetDevice(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 6, len(code))
 
-		err = m.RememberDevice(ctx, testDeviceID, code)
+		err = m.RememberDevice(ctx, testDeviceID, randUser.ID)
 		require.NoError(t, err)
 
 		// Fetch entry and check that device is remembered
@@ -485,13 +485,13 @@ func Test_defaultMFAManager_resetDeviceExpiry(t *testing.T) {
 
 	m := newDefaultMFAManager(withMFADatabaseConnectionPool(dbConnectionPool))
 
-	t.Run("Test error when deviceID or code is empty", func(t *testing.T) {
+	t.Run("Test error when deviceID or userID is empty", func(t *testing.T) {
 		err := m.resetDeviceExpiry(ctx, "", "")
-		assert.EqualError(t, err, "device ID and code are required")
+		assert.EqualError(t, err, "device ID and user ID are required")
 		err = m.resetDeviceExpiry(ctx, "deviceID", "")
-		assert.EqualError(t, err, "device ID and code are required")
-		err = m.resetDeviceExpiry(ctx, "", "code")
-		assert.EqualError(t, err, "device ID and code are required")
+		assert.EqualError(t, err, "device ID and user ID are required")
+		err = m.resetDeviceExpiry(ctx, "", "userID")
+		assert.EqualError(t, err, "device ID and user ID are required")
 	})
 
 	t.Run("Test device expiry reset", func(t *testing.T) {
@@ -502,7 +502,7 @@ func Test_defaultMFAManager_resetDeviceExpiry(t *testing.T) {
             VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour')`, testDeviceID, testCode, randUser.ID)
 		require.NoError(t, err)
 
-		err = m.resetDeviceExpiry(ctx, testDeviceID, testCode)
+		err = m.resetDeviceExpiry(ctx, testDeviceID, randUser.ID)
 		assert.NoError(t, err)
 
 		// Check that the record was updated correctly

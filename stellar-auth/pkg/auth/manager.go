@@ -132,3 +132,9 @@ func WithDefaultMFAManagerOption(dbConnectionPool db.DBConnectionPool) AuthManag
 		am.mfaManager = newDefaultMFAManager(withMFADatabaseConnectionPool(dbConnectionPool))
 	}
 }
+
+func WithCustomMFAManagerOption(mfaManager MFAManager) AuthManagerOption {
+	return func(am *defaultAuthManager) {
+		am.mfaManager = mfaManager
+	}
+}
