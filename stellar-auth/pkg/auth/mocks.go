@@ -102,9 +102,9 @@ func (am *AuthenticatorMock) ForgotPassword(ctx context.Context, sqlExec db.SQLE
 	return args.String(0), args.Error(1)
 }
 
-func (am *AuthenticatorMock) ResetPassword(ctx context.Context, resetToken, password string) error {
+func (am *AuthenticatorMock) ResetPassword(ctx context.Context, resetToken, password string) (string, error) {
 	args := am.Called(ctx, resetToken, password)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (am *AuthenticatorMock) UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error {
@@ -194,6 +194,11 @@ func (m *MFAManagerMock) ValidateMFACode(ctx context.Context, deviceID, code str
 
 func (m *MFAManagerMock) RememberDevice(ctx context.Context, deviceID, userID string) error {
 	args := m.Called(ctx, deviceID, userID)
+	return args.Error(0)
+}
+
+func (m *MFAManagerMock) ForgetAllDevices(ctx context.Context, userID string) error {
+	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
 

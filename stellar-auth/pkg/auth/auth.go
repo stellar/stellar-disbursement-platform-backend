@@ -174,6 +174,13 @@ func (am *defaultAuthManager) UpdateUser(ctx context.Context, tokenString, first
 		return fmt.Errorf("error updating user: %w", err)
 	}
 
+	// If the password changed, revoke every remembered device for the user.
+	if password != "" {
+		if err := am.mfaManager.ForgetAllDevices(ctx, user.ID); err != nil {
+			return fmt.Errorf("error forgetting devices after updating user ID %s: %w", user.ID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -192,12 +199,17 @@ func (am *defaultAuthManager) ForgotPassword(ctx context.Context, sqlExec db.SQL
 
 // ResetPassword sets the user's new password using a valid reset token generated in the ForgotPassword flow.
 func (am *defaultAuthManager) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
-	err := am.authenticator.ResetPassword(ctx, resetToken, newPassword)
+	userID, err := am.authenticator.ResetPassword(ctx, resetToken, newPassword)
 	if err != nil {
 		if errors.Is(err, ErrInvalidResetPasswordToken) {
 			return fmt.Errorf("invalid token in auth reset password: %w", err)
 		}
 		return fmt.Errorf("error on reset password: %w", err)
+	}
+
+	// The password changed, so revoke every remembered device for the user.
+	if err := am.mfaManager.ForgetAllDevices(ctx, userID); err != nil {
+		return fmt.Errorf("error forgetting devices after reset password for user ID %s: %w", userID, err)
 	}
 
 	return nil
@@ -221,6 +233,11 @@ func (am *defaultAuthManager) UpdatePassword(ctx context.Context, tokenString, c
 	err = am.authenticator.UpdatePassword(ctx, user, currentPassword, newPassword)
 	if err != nil {
 		return fmt.Errorf("updating password: %w", err)
+	}
+
+	// The password changed, so revoke every remembered device for the user.
+	if err := am.mfaManager.ForgetAllDevices(ctx, user.ID); err != nil {
+		return fmt.Errorf("error forgetting devices after updating password for user ID %s: %w", user.ID, err)
 	}
 
 	return nil
@@ -403,7 +420,7 @@ func (am *defaultAuthManager) AuthenticateMFA(ctx context.Context, deviceID, cod
 	if err != nil {
 		return "", fmt.Errorf("error validating MFA code: %w", err)
 	}
-	
+
 	if rememberMe {
 		if err := am.mfaManager.RememberDevice(ctx, deviceID, userID); err != nil {
 			return "", fmt.Errorf("error remembering device ID %s: %w", deviceID, err)

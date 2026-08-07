@@ -19,6 +19,7 @@ type MFAManager interface {
 	GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error)
 	ValidateMFACode(ctx context.Context, deviceID, code string) (string, error)
 	RememberDevice(ctx context.Context, deviceID, userID string) error
+	ForgetAllDevices(ctx context.Context, userID string) error
 }
 
 // defaultMFAManager
@@ -143,6 +144,25 @@ func (m *defaultMFAManager) ForgetDevice(ctx context.Context, deviceID, userID s
 	_, err := m.dbConnectionPool.ExecContext(ctx, query, deviceID, userID)
 	if err != nil {
 		return fmt.Errorf("error expiring device for device ID %s and user ID %s: %w", deviceID, userID, err)
+	}
+	return nil
+}
+
+// ForgetAllDevices expires every remembered device for the user, revoking all
+// trusted "remember me" sessions. It is used when the user's password changes.
+func (m *defaultMFAManager) ForgetAllDevices(ctx context.Context, userID string) error {
+	if userID == "" {
+		return fmt.Errorf("user ID is required")
+	}
+
+	const query = `
+		UPDATE auth_user_mfa_codes
+		SET device_expires_at = null
+		WHERE auth_user_id = $1
+	`
+	_, err := m.dbConnectionPool.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("error expiring all devices for user ID %s: %w", userID, err)
 	}
 	return nil
 }

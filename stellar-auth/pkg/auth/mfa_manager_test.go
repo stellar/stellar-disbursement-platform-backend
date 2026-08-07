@@ -334,6 +334,58 @@ func Test_defaultMFAManager_ForgetDevice(t *testing.T) {
 	})
 }
 
+func Test_defaultMFAManager_ForgetAllDevices(t *testing.T) {
+	ctx := context.Background()
+
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, NewDefaultPasswordEncrypter(), false)
+	otherUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, NewDefaultPasswordEncrypter(), false)
+
+	m := newDefaultMFAManager(withMFADatabaseConnectionPool(dbConnectionPool))
+
+	t.Run("Test error when userID is empty", func(t *testing.T) {
+		err := m.ForgetAllDevices(ctx, "")
+		require.EqualError(t, err, "user ID is required")
+	})
+
+	t.Run("Test forget all devices for the user without affecting other users", func(t *testing.T) {
+		defer cleanup(t, ctx, dbConnectionPool)
+
+		// Remember two devices for the user, and one for a different user.
+		for _, deviceID := range []string{"deviceA", "deviceB"} {
+			_, err := m.GenerateMFACode(ctx, deviceID, randUser.ID)
+			require.NoError(t, err)
+			require.NoError(t, m.RememberDevice(ctx, deviceID, randUser.ID))
+		}
+		_, err := m.GenerateMFACode(ctx, "deviceC", otherUser.ID)
+		require.NoError(t, err)
+		require.NoError(t, m.RememberDevice(ctx, "deviceC", otherUser.ID))
+
+		// Forget every device for the user.
+		err = m.ForgetAllDevices(ctx, randUser.ID)
+		require.NoError(t, err)
+
+		// Both of the user's devices are forgotten.
+		for _, deviceID := range []string{"deviceA", "deviceB"} {
+			mc, err := m.getByDeviceAndUser(ctx, deviceID, randUser.ID)
+			require.NoError(t, err)
+			require.NotNil(t, mc)
+			require.Nil(t, mc.DeviceExpiresAt)
+		}
+
+		// The other user's device is untouched.
+		mc, err := m.getByDeviceAndUser(ctx, "deviceC", otherUser.ID)
+		require.NoError(t, err)
+		require.NotNil(t, mc)
+		require.True(t, mc.DeviceExpiresAt.After(time.Now()))
+	})
+}
+
 func Test_defaultMFAManager_getByDeviceAndCode(t *testing.T) {
 	ctx := context.Background()
 

@@ -482,12 +482,12 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now())
 
-		err := authenticator.ResetPassword(ctx, token, newPassword)
+		_, err := authenticator.ResetPassword(ctx, token, newPassword)
 		assert.ErrorContains(t, err, "error trying to encrypt user password: unexpected error")
 	})
 
 	t.Run("Should treat a not found token error", func(t *testing.T) {
-		err := authenticator.ResetPassword(ctx, "notfoundtoken", "newpassword")
+		_, err := authenticator.ResetPassword(ctx, "notfoundtoken", "newpassword")
 		assert.ErrorIs(t, err, ErrInvalidResetPasswordToken)
 	})
 
@@ -507,8 +507,9 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now())
 
-		err := authenticator.ResetPassword(ctx, token, newPassword)
+		userID, err := authenticator.ResetPassword(ctx, token, newPassword)
 		require.NoError(t, err)
+		assert.Equal(t, randUser.ID, userID)
 
 		// Token should be invalid after
 		var dbIsValid bool
@@ -537,7 +538,7 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now().Add(-time.Hour*25))
 
-		err := authenticator.ResetPassword(ctx, token, newPassword)
+		_, err := authenticator.ResetPassword(ctx, token, newPassword)
 		require.ErrorIs(t, err, ErrExpiredResetPasswordToken)
 	})
 
