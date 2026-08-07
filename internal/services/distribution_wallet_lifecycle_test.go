@@ -85,7 +85,10 @@ func Test_DistributionWallet_lifecycle(t *testing.T) {
 			SourceWalletID:          walletB.ID,
 		})
 		require.Error(t, iErr)
-		assert.ErrorContains(t, iErr, "archived")
+		// The guard rejects any non-ACTIVE status, not ARCHIVED specifically, so the message
+		// names the status rather than hardcoding "archived".
+		assert.ErrorContains(t, iErr, "is not active")
+		assert.ErrorContains(t, iErr, "ARCHIVED")
 
 		// History intact: the pre-archive disbursement still exists and references B.
 		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, existing.ID)

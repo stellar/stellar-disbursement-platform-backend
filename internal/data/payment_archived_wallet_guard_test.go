@@ -65,7 +65,9 @@ func Test_PaymentSourceWalletActiveTrigger(t *testing.T) {
 
 		err = insertDirectPayment(dbConnectionPool, walletID)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "is archived")
+		// The guard rejects any non-ACTIVE status, so the message names the status.
+		assert.ErrorContains(t, err, "is not active")
+		assert.ErrorContains(t, err, "ARCHIVED")
 	})
 
 	t.Run("disbursement payments are out of scope: they inherit an already-gated wallet", func(t *testing.T) {

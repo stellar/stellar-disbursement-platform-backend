@@ -18,6 +18,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -154,6 +155,16 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		httperror.BadRequest("request is invalid", nil, map[string]interface{}{
 			"details": "data or logo is required",
 		}).Render(rw)
+		return
+	}
+
+	// This route admits Financial Controllers as well as Owners (serve.go), but the webhook URL is
+	// where every payment and disbursement event in the tenant gets delivered. Left ungated, a
+	// non-owner could point the whole event stream at an endpoint they control. Circle config is
+	// already owner-only for the same reason; this field is at least as sensitive, so gate it
+	// rather than widening who may call the route.
+	if reqBody.WebhookURL != nil && !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+		httperror.Forbidden("only owners can change the webhook URL", nil, nil).Render(rw)
 		return
 	}
 

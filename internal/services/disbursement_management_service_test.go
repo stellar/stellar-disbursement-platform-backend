@@ -674,12 +674,18 @@ func Test_DisbursementManagementService_StartDisbursement_multiWalletIsolation(t
 	require.NoError(t, err)
 	distWalletA, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWalletA.ID, walletAAddress)
 	require.NoError(t, err)
+	// Insert leaves the wallet PENDING; CreateWallet promotes it once funded, and only an
+	// ACTIVE wallet may source a disbursement.
+	distWalletA, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, distWalletA.ID)
+	require.NoError(t, err)
 
 	distWalletB, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
 		Name: "Wallet B (healthy)", AccountType: schema.DistributionAccountStellarDBVault,
 	})
 	require.NoError(t, err)
 	distWalletB, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWalletB.ID, walletBAddress)
+	require.NoError(t, err)
+	distWalletB, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, distWalletB.ID)
 	require.NoError(t, err)
 
 	// Wallet A: an existing in-progress payment (80) already commits most of its balance (100).
@@ -1162,6 +1168,9 @@ func Test_DisbursementManagementService_CancelDisbursement_sameWalletBalanceIsol
 	})
 	require.NoError(t, err)
 	distWallet, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWallet.ID, distWalletAddress)
+	require.NoError(t, err)
+	// Insert leaves the wallet PENDING; only an ACTIVE wallet may source a disbursement.
+	distWallet, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, distWallet.ID)
 	require.NoError(t, err)
 
 	// Balance is 100. Disbursement A (READY, never started) has an 80 draft payment - large
