@@ -42,7 +42,7 @@ func registerLogShippingHook() {
 		PushURL: globalOptions.LogShippingURL,
 	})
 	log.DefaultLogger.AddHook(lokiHook)
-	log.Infof("Log shipping enabled: streaming structured logs to %s", globalOptions.LogShippingURL)
+	log.Infof("Log shipping enabled: streaming structured logs to %s", observability.SanitizeEndpoint(globalOptions.LogShippingURL))
 }
 
 func rootCmd() *cobra.Command {

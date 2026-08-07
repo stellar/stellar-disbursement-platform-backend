@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -406,8 +407,25 @@ func (h *LokiHook) warnSendFailure(err error) {
 	h.sendWarnOnce.Do(func() {
 		warnf("failed to push logs to Loki endpoint %s: %v. "+
 			"Application logging to stdout is unaffected. This warning is only printed once; "+
-			"further failures are silently retried on the next batch.", h.cfg.PushURL, err)
+			"further failures are silently retried on the next batch.", SanitizeEndpoint(h.cfg.PushURL), err)
 	})
+}
+
+// SanitizeEndpoint reduces a push endpoint to scheme://host so a log line can
+// name the destination without disclosing the credentials these endpoints
+// commonly carry in the URL's userinfo or query string. An endpoint we can't
+// parse is described generically rather than echoed back verbatim, since the
+// raw string is precisely what may hold the secret.
+//
+// url.URL.Redacted() is not enough here: it masks only the userinfo password
+// and leaves query-string tokens intact.
+func SanitizeEndpoint(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "an unparseable endpoint"
+	}
+
+	return u.Scheme + "://" + u.Host
 }
 
 // warnf prints a one-off operational warning about the log-shipping

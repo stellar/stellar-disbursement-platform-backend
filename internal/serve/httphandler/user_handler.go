@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -64,6 +65,10 @@ type CreateUserRequest struct {
 	LastName  string          `json:"last_name"`
 	Email     string          `json:"email"`
 	Roles     []data.UserRole `json:"roles"`
+	// WalletID scopes the new user to one distribution wallet. It is optional: requests that
+	// omit it — single-wallet tenants, and any client not sending the field — fall back to the
+	// tenant's default wallet, which the owner can change afterwards.
+	WalletID string `json:"wallet_id"`
 }
 
 func (cur CreateUserRequest) validate() *httperror.HTTPError {
@@ -74,6 +79,11 @@ func (cur CreateUserRequest) validate() *httperror.HTTPError {
 	validator.CheckError(utils.ValidateStringLength(cur.LastName, "last_name", namesMaxLength), "last_name", "")
 	validator.CheckError(utils.ValidateEmail(utils.TrimAndLower(cur.Email)), "email", "")
 	validateRoles(validator, cur.Roles)
+
+	// Owner is tenant-wide, so it is the one role a wallet cannot be attached to.
+	if cur.WalletID != "" && len(cur.Roles) == 1 && cur.Roles[0] == data.OwnerUserRole {
+		validator.AddError("wallet_id", "the owner role is tenant-wide and cannot be scoped to a wallet")
+	}
 
 	if validator.HasErrors() {
 		return httperror.BadRequest("Request invalid", nil, validator.Errors)
@@ -216,11 +226,11 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	// Non-owner users need a wallet membership to see anything (empty lists/403s otherwise).
 	// Owners are tenant-wide by definition and never get membership rows.
 	role := reqBody.Roles[0]
-	var defaultWallet *data.DistributionWallet
+	var membershipWallet *data.DistributionWallet
 	if role != data.OwnerUserRole {
-		defaultWallet, err = h.Models.DistributionWallets.GetDefault(ctx, h.Models.DBConnectionPool)
-		if err != nil {
-			httperror.InternalError(ctx, "Cannot resolve default wallet for new user", err, nil).Render(rw)
+		var walletErr *httperror.HTTPError
+		if membershipWallet, walletErr = h.resolveMembershipWallet(ctx, reqBody.WalletID); walletErr != nil {
+			walletErr.Render(rw)
 			return
 		}
 	}
@@ -243,9 +253,17 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if role != data.OwnerUserRole {
-		if _, err = h.Models.WalletMemberships.Insert(ctx, h.Models.DBConnectionPool, u.ID, defaultWallet.ID, role, &authenticatedUserID); err != nil {
-			httperror.InternalError(ctx, "Cannot grant default wallet membership to new user", err, nil).Render(rw)
+	if membershipWallet != nil {
+		// The auth package writes through its own connection pool and exposes no executor, so
+		// the user row and the membership row cannot share a transaction. Everything checkable
+		// was checked before the user was created; if the grant still fails, deactivate the
+		// user rather than leave a live account with no wallet access — an account that can log
+		// in and see nothing is the exact silent failure this membership prevents.
+		if _, err = h.Models.WalletMemberships.Insert(ctx, h.Models.DBConnectionPool, u.ID, membershipWallet.ID, role, &authenticatedUserID); err != nil {
+			if deactivateErr := h.AuthManager.DeactivateUser(ctx, token, u.ID); deactivateErr != nil {
+				h.CrashTrackerClient.LogAndReportErrors(ctx, deactivateErr, "Cannot deactivate user left without a wallet membership")
+			}
+			httperror.InternalError(ctx, "Cannot grant wallet membership to new user", err, nil).Render(rw)
 			return
 		}
 	}
@@ -263,6 +281,33 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 	log.Ctx(ctx).Infof("[CreateUserAccount] - User ID %s created user with account ID %s", authenticatedUserID, u.ID)
 	httpjson.RenderStatus(rw, http.StatusCreated, u, httpjson.JSON)
+}
+
+// resolveMembershipWallet picks the distribution wallet a new non-owner user is scoped to: the
+// one the request named, or the tenant default when it named none. It deliberately runs before
+// the user is created, so an unusable wallet rejects the whole request instead of leaving a
+// user behind that no membership could be attached to.
+func (h UserHandler) resolveMembershipWallet(ctx context.Context, walletID string) (*data.DistributionWallet, *httperror.HTTPError) {
+	if walletID == "" {
+		wallet, err := h.Models.DistributionWallets.GetDefault(ctx, h.Models.DBConnectionPool)
+		if err != nil {
+			return nil, httperror.InternalError(ctx, "Cannot resolve default wallet for new user", err, nil)
+		}
+		return wallet, nil
+	}
+
+	wallet, err := h.Models.DistributionWallets.Get(ctx, h.Models.DBConnectionPool, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return nil, httperror.BadRequest("", err, map[string]interface{}{"wallet_id": "wallet_id is invalid"})
+		}
+		return nil, httperror.InternalError(ctx, "Cannot resolve wallet for new user", err, nil)
+	}
+	if wallet.Status == data.ArchivedDistributionWalletStatus {
+		return nil, httperror.Conflict("cannot grant membership on an archived wallet", nil, nil)
+	}
+
+	return wallet, nil
 }
 
 func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) {

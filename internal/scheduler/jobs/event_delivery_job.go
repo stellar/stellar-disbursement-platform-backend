@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -118,27 +119,39 @@ func (j eventDeliveryJob) Execute(ctx context.Context) error {
 		ID      string `db:"id"`
 		Payload []byte `db:"payload"`
 	}
+	// Claiming reserves the batch so concurrent instances pick disjoint work instead of all
+	// delivering the same events: SKIP LOCKED steps over rows another run is claiming. The
+	// attempt is counted here rather than after the POST because the lock only lasts for this
+	// statement — counting up front is also what stops a crash mid-batch from letting a
+	// poisoned event retry forever.
 	var pending []eventRow
 	err = j.models.DBConnectionPool.SelectContext(ctx, &pending, `
-		SELECT id, payload FROM events
-		WHERE delivered_at IS NULL AND delivery_attempts < $1
-		ORDER BY occurred_at ASC
-		LIMIT $2`, eventDeliveryMaxAttempts, eventDeliveryBatchLimit)
+		WITH claimed AS (
+			SELECT id FROM events
+			WHERE delivered_at IS NULL AND delivery_attempts < $1
+			ORDER BY occurred_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		), reserved AS (
+			UPDATE events SET delivery_attempts = delivery_attempts + 1
+			FROM claimed WHERE events.id = claimed.id
+			RETURNING events.id, events.payload, events.occurred_at
+		)
+		SELECT id, payload FROM reserved ORDER BY occurred_at ASC`,
+		eventDeliveryMaxAttempts, eventDeliveryBatchLimit)
 	if err != nil {
-		return fmt.Errorf("listing undelivered events: %w", err)
+		return fmt.Errorf("claiming undelivered events: %w", err)
 	}
 
 	for _, event := range pending {
 		if deliverErr := j.deliver(ctx, webhookURL, organization.WebhookSecret, event.Payload); deliverErr != nil {
+			// The attempt was already counted at claim time; leaving delivered_at NULL is what
+			// puts the event back in front of the next run.
 			log.Ctx(ctx).Warnf("delivering event %s: %v", event.ID, deliverErr)
-			if _, uErr := j.models.DBConnectionPool.ExecContext(ctx, `
-				UPDATE events SET delivery_attempts = delivery_attempts + 1 WHERE id = $1`, event.ID); uErr != nil {
-				return fmt.Errorf("recording delivery attempt for event %s: %w", event.ID, uErr)
-			}
 			continue
 		}
 		if _, uErr := j.models.DBConnectionPool.ExecContext(ctx, `
-			UPDATE events SET delivered_at = NOW(), delivery_attempts = delivery_attempts + 1 WHERE id = $1`, event.ID); uErr != nil {
+			UPDATE events SET delivered_at = NOW() WHERE id = $1`, event.ID); uErr != nil {
 			return fmt.Errorf("marking event %s delivered: %w", event.ID, uErr)
 		}
 	}
@@ -155,9 +168,15 @@ func (j eventDeliveryJob) deliver(ctx context.Context, webhookURL, webhookSecret
 
 	// Signs the payload so consumers can verify it actually came from SDP: the webhook URL is
 	// the only thing an attacker would need to send fake events otherwise, and URLs leak into
-	// logs and proxies far more easily than a dedicated secret does.
+	// logs and proxies far more easily than a dedicated secret does. The timestamp is part of
+	// the signed material rather than just a header, so it can't be rewritten — that is what
+	// lets a consumer bound replay by rejecting deliveries outside its tolerance window.
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	mac := hmac.New(sha256.New, []byte(webhookSecret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte{'.'})
 	mac.Write(payload)
+	req.Header.Set("X-SDP-Timestamp", timestamp)
 	req.Header.Set("X-SDP-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
 
 	resp, err := j.httpClient.Do(req)

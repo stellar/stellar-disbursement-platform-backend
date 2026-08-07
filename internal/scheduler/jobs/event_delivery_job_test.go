@@ -10,8 +10,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,7 +77,7 @@ func Test_EventDeliveryJob(t *testing.T) {
 	t.Run("successful delivery posts the intact envelope, signed, and marks delivered", func(t *testing.T) {
 		var received atomic.Int32
 		var lastBody []byte
-		var lastSignature string
+		var lastSignature, lastTimestamp string
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, readErr := io.ReadAll(r.Body)
 			if readErr != nil {
@@ -84,6 +86,7 @@ func Test_EventDeliveryJob(t *testing.T) {
 			}
 			lastBody = body
 			lastSignature = r.Header.Get("X-SDP-Signature")
+			lastTimestamp = r.Header.Get("X-SDP-Timestamp")
 			received.Add(1)
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -103,10 +106,22 @@ func Test_EventDeliveryJob(t *testing.T) {
 		assert.Equal(t, events.WalletCreated, envelope.EventType)
 		assert.Equal(t, wallet.ID, envelope.SourceWalletID)
 
+		sentAt, tsErr := strconv.ParseInt(lastTimestamp, 10, 64)
+		require.NoError(t, tsErr, "consumers need a parseable timestamp to bound replay")
+		assert.WithinDuration(t, time.Now(), time.Unix(sentAt, 0), time.Minute)
+
 		mac := hmac.New(sha256.New, []byte(webhookSecret))
+		mac.Write([]byte(lastTimestamp + "."))
 		mac.Write(lastBody)
 		assert.Equal(t, "sha256="+hex.EncodeToString(mac.Sum(nil)), lastSignature,
 			"consumers must be able to verify the delivery actually came from SDP")
+
+		// The timestamp must be *inside* the MAC, not merely alongside it — otherwise a replayer
+		// could hand the consumer a fresh timestamp with the captured body and signature.
+		bodyOnly := hmac.New(sha256.New, []byte(webhookSecret))
+		bodyOnly.Write(lastBody)
+		assert.NotEqual(t, "sha256="+hex.EncodeToString(bodyOnly.Sum(nil)), lastSignature,
+			"a signature over the body alone would leave the timestamp forgeable")
 
 		// Idempotence: a second run has nothing to deliver.
 		before := received.Load()
@@ -151,6 +166,56 @@ func Test_EventDeliveryJob(t *testing.T) {
 		assert.False(t, delivered, "a poisoned event must not be delivered even with a healthy webhook")
 		assert.Equal(t, eventDeliveryMaxAttempts, attempts, "a poisoned event must not be retried or incremented past the cap")
 	})
+}
+
+// Test_EventDeliveryJob_skipsRowsClaimedByAnotherInstance proves the delivery batch is reserved:
+// an event another instance is already holding is stepped over rather than delivered a second
+// time. Standing in for the concurrent replica is an open transaction holding the row lock.
+func Test_EventDeliveryJob_skipsRowsClaimedByAnotherInstance(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+
+	var received atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		received.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	_, err = dbConnectionPool.ExecContext(ctx, `UPDATE organizations SET webhook_url = $1`, server.URL)
+	require.NoError(t, err)
+
+	require.NoError(t, events.Write(ctx, dbConnectionPool, events.WalletCreated, wallet.ID, map[string]any{"wallet_id": wallet.ID}))
+	var eventID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &eventID,
+		`SELECT id FROM events ORDER BY created_at DESC LIMIT 1`))
+
+	claimer, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	var lockedID string
+	require.NoError(t, claimer.GetContext(ctx, &lockedID, `SELECT id FROM events WHERE id = $1 FOR UPDATE`, eventID))
+
+	job := &eventDeliveryJob{models: models, httpClient: &http.Client{Timeout: eventDeliveryHTTPTimeout}}
+	require.NoError(t, job.Execute(ctx))
+
+	assert.Zero(t, received.Load(), "an event already claimed elsewhere must not be delivered again")
+	require.NoError(t, claimer.Rollback())
+
+	var attempts int
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &attempts, `SELECT delivery_attempts FROM events WHERE id = $1`, eventID))
+	assert.Zero(t, attempts, "a skipped event must not burn an attempt against the poison cap")
+
+	// Once the other instance lets go, the event is claimed and delivered normally.
+	require.NoError(t, job.Execute(ctx))
+	assert.Equal(t, int32(1), received.Load())
 }
 
 // Test_EventDeliveryJob_SSRFGuard proves the REAL production constructor (NewEventDeliveryJob,

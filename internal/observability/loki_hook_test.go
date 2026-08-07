@@ -152,3 +152,45 @@ func Test_LokiHook_QueueFullDropsWithoutBlockingOrPanicking(t *testing.T) {
 		t.Fatal("Fire() blocked the caller instead of dropping once the queue filled up")
 	}
 }
+
+func Test_SanitizeEndpoint(t *testing.T) {
+	testCases := []struct {
+		name    string
+		pushURL string
+		want    string
+	}{
+		{
+			name:    "keeps scheme and host",
+			pushURL: "https://alloy.internal:3100/loki/api/v1/push",
+			want:    "https://alloy.internal:3100",
+		},
+		{
+			name:    "drops userinfo credentials",
+			pushURL: "https://tenant:s3cr3t@alloy.internal/loki/api/v1/push",
+			want:    "https://alloy.internal",
+		},
+		{
+			name:    "drops query string credentials",
+			pushURL: "https://alloy.internal/loki/api/v1/push?token=s3cr3t",
+			want:    "https://alloy.internal",
+		},
+		{
+			name:    "never echoes an unparseable endpoint",
+			pushURL: "tenant:s3cr3t@alloy.internal",
+			want:    "an unparseable endpoint",
+		},
+		{
+			name:    "never echoes a schemeless endpoint",
+			pushURL: "alloy.internal/loki/api/v1/push?token=s3cr3t",
+			want:    "an unparseable endpoint",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SanitizeEndpoint(tc.pushURL)
+			assert.Equal(t, tc.want, got)
+			assert.NotContains(t, got, "s3cr3t")
+		})
+	}
+}
