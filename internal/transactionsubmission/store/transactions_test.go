@@ -1822,3 +1822,64 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 		})
 	}
 }
+
+// Test_TransactionModel_walletIDRoundTrip guards the multi-wallet routing contract: the TSS
+// worker resolves the distribution account from Transaction.WalletID, so wallet_id has to
+// survive the write→read round trip. It was written on INSERT but omitted from
+// TransactionColumnNames, which left WalletID always {Valid:false} and silently routed every
+// secondary-wallet payment back to the tenant's default account.
+func Test_TransactionModel_walletIDRoundTrip(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	txModel := NewTransactionModel(dbConnectionPool)
+
+	newPayment := func(externalID string, walletID sql.NullString) Transaction {
+		return Transaction{
+			ExternalID:      externalID,
+			TransactionType: TransactionTypePayment,
+			WalletID:        walletID,
+			Payment: Payment{
+				AssetCode:   "USDC",
+				AssetIssuer: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				Amount:      decimal.NewFromInt(1),
+				Destination: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+			},
+			TenantID: "tenant-id-1",
+		}
+	}
+
+	t.Run("wallet_id survives Insert→Get and Insert→Lock", func(t *testing.T) {
+		walletID := uuid.NewString()
+		inserted, insErr := txModel.Insert(ctx, newPayment("external-id-wallet-round-trip", sql.NullString{String: walletID, Valid: true}))
+		require.NoError(t, insErr)
+
+		got, getErr := txModel.Get(ctx, inserted.ID)
+		require.NoError(t, getErr)
+		assert.True(t, got.WalletID.Valid, "Get must return wallet_id — the TSS worker routes on it")
+		assert.Equal(t, walletID, got.WalletID.String)
+
+		// Lock is the read the worker actually goes through (via ChannelTransactionBundleModel).
+		locked, lockErr := txModel.Lock(ctx, dbConnectionPool, inserted.ID, 1, 10)
+		require.NoError(t, lockErr)
+		assert.True(t, locked.WalletID.Valid, "Lock must return wallet_id — this is the worker's read path")
+		assert.Equal(t, walletID, locked.WalletID.String)
+	})
+
+	t.Run("a NULL wallet_id stays invalid rather than an empty string", func(t *testing.T) {
+		// Legacy and non-payment rows carry no wallet. They must come back Valid:false so the
+		// resolver takes its tenant-default fallback; a COALESCE would report Valid:true with
+		// an empty string and emit blank wallet_id log labels.
+		inserted, insErr := txModel.Insert(ctx, newPayment("external-id-wallet-null", sql.NullString{}))
+		require.NoError(t, insErr)
+
+		got, getErr := txModel.Get(ctx, inserted.ID)
+		require.NoError(t, getErr)
+		assert.False(t, got.WalletID.Valid)
+		assert.Empty(t, got.WalletID.String)
+	})
+}

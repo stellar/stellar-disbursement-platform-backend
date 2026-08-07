@@ -219,6 +219,7 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"id",
 			"external_id",
 			"tenant_id",
+			"wallet_id",
 			"transaction_type",
 			"distribution_account",
 			"status",
