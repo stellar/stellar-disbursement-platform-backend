@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	migrate "github.com/rubenv/sql-migrate"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 
