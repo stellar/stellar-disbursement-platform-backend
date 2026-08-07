@@ -2838,3 +2838,108 @@ func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]st
 	u.RawQuery = q.Encode()
 	return u.String()
 }
+
+// Test_DisbursementHandler_PatchDisbursementStatus_circleTenant covers the Circle path, which
+// had no coverage at all when multi-wallet moved this handler onto distribution_wallets.
+//
+// A Circle tenant's default wallet row is blank and PENDING_USER_ACTIVATION by construction —
+// provisionDistributionAccount returns without an address, syncDefaultDistributionWallet only
+// copies one across for Stellar types, and completing Circle setup updates circle_client_config
+// and the tenant, never this row. Reading the account from the row therefore rejected every
+// Circle disbursement, and would have dropped CircleWalletID even past that check.
+func Test_DisbursementHandler_PatchDisbursementStatus_circleTenant(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetTokenInContext(ctx, "token")
+	userID := "valid-user-id"
+	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
+	user := &auth.User{ID: userID, Email: "email@email.com", IsOwner: true}
+
+	authManagerMock := &auth.AuthManagerMock{}
+	mockDistAccSvc := svcMocks.NewMockDistributionAccountService(t)
+	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+
+	handler := &DisbursementHandler{
+		Models:                      models,
+		AuthManager:                 authManagerMock,
+		DistributionAccountResolver: mockDistAccResolver,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:                     models,
+			AuthManager:                authManagerMock,
+			DistributionAccountService: mockDistAccSvc,
+		},
+	}
+
+	r := chi.NewRouter()
+	r.Patch("/disbursements/{id}/status", handler.PatchDisbursementStatus)
+
+	readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+		Name:   "circle ready disbursement",
+		Status: data.ReadyDisbursementStatus,
+		StatusHistory: []data.DisbursementStatusHistoryEntry{
+			{Status: data.DraftDisbursementStatus, UserID: userID},
+			{Status: data.ReadyDisbursementStatus, UserID: userID},
+		},
+	})
+
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   readyDisbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.DraftPaymentStatus,
+	})
+
+	// Shape the source wallet exactly as tenant provisioning leaves it for a Circle tenant:
+	// no Stellar address, and a distribution account status that never leaves PENDING.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets
+		SET distribution_account_address = NULL,
+		    distribution_account_type     = $1,
+		    distribution_account_status   = $2
+		WHERE id = $3`,
+		schema.DistributionAccountCircleDBVault, schema.AccountStatusPendingUserActivation,
+		readyDisbursement.SourceWalletID)
+	require.NoError(t, err)
+
+	// What the tenant-level resolver returns for a configured Circle tenant: the wallet ID that
+	// Circle payments are actually addressed by, and the live ACTIVE status.
+	circleAccount := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id-1234",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+
+	authManagerMock.On("GetUserByID", mock.Anything, userID).Return(user, nil).Once()
+	mockDistAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(circleAccount, nil).Once()
+	// The account reaching the balance check must be the Circle one, carrying its wallet ID —
+	// this is the assertion that fails if the handler resolves from distribution_wallets.
+	mockDistAccSvc.On("GetBalance", mock.Anything, &circleAccount, mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(1000), nil).Once()
+
+	reqBody := bytes.NewBuffer(nil)
+	require.NoError(t, json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"}))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.NotContains(t, rr.Body.String(), "no funded distribution account yet",
+		"a Circle wallet has no Stellar address by design and must not be rejected for it")
+	require.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+
+	authManagerMock.AssertExpectations(t)
+}

@@ -673,15 +673,40 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.InternalError(ctx, "Cannot get distribution account", walletErr, nil).Render(w)
 			return
 		}
-		if sourceWallet.Address == nil || *sourceWallet.Address == "" {
-			httperror.BadRequest("the disbursement's source wallet has no funded distribution account yet", nil, nil).Render(w)
-			return
-		}
 
-		distributionAccount := schema.TransactionAccount{
-			Address: *sourceWallet.Address,
-			Type:    sourceWallet.AccountType,
-			Status:  sourceWallet.AccountStatus,
+		var distributionAccount schema.TransactionAccount
+		if sourceWallet.AccountType.IsStellar() {
+			if sourceWallet.Address == nil || *sourceWallet.Address == "" {
+				httperror.BadRequest("the disbursement's source wallet has no funded distribution account yet", nil, nil).Render(w)
+				return
+			}
+
+			distributionAccount = schema.TransactionAccount{
+				Address: *sourceWallet.Address,
+				Type:    sourceWallet.AccountType,
+				Status:  sourceWallet.AccountStatus,
+			}
+		} else {
+			// Non-Stellar (Circle) tenants: distribution_wallets can only describe a Stellar
+			// account. It has no column for a Circle wallet ID, and the row is created blank and
+			// PENDING_USER_ACTIVATION for a Circle tenant — provisionDistributionAccount returns
+			// without an address, and syncDefaultDistributionWallet only copies one across when
+			// the type IsStellar. Completing Circle setup does not repair it either: the config
+			// handler upserts circle_client_config and flips the TENANT to ACTIVE, never touching
+			// this row. Reading the account from here would therefore reject every Circle
+			// disbursement on the empty address above, and even past that would hand
+			// StartDisbursement an account with no CircleWalletID — which is how Circle payments
+			// locate the money (TransactionAccount.ID() is "circle:<walletID>").
+			//
+			// So resolve these the way this handler did before multi-wallet: from the tenant,
+			// which is where a Circle account's wallet ID and live status actually live. Nothing
+			// is lost — multi-wallet is Stellar-only, since CreateWallet mints a Stellar keypair,
+			// so a Circle tenant has exactly one distribution account to resolve.
+			distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+			if err != nil {
+				httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
+				return
+			}
 		}
 
 		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, &distributionAccount)
