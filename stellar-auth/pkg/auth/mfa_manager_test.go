@@ -240,6 +240,73 @@ func Test_defaultMFAManager_ValidateMFACode(t *testing.T) {
 		assert.Error(t, err)
 		assert.True(t, errors.Is(err, ErrMFACodeInvalid))
 	})
+
+	t.Run("Test device is locked out after reaching the max attempts", func(t *testing.T) {
+		testDeviceID := "lockout-device"
+		testCode := "424242"
+		_, err := dbConnectionPool.ExecContext(ctx, `
+            INSERT INTO auth_user_mfa_codes (device_id, code, auth_user_id, device_expires_at, code_expires_at)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour', NOW() + INTERVAL '1 hour')`, testDeviceID, testCode, randUser.ID)
+		require.NoError(t, err)
+
+		// The first (max-1) wrong guesses report an invalid code.
+		for i := 0; i < mfaMaxValidationAttempts-1; i++ {
+			_, err = m.ValidateMFACode(ctx, testDeviceID, "000000")
+			require.ErrorIs(t, err, ErrMFACodeInvalid)
+		}
+
+		// The guess that reaches the cap reports the device as locked out.
+		_, err = m.ValidateMFACode(ctx, testDeviceID, "000000")
+		require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
+
+		// Even the correct code is now rejected until a new one is issued.
+		_, err = m.ValidateMFACode(ctx, testDeviceID, testCode)
+		require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
+	})
+
+	t.Run("Test issuing a new code resets the attempt counter", func(t *testing.T) {
+		testDeviceID := "reset-device"
+		oldCode := "111111"
+		_, err := dbConnectionPool.ExecContext(ctx, `
+            INSERT INTO auth_user_mfa_codes (device_id, code, auth_user_id, device_expires_at, code_expires_at, attempts)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour', NOW() + INTERVAL '1 hour', $4)`,
+			testDeviceID, oldCode, randUser.ID, mfaMaxValidationAttempts)
+		require.NoError(t, err)
+
+		// The device starts locked out.
+		_, err = m.ValidateMFACode(ctx, testDeviceID, oldCode)
+		require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
+
+		// Issuing a new code (as the Resend code flow does) clears the counter.
+		newCode := "222222"
+		err = m.upsertMFACode(ctx, testDeviceID, randUser.ID, newCode)
+		require.NoError(t, err)
+
+		userID, err := m.ValidateMFACode(ctx, testDeviceID, newCode)
+		require.NoError(t, err)
+		assert.Equal(t, randUser.ID, userID)
+	})
+
+	t.Run("Test the last allowed attempt succeeds and clears the counter", func(t *testing.T) {
+		testDeviceID := "boundary-device"
+		testCode := "555555"
+		// Seed the device one attempt below the cap: a correct code must still be accepted.
+		_, err := dbConnectionPool.ExecContext(ctx, `
+            INSERT INTO auth_user_mfa_codes (device_id, code, auth_user_id, device_expires_at, code_expires_at, attempts)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour', NOW() + INTERVAL '1 hour', $4)`,
+			testDeviceID, testCode, randUser.ID, mfaMaxValidationAttempts-1)
+		require.NoError(t, err)
+
+		userID, err := m.ValidateMFACode(ctx, testDeviceID, testCode)
+		require.NoError(t, err)
+		assert.Equal(t, randUser.ID, userID)
+
+		// A successful validation spends the code and resets the attempt counter.
+		mc, err := m.getByDeviceAndUser(ctx, testDeviceID, randUser.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, mc.Attempts)
+		assert.Empty(t, mc.Code)
+	})
 }
 
 func Test_defaultMFAManager_RememberDevice(t *testing.T) {

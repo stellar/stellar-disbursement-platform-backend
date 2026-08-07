@@ -28,14 +28,16 @@ type defaultMFAManager struct {
 }
 
 const (
-	mfaCodeMaxLength     = 6
-	mfaDeviceExpiryHours = time.Hour * 24 * 7 // 7 days
-	mfaCodeExpiryMinutes = time.Minute * 5    // 5 minutes
+	mfaCodeMaxLength         = 6
+	mfaDeviceExpiryHours     = time.Hour * 24 * 7 // 7 days
+	mfaCodeExpiryMinutes     = time.Minute * 5    // 5 minutes
+	mfaMaxValidationAttempts = 5                  // failed validations allowed per device before a new code is required
 )
 
 var (
 	ErrMFACodeInvalid         = errors.New("MFA code is invalid")
 	ErrMFANoCodeForUserDevice = errors.New("no MFA code for user and device")
+	ErrMFAAttemptsExhausted   = errors.New("too many incorrect MFA code attempts")
 )
 
 type mfaCode struct {
@@ -44,6 +46,7 @@ type mfaCode struct {
 	Code            string     `db:"code"`
 	DeviceExpiresAt *time.Time `db:"device_expires_at"`
 	CodeExpiresAt   *time.Time `db:"code_expires_at"`
+	Attempts        int        `db:"attempts"`
 }
 
 // MFADeviceRemembered checks if the device is remembered for the user.
@@ -99,17 +102,26 @@ func (m *defaultMFAManager) GenerateMFACode(ctx context.Context, deviceID, userI
 }
 
 // ValidateMFACode checks if the MFA code is valid for the device ID and returns the user ID.
+// Each failed validation increments a per-device counter; once mfaMaxValidationAttempts is
+// reached the device is locked out (ErrMFAAttemptsExhausted) until a new code is issued.
 func (m *defaultMFAManager) ValidateMFACode(ctx context.Context, deviceID, code string) (string, error) {
 	return db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
 		mc, err := m.getByDeviceAndCode(ctx, deviceID, code)
 		if err != nil {
 			if errors.Is(err, ErrMFANoCodeForUserDevice) {
-				return "", ErrMFACodeInvalid
+				// The submitted code matches no pending code for the device. Count the failed
+				// attempt against the device's live code and lock out once the cap is reached.
+				return "", m.failValidation(ctx, deviceID)
 			}
 			return "", fmt.Errorf("error validating MFA code for device ID %s: %w", deviceID, err)
 		}
 
-		if mc != nil && mc.Code == code && mc.CodeExpiresAt != nil && mc.CodeExpiresAt.After(time.Now()) {
+		// The device is already locked out: reject even a correct code until a new one is issued.
+		if mc.Attempts >= mfaMaxValidationAttempts {
+			return "", ErrMFAAttemptsExhausted
+		}
+
+		if mc.Code == code && mc.CodeExpiresAt != nil && mc.CodeExpiresAt.After(time.Now()) {
 			err = m.expireMFACode(ctx, deviceID, code)
 			if err != nil {
 				return "", fmt.Errorf("error expiring MFA code for device ID %s and code %s: %w", deviceID, code, err)
@@ -117,8 +129,22 @@ func (m *defaultMFAManager) ValidateMFACode(ctx context.Context, deviceID, code 
 			return mc.UserID, nil
 		}
 
-		return "", ErrMFACodeInvalid
+		// The code matched a row but was expired: count it as a failed attempt too.
+		return "", m.failValidation(ctx, deviceID)
 	})
+}
+
+// failValidation records a failed MFA validation for the device and returns the error to
+// surface: ErrMFAAttemptsExhausted once the attempt cap is reached, otherwise ErrMFACodeInvalid.
+func (m *defaultMFAManager) failValidation(ctx context.Context, deviceID string) error {
+	exhausted, err := m.registerFailedMFAAttempt(ctx, deviceID)
+	if err != nil {
+		return err
+	}
+	if exhausted {
+		return ErrMFAAttemptsExhausted
+	}
+	return ErrMFACodeInvalid
 }
 
 // RememberDevice updates the device expiry for the device.
@@ -167,21 +193,46 @@ func (m *defaultMFAManager) ForgetAllDevices(ctx context.Context, userID string)
 	return nil
 }
 
+// registerFailedMFAAttempt increments the failed-attempt counter for the device's live MFA
+// code and reports whether the per-device attempt cap has now been reached. It is a no-op
+// (returns false) when the device has no live code to count against.
+func (m *defaultMFAManager) registerFailedMFAAttempt(ctx context.Context, deviceID string) (bool, error) {
+	if deviceID == "" {
+		return false, fmt.Errorf("device ID is required")
+	}
+	const query = `
+		WITH updated AS (
+			UPDATE auth_user_mfa_codes
+			SET attempts = attempts + 1
+			WHERE device_id = $1 AND code_expires_at IS NOT NULL
+			RETURNING attempts
+		)
+		SELECT COALESCE(MAX(attempts), 0) FROM updated
+	`
+	var attempts int
+	err := m.dbConnectionPool.GetContext(ctx, &attempts, query, deviceID)
+	if err != nil {
+		return false, fmt.Errorf("error registering failed MFA attempt for device ID %s: %w", deviceID, err)
+	}
+	return attempts >= mfaMaxValidationAttempts, nil
+}
+
 // getByDeviceAndUser gets the MFA code for the user and device.
 func (m *defaultMFAManager) getByDeviceAndUser(ctx context.Context, deviceID, userID string) (*mfaCode, error) {
 	if deviceID == "" || userID == "" {
 		return nil, fmt.Errorf("device ID and user ID are required")
 	}
 	const query = `
-		SELECT 
+		SELECT
 		    device_id,
 		    auth_user_id,
 		    COALESCE(code, '') AS code,
 		    device_expires_at,
-		    code_expires_at
-		FROM 
-		    auth_user_mfa_codes 
-		WHERE 
+		    code_expires_at,
+		    attempts
+		FROM
+		    auth_user_mfa_codes
+		WHERE
 		    device_id = $1 AND
 		    auth_user_id = $2
 	`
@@ -203,15 +254,16 @@ func (m *defaultMFAManager) getByDeviceAndCode(ctx context.Context, deviceID, co
 		return nil, fmt.Errorf("device ID and code are required")
 	}
 	const query = `
-		SELECT 
+		SELECT
 		    device_id,
 		    auth_user_id,
 		    COALESCE(code, '') AS code,
 		    device_expires_at,
-		    code_expires_at
-		FROM 
-		    auth_user_mfa_codes 
-		WHERE 
+		    code_expires_at,
+		    attempts
+		FROM
+		    auth_user_mfa_codes
+		WHERE
 		    device_id = $1 AND
 		    code = $2
 	`
@@ -245,11 +297,13 @@ func (m *defaultMFAManager) upsertMFACode(ctx context.Context, deviceID, userID,
 	if deviceID == "" || userID == "" || code == "" {
 		return fmt.Errorf("device ID, user ID and code are required")
 	}
+	// A freshly issued code always starts with a clean attempt counter, so the "Resend code"
+	// flow lifts any prior lockout for the device.
 	const query = `
-		INSERT INTO auth_user_mfa_codes (auth_user_id, device_id, code, code_expires_at) 
-		VALUES ($1, $2, $3, $4) 
-		ON CONFLICT (auth_user_id, device_id) 
-		DO UPDATE SET code = $3, code_expires_at = $4
+		INSERT INTO auth_user_mfa_codes (auth_user_id, device_id, code, code_expires_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (auth_user_id, device_id)
+		DO UPDATE SET code = $3, code_expires_at = $4, attempts = 0
 	`
 	_, err := m.dbConnectionPool.ExecContext(ctx, query, userID, deviceID, code, time.Now().Add(mfaCodeExpiryMinutes))
 	if err != nil {
@@ -281,8 +335,8 @@ func (m *defaultMFAManager) expireMFACode(ctx context.Context, deviceID, code st
 		return fmt.Errorf("device ID and code are required")
 	}
 	const query = `
-		UPDATE auth_user_mfa_codes 
-		SET code = null, code_expires_at = null
+		UPDATE auth_user_mfa_codes
+		SET code = null, code_expires_at = null, attempts = 0
 		WHERE device_id = $1 AND code = $2
 	`
 	_, err := m.dbConnectionPool.ExecContext(ctx, query, deviceID, code)

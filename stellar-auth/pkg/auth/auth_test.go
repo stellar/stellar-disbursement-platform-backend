@@ -1609,6 +1609,25 @@ func Test_AuthManager_AuthenticateMFA(t *testing.T) {
 		mfaManagerMock.AssertExpectations(t)
 	})
 
+	t.Run("returns error and does not remember the device when the attempt limit is exhausted", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authManager := NewAuthManager(WithCustomMFAManagerOption(mfaManagerMock))
+
+		mfaManagerMock.
+			On("ValidateMFACode", ctx, deviceID, code).
+			Return("", ErrMFAAttemptsExhausted).
+			Once()
+
+		mfaManagerMock.On("RememberDevice", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, true)
+		require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
+		assert.Empty(t, token)
+
+		mfaManagerMock.AssertNotCalled(t, "RememberDevice", mock.Anything, mock.Anything, mock.Anything)
+		mfaManagerMock.AssertExpectations(t)
+	})
+
 	t.Run("remembers the device only after validation, keyed on the user ID", func(t *testing.T) {
 		mfaManagerMock := &MFAManagerMock{}
 		authenticatorMock := &AuthenticatorMock{}
