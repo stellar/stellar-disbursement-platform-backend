@@ -91,8 +91,8 @@ func newWebhookHTTPClient(timeout time.Duration) *http.Client {
 // isPublicWebhookAddress reports whether ip is safe to deliver a webhook to: reachable only if
 // it isn't a private, loopback, link-local, unspecified, or multicast address.
 func isPublicWebhookAddress(ip net.IP) bool {
-	return !(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast())
+	return !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() && !ip.IsUnspecified() && !ip.IsMulticast()
 }
 
 func (j eventDeliveryJob) Execute(ctx context.Context) error {
