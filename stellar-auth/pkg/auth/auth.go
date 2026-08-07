@@ -422,7 +422,7 @@ func (am *defaultAuthManager) AuthenticateMFA(ctx context.Context, deviceID, cod
 	}
 
 	if rememberMe {
-		if err := am.mfaManager.RememberDevice(ctx, deviceID, userID); err != nil {
+		if err = am.mfaManager.RememberDevice(ctx, deviceID, userID); err != nil {
 			return "", fmt.Errorf("error remembering device ID %s: %w", deviceID, err)
 		}
 	}

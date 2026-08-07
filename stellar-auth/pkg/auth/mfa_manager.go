@@ -195,7 +195,8 @@ func (m *defaultMFAManager) ForgetAllDevices(ctx context.Context, userID string)
 
 // registerFailedMFAAttempt increments the failed-attempt counter for the device's live MFA
 // code and reports whether the per-device attempt cap has now been reached. It is a no-op
-// (returns false) when the device has no live code to count against.
+// (returns false) when the device has no unexpired code to count against, so guesses against
+// an already-expired code (which can never succeed) do not push the user toward a lockout.
 func (m *defaultMFAManager) registerFailedMFAAttempt(ctx context.Context, deviceID string) (bool, error) {
 	if deviceID == "" {
 		return false, fmt.Errorf("device ID is required")
@@ -204,7 +205,7 @@ func (m *defaultMFAManager) registerFailedMFAAttempt(ctx context.Context, device
 		WITH updated AS (
 			UPDATE auth_user_mfa_codes
 			SET attempts = attempts + 1
-			WHERE device_id = $1 AND code_expires_at IS NOT NULL
+			WHERE device_id = $1 AND code_expires_at > NOW()
 			RETURNING attempts
 		)
 		SELECT COALESCE(MAX(attempts), 0) FROM updated

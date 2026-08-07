@@ -287,6 +287,28 @@ func Test_defaultMFAManager_ValidateMFACode(t *testing.T) {
 		assert.Equal(t, randUser.ID, userID)
 	})
 
+	t.Run("Test failed guesses against an expired code do not count toward the lockout", func(t *testing.T) {
+		testDeviceID := "expired-code-device"
+		testCode := "424243"
+		// Seed an already-expired code (still present in the row, timestamp in the past).
+		_, err := dbConnectionPool.ExecContext(ctx, `
+            INSERT INTO auth_user_mfa_codes (device_id, code, auth_user_id, device_expires_at, code_expires_at, attempts)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour', NOW() - INTERVAL '1 minute', 0)`, testDeviceID, testCode, randUser.ID)
+		require.NoError(t, err)
+
+		// Many wrong guesses against the dead code stay "invalid" and never trigger a lockout,
+		// because an expired code can never succeed. The remedy is to request a new code.
+		for i := 0; i < mfaMaxValidationAttempts+2; i++ {
+			_, err = m.ValidateMFACode(ctx, testDeviceID, "000000")
+			require.ErrorIs(t, err, ErrMFACodeInvalid)
+		}
+
+		// The attempt counter never moved.
+		mc, err := m.getByDeviceAndUser(ctx, testDeviceID, randUser.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, mc.Attempts)
+	})
+
 	t.Run("Test the last allowed attempt succeeds and clears the counter", func(t *testing.T) {
 		testDeviceID := "boundary-device"
 		testCode := "555555"
@@ -439,8 +461,8 @@ func Test_defaultMFAManager_ForgetAllDevices(t *testing.T) {
 
 		// Both of the user's devices are forgotten.
 		for _, deviceID := range []string{"deviceA", "deviceB"} {
-			mc, err := m.getByDeviceAndUser(ctx, deviceID, randUser.ID)
-			require.NoError(t, err)
+			mc, getErr := m.getByDeviceAndUser(ctx, deviceID, randUser.ID)
+			require.NoError(t, getErr)
 			require.NotNil(t, mc)
 			require.Nil(t, mc.DeviceExpiresAt)
 		}
