@@ -184,6 +184,7 @@ func TestStatisticsHandler(t *testing.T) {
 			"payment_amounts_by_asset": [
 				{
 					"asset_code": "USDC",
+					"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 					"payment_amounts": {
 							"canceled": "",
 						  "draft": "10.0000000",
@@ -234,6 +235,7 @@ func TestStatisticsHandler(t *testing.T) {
 			"payment_amounts_by_asset": [
 				{
 					"asset_code": "USDC",
+					"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 					"payment_amounts": {
 							"canceled": "",
 						  "draft": "10.0000000",

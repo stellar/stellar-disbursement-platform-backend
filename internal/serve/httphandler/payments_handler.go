@@ -381,19 +381,11 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 	}
 	serviceReq.SourceWalletID = sourceWallet.ID
 
-	// The balance/trustline check must run against THIS payment's own source wallet, not the
-	// tenant's legacy single distribution account (DistributionAccountFromContext) - on a
-	// multi-wallet tenant those are frequently different accounts, and checking the wrong one
-	// either wrongly blocks a valid payment or (worse) validates against an account with no
-	// relation to the funds actually being spent.
-	if sourceWallet.Address == nil || *sourceWallet.Address == "" {
-		httperror.BadRequest("the source wallet has no funded distribution account yet", nil, nil).Render(w)
+	distAccount, accountErr := resolveSourceDistributionAccount(ctx, p.DistributionAccountResolver, sourceWallet,
+		"the source wallet has no funded distribution account yet")
+	if accountErr != nil {
+		accountErr.Render(w)
 		return
-	}
-	distAccount := schema.TransactionAccount{
-		Address: *sourceWallet.Address,
-		Type:    sourceWallet.AccountType,
-		Status:  sourceWallet.AccountStatus,
 	}
 
 	payment, err := p.DirectPaymentService.CreateDirectPayment(ctx, serviceReq, user, &distAccount)

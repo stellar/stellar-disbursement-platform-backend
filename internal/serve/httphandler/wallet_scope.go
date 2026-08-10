@@ -3,8 +3,10 @@ package httphandler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/stellar/go-stellar-sdk/support/log"
 
@@ -96,6 +98,138 @@ func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager
 		return httperror.InternalError(ctx, "Cannot authorize wallet action", err, nil)
 	}
 	return nil
+}
+
+// walletCapability is one wallet-scoped write action, written as the two gates a request has to
+// clear: the tenant-role gate declared on its route (serve.go) and the membership-role gate
+// enforced at the action site. Authorization is global role first and membership second — a
+// membership can only narrow, never widen — so the caller must satisfy both sets.
+type walletCapability struct {
+	name        string
+	globalRoles []data.UserRole
+	walletRoles []data.UserRole
+}
+
+// walletCapabilityMatrix is the single place that pairing is written down: the capabilities
+// endpoint and the inert-grant check both read it instead of restating the rules, and
+// Test_WalletCapabilityMatrix_Conformance pins each entry to the enforcement site named in its
+// comment, so this table cannot drift from the code that actually enforces it.
+var walletCapabilityMatrix = []walletCapability{
+	{
+		// POST /disbursements, POST /disbursements/{id}/instructions, DELETE /disbursements/{id}.
+		name:        "can_create_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.InitiatorUserRole},
+	},
+	{
+		// PATCH /disbursements/{id}/status → DisbursementManagementService.StartDisbursement.
+		name:        "can_start_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
+	},
+	{
+		// PATCH /disbursements/{id}/status → DisbursementManagementService.PauseDisbursement.
+		name:        "can_pause_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
+	},
+	{
+		// PATCH /disbursements/{id}/status → DisbursementManagementService.CancelDisbursement.
+		name:        "can_cancel_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
+	},
+	{
+		// POST /payments (direct payment) → PostDirectPayment.
+		name:        "can_create_payment",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+	},
+	{
+		// PATCH /payments/retry → RetryPayments.
+		name:        "can_retry_payment",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+	},
+	{
+		// PATCH /payments/{id}/status (cancel) → PatchPaymentStatus.
+		name:        "can_cancel_payment",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole},
+	},
+}
+
+// walletCapabilitiesFor computes what a caller may actually do on one wallet, given their global
+// roles and the membership roles they hold on that wallet. Owners are tenant-wide: neither gate
+// applies to them. There is deliberately no "effective role" here — the two gates do not
+// collapse into one, which is exactly why the pair has to be reported as a capability set.
+func walletCapabilitiesFor(user *auth.User, membershipRoles []data.UserRole) map[string]bool {
+	isOwner := user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole))
+	globalRoles := userRoles(user)
+
+	capabilities := make(map[string]bool, len(walletCapabilityMatrix))
+	for _, capability := range walletCapabilityMatrix {
+		globalOK := isOwner || rolesIntersect(globalRoles, capability.globalRoles)
+		walletOK := isOwner || rolesIntersect(membershipRoles, capability.walletRoles)
+		capabilities[capability.name] = globalOK && walletOK
+	}
+	return capabilities
+}
+
+// walletGrantIsInert reports whether granting role to user would confer nothing whatsoever.
+//
+// The reviewer's rule is "reject a grant that narrows to nothing", and his example was an
+// approver membership on a global developer. Measured on WRITE capability alone that pair is
+// indeed empty — but it is not inert, and rejecting it would break the product:
+//
+//   - A membership is also the READ-visibility grant. GetWalletIDsForUser selects every
+//     membership row regardless of role, and ResolveWalletReadScope filters on that set, so ANY
+//     membership makes the account visible to its holder.
+//   - serve.go admits developers to the membership-scoped reads via GetAllRoles(), and
+//     GetDistributionWallets filters by membership. So a membership is the ONLY way a developer
+//     ever sees an account at all; rejecting the grant leaves their account list permanently
+//     empty with no API call able to populate it.
+//
+// The genuinely inert case is the one the check was written to catch — "a no-op the operator
+// cannot see" — and it is the opposite grantee: a global Owner. Owners short-circuit both gates
+// (EnsureUserCanActOnWallet and ResolveWalletReadScope return early for them), so the row
+// changes nothing at all, and the operator cannot tell it had no effect.
+//
+// Grants that confer read but not write are real and are allowed here. Making their consequence
+// legible is the job of the grant picker's per-role annotation, which is the reviewer's own
+// separate fix for the same confusion — enforcement rejects no-ops, the affordance explains the
+// rest.
+func walletGrantIsInert(user *auth.User, _ data.UserRole) bool {
+	return user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole))
+}
+
+// inertGrantReason explains a rejected grant in the operator's terms.
+func inertGrantReason(role data.UserRole) string {
+	article := "a"
+	if name := role.String(); name != "" && strings.ContainsRune("aeiou", rune(name[0])) {
+		article = "an"
+	}
+
+	return fmt.Sprintf(
+		"%s %s membership grants nothing to an owner: owners already have tenant-wide access to "+
+			"every distribution account, so this membership would have no effect", article, role)
+}
+
+func userRoles(user *auth.User) []data.UserRole {
+	roles := make([]data.UserRole, 0, len(user.Roles))
+	for _, role := range user.Roles {
+		roles = append(roles, data.UserRole(role))
+	}
+	return roles
+}
+
+func rolesIntersect(have, want []data.UserRole) bool {
+	for _, role := range have {
+		if slices.Contains(want, role) {
+			return true
+		}
+	}
+	return false
 }
 
 // XWalletIDHeader carries the explicit source distribution wallet on write requests.

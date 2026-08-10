@@ -142,6 +142,11 @@ func Test_EventDeliveryJob(t *testing.T) {
 		assert.False(t, delivered)
 		assert.Equal(t, 1, attempts)
 
+		var leased bool
+		require.NoError(t, dbConnectionPool.GetContext(ctx, &leased,
+			`SELECT claimed_until IS NOT NULL FROM events WHERE id = $1`, eventID))
+		assert.False(t, leased, "a failed delivery must release its lease so the retry is one interval away, not one lease window")
+
 		require.NoError(t, job.Execute(ctx))
 		_, attempts = eventState(eventID)
 		assert.Equal(t, 2, attempts, "each run retries undelivered events")
@@ -168,9 +173,12 @@ func Test_EventDeliveryJob(t *testing.T) {
 	})
 }
 
-// Test_EventDeliveryJob_skipsRowsClaimedByAnotherInstance proves the delivery batch is reserved:
-// an event another instance is already holding is stepped over rather than delivered a second
-// time. Standing in for the concurrent replica is an open transaction holding the row lock.
+// Test_EventDeliveryJob_skipsRowsClaimedByAnotherInstance proves SKIP LOCKED does its half of the
+// reservation: two claim statements racing at the same instant take disjoint rows. That is all the
+// row locks buy — they are released as soon as the claiming statement returns — so holding the
+// batch across the deliveries themselves falls to the lease, covered by
+// Test_EventDeliveryJob_leaseReservesBatchAcrossDelivery. Standing in for the racing replica here
+// is an open transaction holding the row lock.
 func Test_EventDeliveryJob_skipsRowsClaimedByAnotherInstance(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -216,6 +224,65 @@ func Test_EventDeliveryJob_skipsRowsClaimedByAnotherInstance(t *testing.T) {
 	// Once the other instance lets go, the event is claimed and delivered normally.
 	require.NoError(t, job.Execute(ctx))
 	assert.Equal(t, int32(1), received.Load())
+}
+
+// Test_EventDeliveryJob_leaseReservesBatchAcrossDelivery proves a claim outlives the statement that
+// made it. The claim's row locks are gone the moment SelectContext returns — before any POST — so
+// the persisted lease is the only thing between a second replica's tick and a duplicate concurrent
+// delivery that also burns a second attempt against the poison cap. It equally proves the lease
+// expires unaided: a replica that crashes mid-batch delays its events by one lease window, it does
+// not strand them, and there is no reaper that could fail to run.
+func Test_EventDeliveryJob_leaseReservesBatchAcrossDelivery(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+
+	var received atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		received.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	_, err = dbConnectionPool.ExecContext(ctx, `UPDATE organizations SET webhook_url = $1`, server.URL)
+	require.NoError(t, err)
+
+	require.NoError(t, events.Write(ctx, dbConnectionPool, events.WalletCreated, wallet.ID, map[string]any{"wallet_id": wallet.ID}))
+	var eventID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &eventID,
+		`SELECT id FROM events ORDER BY created_at DESC LIMIT 1`))
+
+	setLease := func(fromNow string) {
+		_, uErr := dbConnectionPool.ExecContext(ctx,
+			`UPDATE events SET claimed_until = NOW() + $2::interval WHERE id = $1`, eventID, fromNow)
+		require.NoError(t, uErr)
+	}
+	attempts := func() int {
+		var n int
+		require.NoError(t, dbConnectionPool.GetContext(ctx, &n, `SELECT delivery_attempts FROM events WHERE id = $1`, eventID))
+		return n
+	}
+
+	job := &eventDeliveryJob{models: models, httpClient: &http.Client{Timeout: eventDeliveryHTTPTimeout}}
+
+	// A live lease is what a replica currently working through its batch leaves behind.
+	setLease("5 minutes")
+	require.NoError(t, job.Execute(ctx))
+	assert.Zero(t, received.Load(), "an event another replica holds a live lease on must not be delivered a second time")
+	assert.Zero(t, attempts(), "a leased event must not burn an attempt against the poison cap")
+
+	// An expired lease is what a replica that died mid-batch leaves behind.
+	setLease("-1 minute")
+	require.NoError(t, job.Execute(ctx))
+	assert.Equal(t, int32(1), received.Load(), "an expired lease must be reclaimed rather than strand the event")
+	assert.Equal(t, 1, attempts())
 }
 
 // Test_EventDeliveryJob_SSRFGuard proves the REAL production constructor (NewEventDeliveryJob,

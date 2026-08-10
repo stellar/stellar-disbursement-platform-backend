@@ -27,6 +27,15 @@ const (
 	// visible in the events table for operations.
 	eventDeliveryMaxAttempts = 20
 	eventDeliveryHTTPTimeout = 10 * time.Second
+	// eventDeliveryLeaseDuration is how long a claimed batch stays reserved. Every replica runs
+	// the scheduler, so without a lease that outlives the claiming statement each replica's tick
+	// re-claims the same rows: duplicate concurrent POSTs, and the attempt cap consumed once per
+	// replica per interval. It has to outlast the slowest possible batch — eventDeliveryBatchLimit
+	// deliveries, each bounded by eventDeliveryHTTPTimeout, doubled for the per-event writes —
+	// otherwise the tail of a slow batch gets reclaimed while its owner is still working through
+	// it. Expiry is the only reclaim path (no reaper), so it also bounds how long a batch sits idle
+	// after a replica crashes mid-run; runs that finish normally release each lease as they go.
+	eventDeliveryLeaseDuration = 2 * eventDeliveryBatchLimit * eventDeliveryHTTPTimeout
 	// eventDeliveryRetentionDays bounds outbox growth: DELIVERED events older than this are
 	// pruned each run. Undelivered (including poisoned) events are NEVER pruned — they stay
 	// visible for operations until handled.
@@ -119,26 +128,32 @@ func (j eventDeliveryJob) Execute(ctx context.Context) error {
 		ID      string `db:"id"`
 		Payload []byte `db:"payload"`
 	}
-	// Claiming reserves the batch so concurrent instances pick disjoint work instead of all
-	// delivering the same events: SKIP LOCKED steps over rows another run is claiming. The
-	// attempt is counted here rather than after the POST because the lock only lasts for this
-	// statement — counting up front is also what stops a crash mid-batch from letting a
-	// poisoned event retry forever.
+	// Claiming both counts the attempt and takes a lease on the batch, so concurrent instances
+	// pick disjoint work instead of all delivering the same events. SKIP LOCKED only separates
+	// two claim statements racing at the same instant — these row locks are gone the moment the
+	// statement returns, well before the POSTs below — so it is claimed_until that reserves the
+	// rows for the delivery itself, and a replica ticking a moment later steps over them. The
+	// attempt is counted here rather than after the POST because the lease can expire unused:
+	// counting up front is what stops a crash mid-batch from letting a poisoned event retry
+	// forever.
 	var pending []eventRow
 	err = j.models.DBConnectionPool.SelectContext(ctx, &pending, `
 		WITH claimed AS (
 			SELECT id FROM events
 			WHERE delivered_at IS NULL AND delivery_attempts < $1
+			  AND (claimed_until IS NULL OR claimed_until < NOW())
 			ORDER BY occurred_at ASC
 			LIMIT $2
 			FOR UPDATE SKIP LOCKED
 		), reserved AS (
-			UPDATE events SET delivery_attempts = delivery_attempts + 1
+			UPDATE events
+			SET delivery_attempts = delivery_attempts + 1,
+			    claimed_until = NOW() + make_interval(secs => $3)
 			FROM claimed WHERE events.id = claimed.id
 			RETURNING events.id, events.payload, events.occurred_at
 		)
 		SELECT id, payload FROM reserved ORDER BY occurred_at ASC`,
-		eventDeliveryMaxAttempts, eventDeliveryBatchLimit)
+		eventDeliveryMaxAttempts, eventDeliveryBatchLimit, eventDeliveryLeaseDuration.Seconds())
 	if err != nil {
 		return fmt.Errorf("claiming undelivered events: %w", err)
 	}
@@ -146,8 +161,16 @@ func (j eventDeliveryJob) Execute(ctx context.Context) error {
 	for _, event := range pending {
 		if deliverErr := j.deliver(ctx, webhookURL, organization.WebhookSecret, event.Payload); deliverErr != nil {
 			// The attempt was already counted at claim time; leaving delivered_at NULL is what
-			// puts the event back in front of the next run.
+			// puts the event back in front of the next run. Releasing the lease now — rather than
+			// letting it run out — is what keeps that next run 30s away instead of a lease window
+			// away. Nothing is delivering this event any more, so a concurrent claim is the retry,
+			// not a duplicate.
 			log.Ctx(ctx).Warnf("delivering event %s: %v", event.ID, deliverErr)
+			if _, rErr := j.models.DBConnectionPool.ExecContext(ctx, `
+				UPDATE events SET claimed_until = NULL WHERE id = $1`, event.ID); rErr != nil {
+				// Not fatal: an unreleased lease expires on its own, it only delays the retry.
+				log.Ctx(ctx).Warnf("releasing delivery lease for event %s: %v", event.ID, rErr)
+			}
 			continue
 		}
 		if _, uErr := j.models.DBConnectionPool.ExecContext(ctx, `

@@ -643,10 +643,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		if o.distributionWalletService != nil {
 			r.Route("/distribution-wallets", func(r chi.Router) {
 				distributionWalletsHandler := httphandler.DistributionWalletsHandler{
-					Service:                    o.distributionWalletService,
-					AuthManager:                authManager,
-					Models:                     o.Models,
-					DistributionAccountService: o.DistributionAccountService,
+					Service:                     o.distributionWalletService,
+					AuthManager:                 authManager,
+					Models:                      o.Models,
+					DistributionAccountService:  o.DistributionAccountService,
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				}
 
 				// Owner-only reads (admin views).
@@ -669,9 +670,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
 					r.Get("/balance", distributionWalletsHandler.GetDistributionWalletsTotalBalance)
 					r.Get("/{id}/balance", distributionWalletsHandler.GetDistributionWalletBalance)
+					r.Get("/{id}/capabilities", distributionWalletsHandler.GetDistributionWalletCapabilities)
 				})
 
-				// Write operations
+				// Write operations. The Owner requirement below only binds the JWT path —
+				// RequirePermission short-circuits to the handler on the API-key path and never
+				// invokes AnyRoleMiddleware — so every handler in this group re-checks it via
+				// ensureCallerIsOwner, which is what actually holds for API keys.
 				r.With(middleware.RequirePermission(
 					data.WriteDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),

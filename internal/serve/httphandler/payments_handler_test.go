@@ -2114,6 +2114,199 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	})
 }
 
+// Test_PaymentsHandler_PostDirectPayment_circleTenant covers the Circle path of the
+// direct-payment route, the sibling of Test_DisbursementHandler_PatchDisbursementStatus_circleTenant.
+//
+// A Circle tenant's source wallet row is blank and PENDING_USER_ACTIVATION by construction —
+// provisionDistributionAccount returns without an address, syncDefaultDistributionWallet only
+// copies one across for Stellar types, and completing Circle setup updates circle_client_config
+// and the tenant, never this row. Reading the account from the row therefore rejected every
+// Circle direct payment, and would have dropped CircleWalletID even past that check.
+func Test_PaymentsHandler_PostDirectPayment_circleTenant(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	// Shared test DB: normalize to exactly one ACTIVE (default) wallet so the X-Wallet-Id
+	// single-wallet fallback applies (routing covered by its own suite).
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+
+	// Shape the source wallet exactly as tenant provisioning leaves it for a Circle tenant:
+	// no Stellar address, and a distribution account status that never leaves PENDING.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets
+		SET distribution_account_address = NULL,
+		    distribution_account_type     = $1,
+		    distribution_account_status   = $2
+		WHERE id = $3`,
+		schema.DistributionAccountCircleDBVault, schema.AccountStatusPendingUserActivation, defaultWallet.ID)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CIRCLECOIN", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Circle Fortress", "https://circle-fortress.com", "circle-fortress.com", "circlefortress://")
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+		wallet.ID, asset.ID)
+	require.NoError(t, err)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "sanguinius@baal.imperium",
+	})
+	data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	authMock := &auth.AuthManagerMock{}
+	authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
+		ID:      "user-sanguinius",
+		Email:   "sanguinius@baal.imperium",
+		IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
+	}, nil)
+
+	// What the tenant-level resolver returns for a configured Circle tenant: the wallet ID that
+	// Circle payments are actually addressed by, and the live ACTIVE status.
+	circleAccount := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id-1234",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+	distResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+	distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(circleAccount, nil).Once()
+
+	// The account reaching the balance check must be the Circle one, carrying its wallet ID —
+	// this is the assertion that fails if the handler resolves from distribution_wallets.
+	distServiceMock := &mocks.MockDistributionAccountService{}
+	distServiceMock.On("GetBalance", mock.Anything, &circleAccount, *asset).Return(decimal.NewFromInt(1000), nil).Once()
+
+	handler := &PaymentsHandler{
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		AuthManager:                 authMock,
+		DistributionAccountResolver: distResolverMock,
+		DirectPaymentService:        services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{}),
+	}
+
+	requestBody := fmt.Sprintf(`{
+		"amount": "150.50",
+		"asset": {"id": %q},
+		"receiver": {"id": %q},
+		"wallet": {"id": %q}
+	}`, asset.ID, receiver.ID, wallet.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments", strings.NewReader(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.PostDirectPayment(rr, req)
+
+	assert.NotContains(t, rr.Body.String(), "no funded distribution account yet",
+		"a Circle wallet has no Stellar address by design and must not be rejected for it")
+	require.Equal(t, http.StatusCreated, rr.Code, "body: %s", rr.Body.String())
+
+	authMock.AssertExpectations(t)
+	distServiceMock.AssertExpectations(t)
+}
+
+// Test_PaymentsHandler_PostDirectPayment_unfundedStellarSourceWallet pins the Stellar side of the
+// same branch Test_PaymentsHandler_PostDirectPayment_circleTenant pins the Circle side of.
+//
+// A Stellar source wallet lives with a NULL address and a PENDING distribution account between
+// CreateWallet and funding. Spending in that window has to be refused, not quietly resolved from
+// the tenant's distribution account — that account belongs to a different wallet, so falling back
+// would spend somebody else's money and report success. The resolver mock is therefore left with
+// no expectations at all: DistributionAccountFromContext must never be reached on this path.
+func Test_PaymentsHandler_PostDirectPayment_unfundedStellarSourceWallet(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	// Shared test DB: normalize to exactly one ACTIVE (default) wallet so the X-Wallet-Id
+	// single-wallet fallback applies (routing covered by its own suite).
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+
+	// Sibling tests in this file UPDATE a real address onto this shared row, so the unfunded
+	// state under test is written here rather than assumed from the fixture's defaults.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets
+		SET distribution_account_address = NULL,
+		    distribution_account_type     = $1,
+		    distribution_account_status   = $2
+		WHERE id = $3`,
+		schema.DistributionAccountStellarDBVault, schema.AccountStatusPendingUserActivation, defaultWallet.ID)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "PROMETHIUM", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Unfunded Bastion", "https://unfunded-bastion.com", "unfunded-bastion.com", "unfundedbastion://")
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+		wallet.ID, asset.ID)
+	require.NoError(t, err)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "guilliman@macragge.imperium",
+	})
+	data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	authMock := &auth.AuthManagerMock{}
+	authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
+		ID:      "user-guilliman",
+		Email:   "guilliman@macragge.imperium",
+		IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
+	}, nil)
+
+	// No expectations on either mock: a rejected request must not resolve the tenant account and
+	// must not reach the balance check.
+	distResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+	distServiceMock := &mocks.MockDistributionAccountService{}
+
+	handler := &PaymentsHandler{
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		AuthManager:                 authMock,
+		DistributionAccountResolver: distResolverMock,
+		DirectPaymentService:        services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{}),
+	}
+
+	requestBody := fmt.Sprintf(`{
+		"amount": "150.50",
+		"asset": {"id": %q},
+		"receiver": {"id": %q},
+		"wallet": {"id": %q}
+	}`, asset.ID, receiver.ID, wallet.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments", strings.NewReader(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.PostDirectPayment(rr, req)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code, "body: %s", rr.Body.String())
+	assert.Contains(t, rr.Body.String(), "the source wallet has no funded distribution account yet")
+
+	distServiceMock.AssertNotCalled(t, "GetBalance", mock.Anything, mock.Anything, mock.Anything)
+	authMock.AssertExpectations(t)
+}
+
 func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-horus")

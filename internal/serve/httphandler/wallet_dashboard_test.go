@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -184,6 +185,40 @@ func Test_W4_WalletAwareDashboards(t *testing.T) {
 
 		rr = balanceAs(memberA.ID, fmt.Sprintf("/distribution-wallets/%s/balance", walletBID))
 		assert.Equal(t, http.StatusNotFound, rr.Code, "no existence disclosure outside scope")
+	})
+
+	t.Run("per-wallet balance: the path wins over a conflicting X-Wallet-Id", func(t *testing.T) {
+		// The header picks the dashboard's active wallet, but /distribution-wallets/{id}/* names
+		// its wallet explicitly. Nothing else pins that precedence, so a refactor making the
+		// header authoritative would silently redirect every one of those requests to another
+		// account. This is the regression guard that fails first.
+		walletB, err := models.DistributionWallets.Get(ctx, dbConnectionPool, walletBID)
+		require.NoError(t, err)
+
+		// The shared mock returns 40 for either wallet, so the balance alone would prove nothing.
+		// Give wallet B a distinct one; wallet A keeps 40 so honouring the header fails on the
+		// value rather than panicking on an unexpected call.
+		conflictDistAccSvc := &svcMocks.MockDistributionAccountService{}
+		conflictDistAccSvc.On("GetBalances", mock.Anything, mock.MatchedBy(func(account *schema.TransactionAccount) bool {
+			return account.Address == *walletB.Address
+		})).Return(map[data.Asset]decimal.Decimal{usdc: decimal.NewFromInt(55)}, nil)
+		conflictDistAccSvc.On("GetBalances", mock.Anything, mock.Anything).
+			Return(map[data.Asset]decimal.Decimal{usdc: decimal.NewFromInt(40)}, nil)
+
+		conflictHandler := walletsHandler
+		conflictHandler.DistributionAccountService = conflictDistAccSvc
+		cr := chi.NewRouter()
+		cr.Get("/distribution-wallets/{id}/balance", conflictHandler.GetDistributionWalletBalance)
+
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/distribution-wallets/%s/balance", walletBID), nil)
+		req.Header.Set(XWalletIDHeader, walletA.ID)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, owner.ID))
+		rr := httptest.NewRecorder()
+		cr.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "55"`,
+			"wallet B from the path, not wallet A from the header")
 	})
 
 	t.Run("aggregate balance: Owner sums all wallets; member sums only their scope", func(t *testing.T) {

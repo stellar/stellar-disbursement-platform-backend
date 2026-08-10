@@ -33,7 +33,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -653,11 +652,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		// The balance check must run against THIS disbursement's own source wallet, not the
-		// tenant's legacy single distribution account (DistributionAccountFromContext) - on a
-		// multi-wallet tenant those are frequently different accounts, and checking the wrong
-		// one either wrongly blocks a valid disbursement or (worse) validates against an
-		// account with no relation to the funds actually being spent.
+		// The balance check must run against THIS disbursement's own source wallet, so the
+		// disbursement is loaded here purely to reach it (see resolveSourceDistributionAccount).
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 		if getErr != nil {
 			if errors.Is(getErr, data.ErrRecordNotFound) {
@@ -674,39 +670,11 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			return
 		}
 
-		var distributionAccount schema.TransactionAccount
-		if sourceWallet.AccountType.IsStellar() {
-			if sourceWallet.Address == nil || *sourceWallet.Address == "" {
-				httperror.BadRequest("the disbursement's source wallet has no funded distribution account yet", nil, nil).Render(w)
-				return
-			}
-
-			distributionAccount = schema.TransactionAccount{
-				Address: *sourceWallet.Address,
-				Type:    sourceWallet.AccountType,
-				Status:  sourceWallet.AccountStatus,
-			}
-		} else {
-			// Non-Stellar (Circle) tenants: distribution_wallets can only describe a Stellar
-			// account. It has no column for a Circle wallet ID, and the row is created blank and
-			// PENDING_USER_ACTIVATION for a Circle tenant — provisionDistributionAccount returns
-			// without an address, and syncDefaultDistributionWallet only copies one across when
-			// the type IsStellar. Completing Circle setup does not repair it either: the config
-			// handler upserts circle_client_config and flips the TENANT to ACTIVE, never touching
-			// this row. Reading the account from here would therefore reject every Circle
-			// disbursement on the empty address above, and even past that would hand
-			// StartDisbursement an account with no CircleWalletID — which is how Circle payments
-			// locate the money (TransactionAccount.ID() is "circle:<walletID>").
-			//
-			// So resolve these the way this handler did before multi-wallet: from the tenant,
-			// which is where a Circle account's wallet ID and live status actually live. Nothing
-			// is lost — multi-wallet is Stellar-only, since CreateWallet mints a Stellar keypair,
-			// so a Circle tenant has exactly one distribution account to resolve.
-			distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-			if err != nil {
-				httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
-				return
-			}
+		distributionAccount, accountErr := resolveSourceDistributionAccount(ctx, d.DistributionAccountResolver, sourceWallet,
+			"the disbursement's source wallet has no funded distribution account yet")
+		if accountErr != nil {
+			accountErr.Render(w)
+			return
 		}
 
 		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, &distributionAccount)

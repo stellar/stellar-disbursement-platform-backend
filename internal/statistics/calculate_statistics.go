@@ -40,7 +40,11 @@ type PaymentAmounts struct {
 }
 
 type PaymentAmountsByAsset struct {
-	AssetCode      string         `json:"asset_code"`
+	AssetCode string `json:"asset_code"`
+	// AssetIssuer keeps two issuers of the same code apart — routine during an issuer migration —
+	// and lets consumers join these figures against the CODE:ISSUER keys used by the wallet balance
+	// endpoints. Native XLM has no issuer and reports "", mirroring the assets.issuer column.
+	AssetIssuer    string         `json:"asset_issuer"`
 	PaymentAmounts PaymentAmounts `json:"payment_amounts"`
 }
 
@@ -68,12 +72,12 @@ type ReceiverWalletsCounters struct {
 // is sent in the parameters the payment stats will be calculated for a specific disbursement.
 func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string, walletIDs []string) (*PaymentCounters, []PaymentAmountsByAsset, error) {
 	query := []string{
-		0: "SELECT code, status, Count(*), Sum(p.amount)",
+		0: "SELECT a.code, a.issuer, p.status, Count(*), Sum(p.amount)",
 		1: "FROM payments p",
 		2: "JOIN assets a ON p.asset_id=a.id",
 		3: "",
-		4: "GROUP BY (a.code, p.status)",
-		5: "ORDER BY (a.code);",
+		4: "GROUP BY (a.code, a.issuer, p.status)",
+		5: "ORDER BY a.code, a.issuer;",
 	}
 
 	var args []interface{}
@@ -93,7 +97,10 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 
 	defer db.CloseRows(ctx, rows)
 
-	currentCode := ""
+	currentCode, currentIssuer := "", ""
+	// Native XLM stores an empty issuer, so the zero value cannot double as the "no group yet"
+	// sentinel the way the code alone used to — track it explicitly.
+	assetOpen := false
 	paymentCounters := PaymentCounters{}
 	paymentAmounts := PaymentAmounts{}
 
@@ -103,18 +110,17 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 
 	for rows.Next() {
 		var (
-			code, status, amount string
-			count                int64
+			code, issuer, status, amount string
+			count                        int64
 		)
 
-		err = rows.Scan(&code, &status, &count, &amount)
+		err = rows.Scan(&code, &issuer, &status, &count, &amount)
 		if err != nil {
 			return nil, nil, fmt.Errorf("attributing values to rows in getPaymentsStats: %w", err)
 		}
 
-		if currentCode != code {
-
-			if currentCode != "" {
+		if currentCode != code || currentIssuer != issuer {
+			if assetOpen {
 				avg := totalAmount / float64(totalCount)
 				paymentAmounts.Total = utils.FloatToString(totalAmount)
 				paymentAmounts.Average = utils.FloatToString(avg)
@@ -125,6 +131,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 					paymentsAmountsByAsset,
 					PaymentAmountsByAsset{
 						AssetCode:      currentCode,
+						AssetIssuer:    currentIssuer,
 						PaymentAmounts: paymentAmounts,
 					},
 				)
@@ -132,7 +139,8 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 				paymentAmounts = PaymentAmounts{}
 			}
 
-			currentCode = code
+			currentCode, currentIssuer = code, issuer
+			assetOpen = true
 		}
 
 		switch data.PaymentStatus(status) {
@@ -181,7 +189,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 		return nil, nil, fmt.Errorf("end scanning: %w", err)
 	}
 
-	if currentCode != "" {
+	if assetOpen {
 		avg := totalAmount / float64(totalCount)
 		paymentAmounts.Total = utils.FloatToString(totalAmount)
 		paymentAmounts.Average = utils.FloatToString(avg)
@@ -190,6 +198,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 			paymentsAmountsByAsset,
 			PaymentAmountsByAsset{
 				AssetCode:      currentCode,
+				AssetIssuer:    currentIssuer,
 				PaymentAmounts: paymentAmounts,
 			},
 		)

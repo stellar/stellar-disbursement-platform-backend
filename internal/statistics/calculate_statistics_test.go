@@ -198,6 +198,7 @@ func TestCalculateStatistics(t *testing.T) {
 		wantJSONAmountByAsset := `[
 				{
 					"asset_code": "USDC",
+					"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 					"payment_amounts": {
 							"canceled": "",
 							"draft": "20.0000000",
@@ -268,6 +269,7 @@ func TestCalculateStatistics(t *testing.T) {
 		wantJSONAmountByAsset := `[
 				{
 					"asset_code": "EURT",
+					"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 					"payment_amounts": {
 						  "canceled": "",
 							"draft": "",
@@ -282,6 +284,7 @@ func TestCalculateStatistics(t *testing.T) {
 				},
 				{
 					"asset_code": "USDC",
+					"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 					"payment_amounts": {
 							"canceled":"",
 							"draft": "20.0000000",
@@ -328,6 +331,7 @@ func TestCalculateStatistics(t *testing.T) {
 		wantJSONAmountByAsset := `[
 				{
 					"asset_code": "EURT",
+					"asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 					"payment_amounts": {
 							"canceled":"",
 							"draft": "",
@@ -376,6 +380,117 @@ func TestCalculateStatistics(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), totalReceivers)
 	})
+}
+
+// An issuer migration puts two issuers of the same asset code in play at once. They have to stay
+// on separate rows: once merged nothing downstream can split them again, and the dashboard joins
+// these figures against balances keyed by CODE:ISSUER.
+func Test_getPaymentsStats_separatesAssetsByIssuer(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	const (
+		issuerOld = "GA62MH5RDXFWAIWHQEFNMO2SVDDCQLWOO3GO36VQB5LHUXL22DQ6IQAU"
+		issuerNew = "GABC65XJDMXTGPNZRCI6V3KOKKWVK55UEKGQLONRIVYPMEJNNQ45YOEE"
+	)
+
+	usdcOld := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", issuerOld)
+	usdcNew := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", issuerNew)
+	xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+
+	createPayment := func(asset *data.Asset, amount string, status data.PaymentStatus) {
+		t.Helper()
+
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Status: data.CompletedDisbursementStatus,
+			Asset:  asset,
+			Wallet: wallet,
+		})
+
+		stellarTransactionID, txErr := utils.RandomString(64)
+		require.NoError(t, txErr)
+		stellarOperationID, opErr := utils.RandomString(32)
+		require.NoError(t, opErr)
+
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               amount,
+			StellarTransactionID: stellarTransactionID,
+			StellarOperationID:   stellarOperationID,
+			Status:               status,
+			Disbursement:         disbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
+		})
+	}
+
+	createPayment(usdcOld, "10", data.DraftPaymentStatus)
+	createPayment(usdcNew, "25", data.SuccessPaymentStatus)
+	createPayment(xlm, "7", data.SuccessPaymentStatus)
+
+	paymentsCounter, paymentsAmountByAsset, err := getPaymentsStats(ctx, dbConnectionPool, "", nil)
+	require.NoError(t, err)
+
+	gotJSONCounter, err := json.Marshal(paymentsCounter)
+	require.NoError(t, err)
+
+	wantJSONCounter := `{
+		"canceled": 0,
+		"draft": 1,
+		"ready": 0,
+		"pending": 0,
+		"paused": 0,
+		"success": 2,
+		"failed": 0,
+		"total": 3
+	}`
+
+	assert.JSONEq(t, wantJSONCounter, string(gotJSONCounter))
+
+	// Ordering between distinct assets depends on the database collation, so assert set
+	// membership rather than a fixed sequence.
+	assert.ElementsMatch(t, []PaymentAmountsByAsset{
+		{
+			AssetCode:   "USDC",
+			AssetIssuer: issuerOld,
+			PaymentAmounts: PaymentAmounts{
+				Draft:   "10.0000000",
+				Average: "10.0000000",
+				Total:   "10.0000000",
+			},
+		},
+		{
+			AssetCode:   "USDC",
+			AssetIssuer: issuerNew,
+			PaymentAmounts: PaymentAmounts{
+				Success: "25.0000000",
+				Average: "25.0000000",
+				Total:   "25.0000000",
+			},
+		},
+		{
+			// assets.issuer is NOT NULL and holds the empty string for native XLM.
+			AssetCode:   "XLM",
+			AssetIssuer: "",
+			PaymentAmounts: PaymentAmounts{
+				Success: "7.0000000",
+				Average: "7.0000000",
+				Total:   "7.0000000",
+			},
+		},
+	}, paymentsAmountByAsset)
 }
 
 func Test_checkIfDisbursementExists(t *testing.T) {
