@@ -8,21 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Support multiple independent distribution accounts ("distribution wallets") per tenant, each with its own per-wallet membership and role-based access control and its own envelope-encrypted signing key, with a tamper-proof append-only audit trail for disbursements/payments. Existing single-wallet tenants are fully backward compatible: they're automatically migrated onto an implicit default wallet with zero behavior change. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
-- Add an owner-only membership audit endpoint and an operator CLI for per-wallet signing-key (DEK) rotation. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
-- Add optional Prometheus/Grafana wiring (ServiceMonitor, annotation-based scrape, provisioned dashboards) and structured, wallet-tagged transaction logging for the SDP + TSS services. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add support for multiple distribution accounts ("distribution wallets") per tenant, each with its own membership roles and envelope-encrypted signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add append-only audit tables for disbursements, payments, and distribution-wallet memberships, with an owner-only endpoint to read membership history. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add `distribution-account rotate --wallet-id` to rotate any distribution wallet's account, and `distribution-account rotate-wallet-dek` to rotate a wallet's signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add optional Prometheus/Grafana wiring and wallet-tagged structured transaction logging for the SDP and TSS services. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 
 ### Fixed
 
 - Verify automated release cloudformation version migration. [#1158](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1158)
 - Speed up test DB setup via template cloning to end flaky CI timeout [#1160](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1160) 
 - Migrations only soft-delete Vibrant Assist when it has no receiver wallets [#1162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1162)
-- Multi-wallet start-disbursement balance check used the wrong distribution account. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 
 ### Security and Dependencies
 
 - Pin cargo-audit install in contract build job with --locked flag. [#1171](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1171)
-- Evict the API-key auth cache synchronously on permission/allowed-IP updates and deletes, keyed by API key ID (scoped per tenant) instead of the raw secret, so a revoked scope or reverted IP restriction takes effect on the very next request instead of only after the cache TTL expires. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Evict the API-key auth cache synchronously on permission and allowed-IP changes, keyed by API key ID per tenant instead of the raw secret, so revocations take effect on the next request rather than after the cache TTL. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 
 ## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
 
