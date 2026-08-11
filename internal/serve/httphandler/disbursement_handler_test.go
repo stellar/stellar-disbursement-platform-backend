@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -236,8 +235,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
+		ID:      "user-id",
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 	}
 
 	// setup fixtures
@@ -375,7 +375,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 						TenantName: "default-tenant",
 					},
 				}
-				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+				mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, mock.MatchedBy(func(m map[string]string) bool {
+					return m["asset"] == labels.Asset && m["wallet"] == labels.Wallet && m["wallet_id"] != ""
+				})).Return(nil).Once()
 			},
 			reqBody: map[string]interface{}{
 				"name":                                   fmt.Sprintf("successful disbursement %d", i),
@@ -387,6 +389,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			wantResponseBodyFn: func(d *data.Disbursement) string {
 				respMap := map[string]interface{}{
 					"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+					"source_wallet_id":                       d.SourceWalletID,
 					"id":                                     d.ID,
 					"name":                                   fmt.Sprintf("successful disbursement %d", i),
 					"receiver_registration_message_template": customInviteTemplate,
@@ -466,7 +469,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 					TenantName: "default-tenant",
 				},
 			}
-			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
+			mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, mock.MatchedBy(func(m map[string]string) bool {
+				return m["asset"] == labels.Asset && m["wallet"] == labels.Wallet && m["wallet_id"] != ""
+			})).Return(nil).Once()
 		}
 
 		reqBody := map[string]interface{}{
@@ -486,6 +491,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			assetResp := d.Asset
 			respMap := map[string]interface{}{
 				"created_at":                             d.CreatedAt.Format(time.RFC3339Nano),
+				"source_wallet_id":                       d.SourceWalletID,
 				"id":                                     d.ID,
 				"name":                                   caseCopy.responseLabel,
 				"receiver_registration_message_template": "",
@@ -587,12 +593,21 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	getDisbAuthMock := &auth.AuthManagerMock{}
+	getDisbAuthMock.On("GetUserByID", mock.Anything, "get-disb-owner").
+		Return(&auth.User{ID: "get-disb-owner", IsOwner: true}, nil).Maybe()
+	getDisbAuthMock.On("GetUsersByID", mock.Anything, mock.Anything, mock.Anything).
+		Return([]*auth.User{}, nil).Maybe()
 	handler := &DisbursementHandler{
 		Models:                        models,
-		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
+		AuthManager:                   getDisbAuthMock,
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models, AuthManager: getDisbAuthMock},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "get-disb-owner"))
+		handler.GetDisbursements(w, r)
+	}))
 	defer ts.Close()
 
 	tests := []struct {
@@ -655,7 +670,7 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 				"status": "invalid_status",
 			},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedResponse:   `{"error":"request invalid", "extras":{"status":"invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed"}}`,
+			expectedResponse:   `{"error":"request invalid", "extras":{"status":"invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed, canceled"}}`,
 		},
 		{
 			name: "returns error when created_at_after is invalid",
@@ -719,7 +734,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
+	authManagerMock.On("GetUserByID", mock.Anything, "get-disb-success-owner").
+		Return(&auth.User{ID: "get-disb-success-owner", IsOwner: true}, nil).Maybe()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "get-disb-success-owner"))
+		handler.GetDisbursements(w, r)
+	}))
 	defer ts.Close()
 
 	ctx := context.Background()
@@ -1085,8 +1105,9 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
 		Return(&auth.User{
-			ID:    "user-id",
-			Email: "email@email.com",
+			ID:      "user-id",
+			Email:   "email@email.com",
+			IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
@@ -1521,6 +1542,8 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, "get-disb-viewer").
+		Return(&auth.User{ID: "get-disb-viewer", IsOwner: true}, nil).Maybe()
 	createdByUser := auth.User{
 		ID:        "User1",
 		FirstName: "User",
@@ -1554,6 +1577,11 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "get-disb-viewer")))
+		})
+	})
 	r.Get("/disbursements/{id}", handler.GetDisbursement)
 
 	// create disbursements
@@ -1639,12 +1667,21 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	receiversAuthMock := &auth.AuthManagerMock{}
+	receiversAuthMock.On("GetUserByID", mock.Anything, "get-disb-recv-viewer").
+		Return(&auth.User{ID: "get-disb-recv-viewer", IsOwner: true}, nil).Maybe()
 	handler := &DisbursementHandler{
 		Models:                        models,
+		AuthManager:                   receiversAuthMock,
 		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
 	}
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "get-disb-recv-viewer")))
+		})
+	})
 	r.Get("/disbursements/{id}/receivers", handler.GetDisbursementReceivers)
 
 	// create fixtures
@@ -1808,8 +1845,9 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	userID := "valid-user-id"
 	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 	user := &auth.User{
-		ID:    userID,
-		Email: "email@email.com",
+		ID:      userID,
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 	}
 	require.NotNil(t, user)
 
@@ -1818,7 +1856,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
 	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
-	distAcc := schema.NewStellarEnvTransactionAccount(defaultTenantDistAcc)
 	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
 	handler := &DisbursementHandler{
@@ -1882,14 +1919,14 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("cannot get distribution account", func(t *testing.T) {
+		// The disbursement's source wallet is resolved directly (not via
+		// DistributionAccountFromContext / the tenant's legacy single account) so the balance
+		// check always targets THIS disbursement's own funding account, never a different one.
+		// draftDisbursement's source wallet is the shared default fixture, which has no
+		// on-chain address yet -- exercising that failure mode naturally.
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 
 		httpRouter := chi.NewRouter()
@@ -1903,19 +1940,31 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		rr := httptest.NewRecorder()
 		httpRouter.ServeHTTP(rr, req)
 
-		require.Equal(t, http.StatusInternalServerError, rr.Code)
-		require.Contains(t, rr.Body.String(), "Cannot get distribution account")
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "the disbursement's source wallet has no funded distribution account yet")
 	})
+
+	// Fund the shared default wallet's on-chain address now (it has none by default) so the
+	// remaining "Started" sub-tests below can reach their intended business-rule checks instead
+	// of failing earlier on "no funded distribution account yet".
+	fundedSourceWallet, fundErr := handler.Models.DistributionWallets.Get(ctx, dbConnectionPool, draftDisbursement.SourceWalletID)
+	require.NoError(t, fundErr)
+	_, fundErr = dbConnectionPool.ExecContext(ctx,
+		`UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2`,
+		defaultTenantDistAcc, fundedSourceWallet.ID)
+	require.NoError(t, fundErr)
+	fundedSourceWallet, fundErr = handler.Models.DistributionWallets.Get(ctx, dbConnectionPool, fundedSourceWallet.ID)
+	require.NoError(t, fundErr)
+	resolvedDistAcc := schema.TransactionAccount{
+		Address: *fundedSourceWallet.Address,
+		Type:    fundedSourceWallet.AccountType,
+		Status:  fundedSourceWallet.AccountStatus,
+	}
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
 			Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -1943,11 +1992,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
 			Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -1986,7 +2030,14 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		approverUser := &auth.User{
 			ID:    "valid-approver-user-id",
 			Email: "approver@mail.org",
+			Roles: []string{string(data.ApproverUserRole)},
 		}
+
+		// Wallet-scoped authorization: the approver needs membership on the
+		// disbursement's source wallet.
+		_, mErr := handler.Models.WalletMemberships.Insert(ctx, dbConnectionPool,
+			approverUser.ID, readyDisbursement.SourceWalletID, data.ApproverUserRole, nil)
+		require.NoError(t, mErr)
 
 		// Create a context with the approver's userID for this test
 		approverCtx := sdpcontext.SetUserIDInContext(ctx, approverUser.ID)
@@ -1996,12 +2047,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(approverUser, nil).
 			Once()
 
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
-			Once()
-
-		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
+		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
 			Return(decimal.NewFromFloat(10000.0), nil).Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -2023,12 +2069,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(user, nil).
 			Twice()
 
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
-			Once()
-
-		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
+		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
 			Return(decimal.NewFromFloat(10000.0), nil).Once()
 
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
@@ -2101,6 +2142,72 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotReadyToPause.Error())
 	})
 
+	t.Run("disbursement canceled", func(t *testing.T) {
+		authManagerMock.
+			On("GetUserByID", mock.Anything, userID).
+			Return(user, nil).
+			Once()
+
+		cancelableDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:   "disbursement to cancel",
+			Status: data.ReadyDisbursementStatus,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   cancelableDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
+		})
+
+		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", cancelableDisbursement.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Contains(t, rr.Body.String(), "Disbursement canceled")
+
+		disbursement, err := handler.Models.Disbursements.Get(context.Background(), models.DBConnectionPool, cancelableDisbursement.ID)
+		require.NoError(t, err)
+		require.Equal(t, data.CanceledDisbursementStatus, disbursement.Status)
+
+		gotPayment, err := handler.Models.Payment.Get(context.Background(), payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		require.Equal(t, data.CanceledPaymentStatus, gotPayment.Status)
+	})
+
+	t.Run("disbursement can't be canceled", func(t *testing.T) {
+		authManagerMock.
+			On("GetUserByID", mock.Anything, userID).
+			Return(user, nil).
+			Once()
+
+		startedForCancelAttempt := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:   "started disbursement can't be canceled",
+			Status: data.StartedDisbursementStatus,
+		})
+
+		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", startedForCancelAttempt.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), services.ErrDisbursementNotReadyToCancel.Error())
+	})
+
 	t.Run("disbursement status can't be changed", func(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
@@ -2124,11 +2231,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
-
-		mockDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(distAcc, nil).
 			Once()
 
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
@@ -2159,8 +2261,16 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	handler := &DisbursementHandler{Models: models}
+	instrAuthMock := &auth.AuthManagerMock{}
+	instrAuthMock.On("GetUserByID", mock.Anything, "get-disb-instr-viewer").
+		Return(&auth.User{ID: "get-disb-instr-viewer", IsOwner: true}, nil).Maybe()
+	handler := &DisbursementHandler{Models: models, AuthManager: instrAuthMock}
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "get-disb-instr-viewer")))
+		})
+	})
 	r.Get("/disbursements/{id}/instructions", handler.GetDisbursementInstructions)
 
 	disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
@@ -2257,11 +2367,20 @@ func Test_DisbursementHandler_DeleteDisbursement(t *testing.T) {
 	require.NoError(t, outerErr)
 
 	ctx := context.Background()
+	deleteAuthMock := &auth.AuthManagerMock{}
+	deleteAuthMock.On("GetUserByID", mock.Anything, "delete-owner").
+		Return(&auth.User{ID: "delete-owner", IsOwner: true}, nil).Maybe()
 	handler := &DisbursementHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: deleteAuthMock,
 	}
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			next.ServeHTTP(w, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "delete-owner")))
+		})
+	})
 	r.Delete("/disbursements/{id}", handler.DeleteDisbursement)
 
 	// Create test fixtures
@@ -2413,6 +2532,7 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	embeddedWallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://embedded.example.com", "embedded.example.com", "embedded://")
 	data.MakeWalletEmbedded(t, ctx, dbConnectionPool, embeddedWallet.ID)
 	data.CreateWalletAssets(t, ctx, dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	walletNamesByID := map[string]string{
 		enabledWallet.ID:     enabledWallet.Name,
@@ -2426,8 +2546,9 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 	authManagerMock.
 		On("GetUserByID", mock.Anything, mock.Anything).
 		Return(&auth.User{
-			ID:    "user-id",
-			Email: "email@email.com",
+			ID:      "user-id",
+			Email:   "email@email.com",
+			IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 		}, nil).
 		Run(func(args mock.Arguments) {
 			mockCtx := args.Get(0).(context.Context)
@@ -2581,7 +2702,9 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 			}
 
 			mMonitorService.
-				On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).
+				On("MonitorCounters", monitor.DisbursementsCounterTag, mock.MatchedBy(func(m map[string]string) bool {
+					return m["asset"] == labels.Asset && m["wallet"] == labels.Wallet && m["wallet_id"] != ""
+				})).
 				Return(nil).
 				Maybe()
 
@@ -2714,4 +2837,109 @@ func buildURLWithQueryParams(baseURL, endpoint string, queryParams map[string]st
 	}
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// Test_DisbursementHandler_PatchDisbursementStatus_circleTenant covers the Circle path, which
+// had no coverage at all when multi-wallet moved this handler onto distribution_wallets.
+//
+// A Circle tenant's default wallet row is blank and PENDING_USER_ACTIVATION by construction —
+// provisionDistributionAccount returns without an address, syncDefaultDistributionWallet only
+// copies one across for Stellar types, and completing Circle setup updates circle_client_config
+// and the tenant, never this row. Reading the account from the row therefore rejected every
+// Circle disbursement, and would have dropped CircleWalletID even past that check.
+func Test_DisbursementHandler_PatchDisbursementStatus_circleTenant(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	_, ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
+	ctx = sdpcontext.SetTokenInContext(ctx, "token")
+	userID := "valid-user-id"
+	ctx = sdpcontext.SetUserIDInContext(ctx, userID)
+	user := &auth.User{ID: userID, Email: "email@email.com", IsOwner: true}
+
+	authManagerMock := &auth.AuthManagerMock{}
+	mockDistAccSvc := svcMocks.NewMockDistributionAccountService(t)
+	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+
+	handler := &DisbursementHandler{
+		Models:                      models,
+		AuthManager:                 authManagerMock,
+		DistributionAccountResolver: mockDistAccResolver,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:                     models,
+			AuthManager:                authManagerMock,
+			DistributionAccountService: mockDistAccSvc,
+		},
+	}
+
+	r := chi.NewRouter()
+	r.Patch("/disbursements/{id}/status", handler.PatchDisbursementStatus)
+
+	readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+		Name:   "circle ready disbursement",
+		Status: data.ReadyDisbursementStatus,
+		StatusHistory: []data.DisbursementStatusHistoryEntry{
+			{Status: data.DraftDisbursementStatus, UserID: userID},
+			{Status: data.ReadyDisbursementStatus, UserID: userID},
+		},
+	})
+
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   readyDisbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.DraftPaymentStatus,
+	})
+
+	// Shape the source wallet exactly as tenant provisioning leaves it for a Circle tenant:
+	// no Stellar address, and a distribution account status that never leaves PENDING.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets
+		SET distribution_account_address = NULL,
+		    distribution_account_type     = $1,
+		    distribution_account_status   = $2
+		WHERE id = $3`,
+		schema.DistributionAccountCircleDBVault, schema.AccountStatusPendingUserActivation,
+		readyDisbursement.SourceWalletID)
+	require.NoError(t, err)
+
+	// What the tenant-level resolver returns for a configured Circle tenant: the wallet ID that
+	// Circle payments are actually addressed by, and the live ACTIVE status.
+	circleAccount := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id-1234",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+
+	authManagerMock.On("GetUserByID", mock.Anything, userID).Return(user, nil).Once()
+	mockDistAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(circleAccount, nil).Once()
+	// The account reaching the balance check must be the Circle one, carrying its wallet ID —
+	// this is the assertion that fails if the handler resolves from distribution_wallets.
+	mockDistAccSvc.On("GetBalance", mock.Anything, &circleAccount, mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(1000), nil).Once()
+
+	reqBody := bytes.NewBuffer(nil)
+	require.NoError(t, json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"}))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.NotContains(t, rr.Body.String(), "no funded distribution account yet",
+		"a Circle wallet has no Stellar address by design and must not be rejected for it")
+	require.Equal(t, http.StatusOK, rr.Code, "body: %s", rr.Body.String())
+
+	authManagerMock.AssertExpectations(t)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -85,6 +86,7 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 				MemoType:    memo.Type,
 			},
 			TenantID: tenantID,
+			WalletID: sdpUtils.SQLNullString(payment.SourceWalletID),
 		}
 		transactions = append(transactions, transaction)
 	}

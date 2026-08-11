@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -38,7 +40,11 @@ type PaymentAmounts struct {
 }
 
 type PaymentAmountsByAsset struct {
-	AssetCode      string         `json:"asset_code"`
+	AssetCode string `json:"asset_code"`
+	// AssetIssuer keeps two issuers of the same code apart — routine during an issuer migration —
+	// and lets consumers join these figures against the CODE:ISSUER keys used by the wallet balance
+	// endpoints. Native XLM has no issuer and reports "", mirroring the assets.issuer column.
+	AssetIssuer    string         `json:"asset_issuer"`
 	PaymentAmounts PaymentAmounts `json:"payment_amounts"`
 }
 
@@ -64,20 +70,24 @@ type ReceiverWalletsCounters struct {
 
 // getPaymentsStats returns payment statistics aggregated by payment status, if a disbursement ID
 // is sent in the parameters the payment stats will be calculated for a specific disbursement.
-func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) (*PaymentCounters, []PaymentAmountsByAsset, error) {
+func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string, walletIDs []string) (*PaymentCounters, []PaymentAmountsByAsset, error) {
 	query := []string{
-		0: "SELECT code, status, Count(*), Sum(p.amount)",
+		0: "SELECT a.code, a.issuer, p.status, Count(*), Sum(p.amount)",
 		1: "FROM payments p",
 		2: "JOIN assets a ON p.asset_id=a.id",
 		3: "",
-		4: "GROUP BY (a.code, p.status)",
-		5: "ORDER BY (a.code);",
+		4: "GROUP BY (a.code, a.issuer, p.status)",
+		5: "ORDER BY a.code, a.issuer;",
 	}
 
 	var args []interface{}
 	if disbursementID != "" {
 		query[3] = "WHERE p.disbursement_id = $1"
 		args = append(args, disbursementID)
+	} else if walletIDs != nil {
+		// Per-wallet visibility: scope statistics to the given distribution wallets.
+		query[3] = "WHERE p.source_wallet_id = ANY($1)"
+		args = append(args, pq.Array(walletIDs))
 	}
 
 	rows, err := sqlExec.QueryxContext(ctx, strings.Join(query, " "), args...)
@@ -87,7 +97,10 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 
 	defer db.CloseRows(ctx, rows)
 
-	currentCode := ""
+	currentCode, currentIssuer := "", ""
+	// Native XLM stores an empty issuer, so the zero value cannot double as the "no group yet"
+	// sentinel the way the code alone used to — track it explicitly.
+	assetOpen := false
 	paymentCounters := PaymentCounters{}
 	paymentAmounts := PaymentAmounts{}
 
@@ -97,18 +110,17 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 
 	for rows.Next() {
 		var (
-			code, status, amount string
-			count                int64
+			code, issuer, status, amount string
+			count                        int64
 		)
 
-		err = rows.Scan(&code, &status, &count, &amount)
+		err = rows.Scan(&code, &issuer, &status, &count, &amount)
 		if err != nil {
 			return nil, nil, fmt.Errorf("attributing values to rows in getPaymentsStats: %w", err)
 		}
 
-		if currentCode != code {
-
-			if currentCode != "" {
+		if currentCode != code || currentIssuer != issuer {
+			if assetOpen {
 				avg := totalAmount / float64(totalCount)
 				paymentAmounts.Total = utils.FloatToString(totalAmount)
 				paymentAmounts.Average = utils.FloatToString(avg)
@@ -119,6 +131,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 					paymentsAmountsByAsset,
 					PaymentAmountsByAsset{
 						AssetCode:      currentCode,
+						AssetIssuer:    currentIssuer,
 						PaymentAmounts: paymentAmounts,
 					},
 				)
@@ -126,7 +139,8 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 				paymentAmounts = PaymentAmounts{}
 			}
 
-			currentCode = code
+			currentCode, currentIssuer = code, issuer
+			assetOpen = true
 		}
 
 		switch data.PaymentStatus(status) {
@@ -175,7 +189,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 		return nil, nil, fmt.Errorf("end scanning: %w", err)
 	}
 
-	if currentCode != "" {
+	if assetOpen {
 		avg := totalAmount / float64(totalCount)
 		paymentAmounts.Total = utils.FloatToString(totalAmount)
 		paymentAmounts.Average = utils.FloatToString(avg)
@@ -184,6 +198,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 			paymentsAmountsByAsset,
 			PaymentAmountsByAsset{
 				AssetCode:      currentCode,
+				AssetIssuer:    currentIssuer,
 				PaymentAmounts: paymentAmounts,
 			},
 		)
@@ -194,7 +209,7 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 
 // getReceiverWalletsStats returns receiver wallets statistics aggregated by receiver wallet status, if a disbursement
 // ID is sent in the parameters the receiver wallet stats will be calculated for a specific disbursement.
-func getReceiverWalletsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) (*ReceiverWalletsCounters, error) {
+func getReceiverWalletsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string, walletIDs []string) (*ReceiverWalletsCounters, error) {
 	query := []string{
 		0: "SELECT rw.status, Count(DISTINCT rw.receiver_id)",
 		1: "FROM receiver_wallets rw",
@@ -207,6 +222,10 @@ func getReceiverWalletsStats(ctx context.Context, sqlExec db.SQLExecuter, disbur
 	if disbursementID != "" {
 		query[3] = "WHERE p.disbursement_id = $1"
 		args = append(args, disbursementID)
+	} else if walletIDs != nil {
+		// Per-wallet visibility: scope statistics to the given distribution wallets.
+		query[3] = "WHERE p.source_wallet_id = ANY($1)"
+		args = append(args, pq.Array(walletIDs))
 	}
 
 	rows, err := sqlExec.QueryxContext(ctx, strings.Join(query, " "), args...)
@@ -258,13 +277,16 @@ func getReceiverWalletsStats(ctx context.Context, sqlExec db.SQLExecuter, disbur
 
 // getTotalReceivers returns total amount of receivers, if a disbursement ID is sent in the parameters
 // then the total amount of receivers present in the specific disbursement is returned.
-func getTotalReceivers(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) (int64, error) {
+func getTotalReceivers(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string, walletIDs []string) (int64, error) {
 	var args []interface{}
 	query := "SELECT COUNT(DISTINCT r.id) FROM receivers r"
 
 	if disbursementID != "" {
 		query += " JOIN payments p ON p.receiver_id = r.id WHERE p.disbursement_id = $1"
 		args = append(args, disbursementID)
+	} else if walletIDs != nil {
+		query += " WHERE EXISTS (SELECT 1 FROM payments p WHERE p.receiver_id = r.id AND p.source_wallet_id = ANY($1))"
+		args = append(args, pq.Array(walletIDs))
 	}
 
 	var totalReceivers int64
@@ -277,9 +299,14 @@ func getTotalReceivers(ctx context.Context, sqlExec db.SQLExecuter, disbursement
 }
 
 // getTotalDisbursements returns total amount of disbursements.
-func getTotalDisbursements(ctx context.Context, sqlExec db.SQLExecuter) (totalDisbursement int64, err error) {
+func getTotalDisbursements(ctx context.Context, sqlExec db.SQLExecuter, walletIDs []string) (totalDisbursement int64, err error) {
 	q := "SELECT COUNT(*) FROM disbursements"
-	err = sqlExec.GetContext(ctx, &totalDisbursement, q)
+	var args []interface{}
+	if walletIDs != nil {
+		q += " WHERE source_wallet_id = ANY($1)"
+		args = append(args, pq.Array(walletIDs))
+	}
+	err = sqlExec.GetContext(ctx, &totalDisbursement, q, args...)
 	if err != nil {
 		return 0, fmt.Errorf("getting total disbursement data: %w", err)
 	}
@@ -287,8 +314,9 @@ func getTotalDisbursements(ctx context.Context, sqlExec db.SQLExecuter) (totalDi
 	return totalDisbursement, nil
 }
 
-// CalculateStatistics calculate statistics for all disbursements.
-func CalculateStatistics(ctx context.Context, dbConnectionPool db.DBConnectionPool) (statistics *GeneralStatistics, err error) {
+// CalculateStatistics calculate statistics for all disbursements. walletIDs (nil =
+// tenant-wide) scopes every counter to the given distribution wallets (read taxonomy).
+func CalculateStatistics(ctx context.Context, dbConnectionPool db.DBConnectionPool, walletIDs []string) (statistics *GeneralStatistics, err error) {
 	// Start transaction
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 	if err != nil {
@@ -298,22 +326,22 @@ func CalculateStatistics(ctx context.Context, dbConnectionPool db.DBConnectionPo
 		db.DBTxRollback(ctx, dbTx, err, "error in CalculateStatistics")
 	}()
 
-	paymentCounters, paymentAmountByAsset, err := getPaymentsStats(ctx, dbTx, "")
+	paymentCounters, paymentAmountByAsset, err := getPaymentsStats(ctx, dbTx, "", walletIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	receiverWalletsCounters, err := getReceiverWalletsStats(ctx, dbTx, "")
+	receiverWalletsCounters, err := getReceiverWalletsStats(ctx, dbTx, "", walletIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	totalReceivers, err := getTotalReceivers(ctx, dbTx, "")
+	totalReceivers, err := getTotalReceivers(ctx, dbTx, "", walletIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	totalDisbursement, err := getTotalDisbursements(ctx, dbTx)
+	totalDisbursement, err := getTotalDisbursements(ctx, dbTx, walletIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -350,17 +378,17 @@ func CalculateStatisticsByDisbursement(ctx context.Context, dbConnectionPool db.
 		return nil, ErrResourcesNotFound
 	}
 
-	paymentCounters, paymentAmountByAsset, err := getPaymentsStats(ctx, dbTx, disbursementID)
+	paymentCounters, paymentAmountByAsset, err := getPaymentsStats(ctx, dbTx, disbursementID, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	receiverWalletsCounters, err := getReceiverWalletsStats(ctx, dbTx, disbursementID)
+	receiverWalletsCounters, err := getReceiverWalletsStats(ctx, dbTx, disbursementID, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	totalReceivers, err := getTotalReceivers(ctx, dbTx, disbursementID)
+	totalReceivers, err := getTotalReceivers(ctx, dbTx, disbursementID, nil)
 	if err != nil {
 		return nil, err
 	}

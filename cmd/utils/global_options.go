@@ -18,6 +18,12 @@ type GlobalOptionsType struct {
 	SDPUIBaseURL      string
 	NetworkPassphrase string
 	EnvFile           string
+	// LogShippingURL is the Loki-compatible push endpoint (e.g. a Grafana
+	// Alloy loki.source.api receiver) that structured logs are shipped to
+	// directly over HTTP, bypassing stdout capture. Empty (the default)
+	// disables log shipping entirely -- local dev and any deployment that
+	// doesn't set this env var are completely unaffected.
+	LogShippingURL string
 }
 
 // PopulateCrashTrackerOptions populates the CrastTrackerOptions from the global options.

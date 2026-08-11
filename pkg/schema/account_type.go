@@ -41,6 +41,11 @@ func (t AccountType) IsCircle() bool {
 	return t.Platform() == CirclePlatform
 }
 
+// IsDistribution reports whether the account type is a distribution account type.
+func (t AccountType) IsDistribution() bool {
+	return t.Role() == DistributionAccountRole
+}
+
 // Role represents the role of an account in the system, e.g. HOST, CHANNEL_ACCOUNT, or DISTRIBUTION_ACCOUNT.
 type Role string
 

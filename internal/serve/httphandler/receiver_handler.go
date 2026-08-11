@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -16,11 +17,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type ReceiverHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
+	AuthManager      auth.AuthManager
 }
 
 type GetReceiverResponse struct {
@@ -54,6 +57,23 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 
 	response, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *GetReceiverResponse, innerErr error) {
 		receiver, innerErr := rh.Models.Receiver.Get(ctx, dbTx, receiverID)
+		if innerErr == nil {
+			scope, scopeHTTPErr := resolveWalletReadScope(ctx, rh.AuthManager, rh.Models)
+			if scopeHTTPErr != nil {
+				return nil, fmt.Errorf("resolving wallet scope: %w", scopeHTTPErr)
+			}
+			if scope != nil {
+				var visible bool
+				if visErr := dbTx.GetContext(ctx, &visible, `
+					SELECT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = $1 AND pw.source_wallet_id = ANY($2))`,
+					receiverID, pq.Array(scope)); visErr != nil {
+					return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
+				}
+				if !visible {
+					return nil, data.ErrRecordNotFound
+				}
+			}
+		}
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting receiver by ID: %w", innerErr)
 		}
@@ -99,6 +119,17 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// Per-account list scope: receivers reachable via the selected account's payments when
+	// X-Wallet-Id is set, else full visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, rh.AuthManager, rh.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+	}
 
 	httpResponse, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*httpresponse.PaginatedResponse, error) {
 		totalReceivers, err := rh.Models.Receiver.Count(ctx, dbTx, queryParams)

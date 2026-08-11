@@ -2,6 +2,7 @@ package signing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/stellar/go-stellar-sdk/keypair"
@@ -39,6 +40,8 @@ func (opts *DistributionAccountDBVaultSignatureClientOptions) Validate() error {
 type DistributionAccountDBVaultSignatureClient struct {
 	networkPassphrase    string
 	dbVault              store.DBVault
+	walletKeys           *store.DistributionWalletKeyModel
+	envelopeEncrypter    sdpUtils.EnvelopeEncrypter
 	encrypter            sdpUtils.PrivateKeyEncrypter
 	encryptionPassphrase string
 }
@@ -57,6 +60,8 @@ func NewDistributionAccountDBVaultSignatureClient(opts DistributionAccountDBVaul
 	return &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    opts.NetworkPassphrase,
 		dbVault:              store.NewDBVaultModel(opts.DBConnectionPool),
+		walletKeys:           store.NewDistributionWalletKeyModel(opts.DBConnectionPool),
+		envelopeEncrypter:    sdpUtils.EnvelopeEncrypter{},
 		encrypter:            encrypter,
 		encryptionPassphrase: opts.EncryptionPassphrase,
 	}, nil
@@ -81,20 +86,36 @@ func (c *DistributionAccountDBVaultSignatureClient) getKPsForPublicKeys(ctx cont
 			return nil, fmt.Errorf("publicKey %d is empty", i)
 		}
 
-		// Can return ErrRecordNotFound
-		dbVaultEntry, err := c.dbVault.Get(ctx, publicKey)
-		if err != nil {
-			return nil, fmt.Errorf("getting dbVaultEntry for distribution account %q in %T: %w", publicKey, c, err)
-		}
+		// Per-wallet envelope-encrypted keys take precedence (multi-distribution-wallet);
+		// the legacy vault remains the fallback for pre-multi-wallet accounts. Real failures
+		// on the wallet-keys path fail closed for that wallet — they never fall through to
+		// the vault, so corruption cannot be masked.
+		var sigPrivateKey string
+		walletKey, wkErr := c.walletKeys.Get(ctx, publicKey)
+		switch {
+		case wkErr == nil:
+			sigPrivateKey, wkErr = c.envelopeEncrypter.DecryptWithDEK(walletKey.EncryptedPrivateKey, walletKey.EncryptedDEK, c.encryptionPassphrase)
+			if wkErr != nil {
+				return nil, fmt.Errorf("decrypting distribution wallet key %q in %T: %w", publicKey, c, wkErr)
+			}
+		case errors.Is(wkErr, store.ErrRecordNotFound):
+			// Can return ErrRecordNotFound
+			dbVaultEntry, err := c.dbVault.Get(ctx, publicKey)
+			if err != nil {
+				return nil, fmt.Errorf("getting dbVaultEntry for distribution account %q in %T: %w", publicKey, c, err)
+			}
 
-		sigPrivateKey, err := c.encrypter.Decrypt(dbVaultEntry.EncryptedPrivateKey, c.encryptionPassphrase)
-		if err != nil {
-			return nil, fmt.Errorf("cannot decrypt private key: %w", err)
+			sigPrivateKey, err = c.encrypter.Decrypt(dbVaultEntry.EncryptedPrivateKey, c.encryptionPassphrase)
+			if err != nil {
+				return nil, fmt.Errorf("cannot decrypt private key: %w", err)
+			}
+		default:
+			return nil, fmt.Errorf("getting distribution wallet key %q in %T: %w", publicKey, c, wkErr)
 		}
 
 		kp, err := keypair.ParseFull(sigPrivateKey)
 		if err != nil {
-			return nil, fmt.Errorf("parsing secret for dbVaultEntry %q in %T: %w", dbVaultEntry.PublicKey, c, err)
+			return nil, fmt.Errorf("parsing secret for account %q in %T: %w", publicKey, c, err)
 		}
 		kps = append(kps, kp)
 	}

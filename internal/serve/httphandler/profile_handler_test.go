@@ -156,6 +156,58 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			wantRespBody:   `{"error": "Not authorized."}`,
 		},
 		{
+			// The route admits Financial Controllers as well as Owners, but the webhook URL is
+			// where every payment and disbursement event in the tenant is delivered — a non-owner
+			// must not be able to redirect the event stream to an endpoint they control.
+			name:  "returns Forbidden when a non-owner tries to set the webhook URL",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&auth.User{
+						ID:    "fc-user-id",
+						Roles: []string{data.FinancialControllerUserRole.String()},
+					}, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				// Fresh buffer: the shared pngImgBuf is drained by whichever case reads it first.
+				buf := new(bytes.Buffer)
+				require.NoError(t, png.Encode(buf, data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)))
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png",
+					`{"webhook_url": "https://attacker.example.com/hook"}`, buf)
+			},
+			wantStatusCode: http.StatusForbidden,
+			wantRespBody:   `{"error": "only owners can change the webhook URL"}`,
+		},
+		{
+			// Same request shape, owner instead — must get past the gate. It fails later on the
+			// empty-organization-name path, which is enough to prove the gate is role-based and
+			// not simply rejecting every webhook_url write.
+			name:  "lets an owner past the webhook URL gate",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(&auth.User{
+						ID:      "owner-user-id",
+						IsOwner: true,
+						Roles:   []string{data.OwnerUserRole.String()},
+					}, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				// Fresh buffer: the shared pngImgBuf is drained by whichever case reads it first.
+				buf := new(bytes.Buffer)
+				require.NoError(t, png.Encode(buf, data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)))
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png",
+					`{"webhook_url": "http://insecure.example.com/hook"}`, buf)
+			},
+			// http:// is rejected by the scheme validator that runs after the gate.
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way.", "extras": {"webhook_url": "invalid URL scheme is not part of [https]"}}`,
+		},
+		{
 			name:  "returns BadRequest when the request is not valid (invalid JSON)",
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
@@ -1298,6 +1350,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
+				"webhook_url": null,
 				"is_approval_required": false,
 				"is_link_shortener_enabled": false,
 				"is_memo_tracing_enabled": true,
@@ -1340,6 +1393,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
+				"webhook_url": null,
 				"is_approval_required":false,
 				"is_link_shortener_enabled": false,
 				"is_memo_tracing_enabled": true,
@@ -1381,6 +1435,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
+				"webhook_url": null,
 				"is_approval_required":false,
 				"is_link_shortener_enabled": false,
 				"is_memo_tracing_enabled": true,
@@ -1427,6 +1482,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
+				"webhook_url": null,
 				"is_approval_required":false,
 				"is_link_shortener_enabled": false,
 				"is_memo_tracing_enabled": true,
@@ -1471,6 +1527,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
+				"webhook_url": null,
 				"is_approval_required":false,
 				"is_link_shortener_enabled": false,
 				"is_memo_tracing_enabled": true,
@@ -1515,6 +1572,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
+				"webhook_url": null,
 				"is_approval_required":false,
 				"is_link_shortener_enabled": false,
 				"is_memo_tracing_enabled": true,

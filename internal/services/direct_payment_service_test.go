@@ -65,6 +65,7 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.RegisteredReceiversWalletStatus)
 
 		req := CreateDirectPaymentRequest{
+			SourceWalletID:    data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
 			Amount:            "100.00",
 			Asset:             AssetReference{ID: &asset.ID},
 			Receiver:          ReceiverReference{ID: &receiver.ID},
@@ -120,10 +121,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "100.00",
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{ID: &disabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{ID: &disabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -157,10 +159,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "100.00",
-			Asset:    AssetReference{ID: &usdc.ID}, // USDC not associated with enabled wallet
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
+			Asset:          AssetReference{ID: &usdc.ID}, // USDC not associated with enabled wallet
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -197,10 +200,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.RegisteredReceiversWalletStatus)
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "1000.00", // More than available balance
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "1000.00", // More than available balance
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -256,10 +260,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, enabledWallet.ID, data.DraftReceiversWalletStatus)
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "10.00",
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "10.00",
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -290,10 +295,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "100.00",
-			Asset:    AssetReference{}, // Empty reference - invalid
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
+			Asset:          AssetReference{}, // Empty reference - invalid
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -325,10 +331,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "100.00",
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{ID: testutils.StringPtr("chaos-marine-001")}, // Non-existent receiver
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{ID: testutils.StringPtr("chaos-marine-001")}, // Non-existent receiver
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -376,10 +383,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		wallet, err := models.ReceiverWallet.GetByID(ctx, dbConnectionPool, rw.ID)
 		require.NoError(t, err)
 		req := CreateDirectPaymentRequest{
-			Amount:   "10000.00", // Large amount to test balance validation
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{Address: &wallet.StellarAddress},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "10000.00", // Large amount to test balance validation
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{Address: &wallet.StellarAddress},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -428,10 +436,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "100.00",
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{ID: &receiver.ID},
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{ID: &receiver.ID},
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -461,10 +470,11 @@ func TestDirectPaymentService_CreateDirectPayment_Scenarios(t *testing.T) {
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount:   "100.00",
-			Asset:    AssetReference{ID: &asset.ID},
-			Receiver: ReceiverReference{Email: testutils.StringPtr("chaos@warp.void")}, // Non-existent email
-			Wallet:   WalletReference{ID: &enabledWallet.ID},
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
+			Asset:          AssetReference{ID: &asset.ID},
+			Receiver:       ReceiverReference{Email: testutils.StringPtr("chaos@warp.void")}, // Non-existent email
+			Wallet:         WalletReference{ID: &enabledWallet.ID},
 		}
 
 		horizonClientMock := &horizonclient.MockClient{}
@@ -527,6 +537,7 @@ func TestDirectPaymentService_CreateDirectPayment_CircleAccount(t *testing.T) {
 	}
 
 	req := CreateDirectPaymentRequest{
+		SourceWalletID:    data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
 		Amount:            "500.00",
 		Asset:             AssetReference{ID: &asset.ID},
 		Receiver:          ReceiverReference{ID: &receiver.ID},
@@ -661,7 +672,7 @@ func TestDirectPaymentService_calculatePendingAmountForAsset(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			total, err := service.calculatePendingAmountForAsset(ctx, tx, *tc.targetAsset)
+			total, err := service.calculatePendingAmountForAsset(ctx, tx, *tc.targetAsset, disbursement.SourceWalletID)
 			require.NoError(t, err)
 
 			assert.True(t, tc.expectedAmount.Equal(total), "expected %s, got %s", tc.expectedAmount.String(), total.String())
@@ -703,7 +714,8 @@ func TestDirectPaymentService_CreateDirectPayment_Success(t *testing.T) {
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	req := CreateDirectPaymentRequest{
-		Amount: "50.00",
+		SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+		Amount:         "50.00",
 		Asset: AssetReference{
 			ID: &asset.ID,
 		},
@@ -830,7 +842,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 		require.Len(t, receiverWallets, 0, "No receiver wallet should exist initially")
 
 		req := CreateDirectPaymentRequest{
-			Amount: "100.00",
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
 			Asset: AssetReference{
 				ID: &asset.ID,
 			},
@@ -867,7 +880,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 		require.NoError(t, updateErr)
 
 		req := CreateDirectPaymentRequest{
-			Amount: "100.00",
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
 			Asset: AssetReference{
 				ID: &asset.ID,
 			},
@@ -892,7 +906,8 @@ func TestDirectPaymentService_CreateDirectPayment_WithVerifiedReceiver(t *testin
 		})
 
 		req := CreateDirectPaymentRequest{
-			Amount: "100.00",
+			SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool).ID,
+			Amount:         "100.00",
 			Asset: AssetReference{
 				ID: &asset.ID,
 			},
