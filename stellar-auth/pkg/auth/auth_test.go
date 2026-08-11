@@ -669,7 +669,8 @@ func Test_AuthManager_ActivateUser(t *testing.T) {
 func Test_AuthManager_UpdateUser(t *testing.T) {
 	authenticatorMock := &AuthenticatorMock{}
 	jwtManagerMock := &JWTManagerMock{}
-	authManager := NewAuthManager(WithCustomJWTManagerOption(jwtManagerMock), WithCustomAuthenticatorOption(authenticatorMock))
+	mfaManagerMock := &MFAManagerMock{}
+	authManager := NewAuthManager(WithCustomJWTManagerOption(jwtManagerMock), WithCustomAuthenticatorOption(authenticatorMock), WithCustomMFAManagerOption(mfaManagerMock))
 
 	ctx := context.Background()
 
@@ -734,7 +735,7 @@ func Test_AuthManager_UpdateUser(t *testing.T) {
 		assert.EqualError(t, err, "error updating user: unexpected error")
 	})
 
-	t.Run("updates user successfully", func(t *testing.T) {
+	t.Run("updates user and forgets remembered devices when the password changes", func(t *testing.T) {
 		token := "mytoken"
 		userID := "user-id"
 		firstName, lastName, email, password := "First", "Last", "email@email.com", "mysecret"
@@ -751,11 +752,43 @@ func Test_AuthManager_UpdateUser(t *testing.T) {
 			On("UpdateUser", ctx, userID, firstName, lastName, email, password).
 			Return(nil).
 			Once()
+		mfaManagerMock.
+			On("ForgetAllDevices", ctx, userID).
+			Return(nil).
+			Once()
 
 		err := authManager.UpdateUser(ctx, token, "First", "Last", "email@email.com", "mysecret")
 
 		assert.Nil(t, err)
 	})
+
+	t.Run("does not forget remembered devices when the password is unchanged", func(t *testing.T) {
+		token := "mytoken"
+		userID := "profile-only-user-id"
+		firstName, lastName, email := "First", "Last", "email@email.com"
+
+		jwtManagerMock.
+			On("ValidateToken", ctx, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, token).
+			Return(&User{ID: userID}, nil).
+			Once()
+
+		authenticatorMock.
+			On("UpdateUser", ctx, userID, firstName, lastName, email, "").
+			Return(nil).
+			Once()
+
+		err := authManager.UpdateUser(ctx, token, "First", "Last", "email@email.com", "")
+
+		assert.Nil(t, err)
+		mfaManagerMock.AssertNotCalled(t, "ForgetAllDevices", ctx, userID)
+	})
+
+	jwtManagerMock.AssertExpectations(t)
+	authenticatorMock.AssertExpectations(t)
+	mfaManagerMock.AssertExpectations(t)
 }
 
 func Test_AuthManager_DeactivateUser(t *testing.T) {
@@ -957,8 +990,10 @@ func Test_AuthManager_ForgotPassword(t *testing.T) {
 
 func Test_AuthManager_ResetPassword(t *testing.T) {
 	authenticatorMock := &AuthenticatorMock{}
+	mfaManagerMock := &MFAManagerMock{}
 	authManager := NewAuthManager(
 		WithCustomAuthenticatorOption(authenticatorMock),
+		WithCustomMFAManagerOption(mfaManagerMock),
 	)
 
 	ctx := context.Background()
@@ -966,7 +1001,7 @@ func Test_AuthManager_ResetPassword(t *testing.T) {
 	t.Run("returns error when the reset token is invalid", func(t *testing.T) {
 		authenticatorMock.
 			On("ResetPassword", ctx, "invalidToken", "password123").
-			Return(ErrInvalidResetPasswordToken).
+			Return("", ErrInvalidResetPasswordToken).
 			Once()
 
 		err := authManager.ResetPassword(ctx, "invalidToken", "password123")
@@ -976,16 +1011,34 @@ func Test_AuthManager_ResetPassword(t *testing.T) {
 	t.Run("returns error when authenticator fails", func(t *testing.T) {
 		authenticatorMock.
 			On("ResetPassword", ctx, "validToken", "password123").
-			Return(errUnexpectedError).
+			Return("", errUnexpectedError).
 			Once()
 
 		err := authManager.ResetPassword(ctx, "validToken", "password123")
 		assert.EqualError(t, err, "error on reset password: unexpected error")
 	})
 
+	t.Run("returns error when forgetting devices fails", func(t *testing.T) {
+		authenticatorMock.
+			On("ResetPassword", ctx, "goodtoken", "password123").
+			Return("user-id", nil).
+			Once()
+		mfaManagerMock.
+			On("ForgetAllDevices", ctx, "user-id").
+			Return(errUnexpectedError).
+			Once()
+
+		err := authManager.ResetPassword(ctx, "goodtoken", "password123")
+		assert.EqualError(t, err, "error forgetting devices after reset password for user ID user-id: unexpected error")
+	})
+
 	t.Run("no error with a valid reset token", func(t *testing.T) {
 		authenticatorMock.
 			On("ResetPassword", ctx, "goodtoken", "password123").
+			Return("user-id", nil).
+			Once()
+		mfaManagerMock.
+			On("ForgetAllDevices", ctx, "user-id").
 			Return(nil).
 			Once()
 
@@ -994,12 +1047,14 @@ func Test_AuthManager_ResetPassword(t *testing.T) {
 	})
 
 	authenticatorMock.AssertExpectations(t)
+	mfaManagerMock.AssertExpectations(t)
 }
 
 func Test_AuthManager_UpdatePassword(t *testing.T) {
 	authenticatorMock := &AuthenticatorMock{}
 	jwtManagerMock := &JWTManagerMock{}
-	authManager := NewAuthManager(WithCustomJWTManagerOption(jwtManagerMock), WithCustomAuthenticatorOption(authenticatorMock))
+	mfaManagerMock := &MFAManagerMock{}
+	authManager := NewAuthManager(WithCustomJWTManagerOption(jwtManagerMock), WithCustomAuthenticatorOption(authenticatorMock), WithCustomMFAManagerOption(mfaManagerMock))
 
 	ctx := context.Background()
 
@@ -1090,11 +1145,42 @@ func Test_AuthManager_UpdatePassword(t *testing.T) {
 			On("UpdatePassword", ctx, user, "currentpassword", "newpassword").
 			Return(nil).
 			Once()
+		mfaManagerMock.
+			On("ForgetAllDevices", ctx, user.ID).
+			Return(nil).
+			Once()
 
 		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
 
 		assert.Nil(t, err)
 	})
+
+	t.Run("returns error when forgetting devices fails", func(t *testing.T) {
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, "token").
+			Return(user, nil).
+			Once()
+
+		authenticatorMock.
+			On("UpdatePassword", ctx, user, "currentpassword", "newpassword").
+			Return(nil).
+			Once()
+		mfaManagerMock.
+			On("ForgetAllDevices", ctx, user.ID).
+			Return(errUnexpectedError).
+			Once()
+
+		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.EqualError(t, err, "error forgetting devices after updating password for user ID user-id: unexpected error")
+	})
+
+	jwtManagerMock.AssertExpectations(t)
+	authenticatorMock.AssertExpectations(t)
+	mfaManagerMock.AssertExpectations(t)
 }
 
 func Test_AuthManager_GetAllUsers(t *testing.T) {
@@ -1498,4 +1584,130 @@ func Test_AuthManager_GetUserID(t *testing.T) {
 	authenticatorMock.AssertExpectations(t)
 	jwtManagerMock.AssertExpectations(t)
 	roleManagerMock.AssertExpectations(t)
+}
+
+func Test_AuthManager_AuthenticateMFA(t *testing.T) {
+	ctx := context.Background()
+	deviceID, code := "device-id", "123456"
+
+	t.Run("returns error and does not remember the device when the code is invalid", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authManager := NewAuthManager(WithCustomMFAManagerOption(mfaManagerMock))
+
+		mfaManagerMock.
+			On("ValidateMFACode", ctx, deviceID, code).
+			Return("", ErrMFACodeInvalid).
+			Once()
+
+		mfaManagerMock.On("RememberDevice", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, true)
+		require.ErrorIs(t, err, ErrMFACodeInvalid)
+		assert.Empty(t, token)
+
+		mfaManagerMock.AssertNotCalled(t, "RememberDevice", mock.Anything, mock.Anything, mock.Anything)
+		mfaManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("returns error and does not remember the device when the attempt limit is exhausted", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authManager := NewAuthManager(WithCustomMFAManagerOption(mfaManagerMock))
+
+		mfaManagerMock.
+			On("ValidateMFACode", ctx, deviceID, code).
+			Return("", ErrMFAAttemptsExhausted).
+			Once()
+
+		mfaManagerMock.On("RememberDevice", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, true)
+		require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
+		assert.Empty(t, token)
+
+		mfaManagerMock.AssertNotCalled(t, "RememberDevice", mock.Anything, mock.Anything, mock.Anything)
+		mfaManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("remembers the device only after validation, keyed on the user ID", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authenticatorMock := &AuthenticatorMock{}
+		jwtManagerMock := &JWTManagerMock{}
+		roleManagerMock := &RoleManagerMock{}
+		authManager := NewAuthManager(
+			WithCustomMFAManagerOption(mfaManagerMock),
+			WithCustomAuthenticatorOption(authenticatorMock),
+			WithCustomJWTManagerOption(jwtManagerMock),
+			WithCustomRoleManagerOption(roleManagerMock),
+		)
+
+		userID := "user-id"
+		user := &User{ID: userID, Email: "email@email.com"}
+		roles := []string{"role1"}
+		expectedUser := &User{ID: userID, Email: "email@email.com", Roles: roles}
+		expectedToken := "mytoken"
+
+		validateCall := mfaManagerMock.
+			On("ValidateMFACode", ctx, deviceID, code).
+			Return(userID, nil).
+			Once()
+		rememberCall := mfaManagerMock.
+			On("RememberDevice", ctx, deviceID, userID).
+			Return(nil).
+			Once()
+		mock.InOrder(validateCall, rememberCall)
+
+		authenticatorMock.On("GetUser", ctx, userID).Return(user, nil).Once()
+		roleManagerMock.On("GetUserRoles", ctx, user).Return(roles, nil).Once()
+		jwtManagerMock.
+			On("GenerateToken", ctx, expectedUser, mock.AnythingOfType("time.Time")).
+			Return(expectedToken, nil).
+			Once()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, true)
+		require.NoError(t, err)
+		assert.Equal(t, expectedToken, token)
+
+		mfaManagerMock.AssertExpectations(t)
+		authenticatorMock.AssertExpectations(t)
+		jwtManagerMock.AssertExpectations(t)
+		roleManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("does not remember the device when rememberMe is false", func(t *testing.T) {
+		mfaManagerMock := &MFAManagerMock{}
+		authenticatorMock := &AuthenticatorMock{}
+		jwtManagerMock := &JWTManagerMock{}
+		roleManagerMock := &RoleManagerMock{}
+		authManager := NewAuthManager(
+			WithCustomMFAManagerOption(mfaManagerMock),
+			WithCustomAuthenticatorOption(authenticatorMock),
+			WithCustomJWTManagerOption(jwtManagerMock),
+			WithCustomRoleManagerOption(roleManagerMock),
+		)
+
+		userID := "user-id"
+		user := &User{ID: userID, Email: "email@email.com"}
+		roles := []string{"role1"}
+		expectedUser := &User{ID: userID, Email: "email@email.com", Roles: roles}
+		expectedToken := "mytoken"
+
+		mfaManagerMock.On("ValidateMFACode", ctx, deviceID, code).Return(userID, nil).Once()
+		mfaManagerMock.On("RememberDevice", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		authenticatorMock.On("GetUser", ctx, userID).Return(user, nil).Once()
+		roleManagerMock.On("GetUserRoles", ctx, user).Return(roles, nil).Once()
+		jwtManagerMock.
+			On("GenerateToken", ctx, expectedUser, mock.AnythingOfType("time.Time")).
+			Return(expectedToken, nil).
+			Once()
+
+		token, err := authManager.AuthenticateMFA(ctx, deviceID, code, false)
+		require.NoError(t, err)
+		assert.Equal(t, expectedToken, token)
+
+		mfaManagerMock.AssertNotCalled(t, "RememberDevice", mock.Anything, mock.Anything, mock.Anything)
+		mfaManagerMock.AssertExpectations(t)
+		authenticatorMock.AssertExpectations(t)
+		jwtManagerMock.AssertExpectations(t)
+		roleManagerMock.AssertExpectations(t)
+	})
 }

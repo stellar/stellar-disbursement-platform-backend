@@ -91,9 +91,12 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Step 3: Authenticate the user with the MFA code
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
-		if errors.Is(err, auth.ErrMFACodeInvalid) {
+		switch {
+		case errors.Is(err, auth.ErrMFACodeInvalid):
 			httperror.Unauthorized("", err, nil).Render(rw)
-		} else {
+		case errors.Is(err, auth.ErrMFAAttemptsExhausted):
+			httperror.Unauthorized("Too many incorrect attempts. Please request a new code using the Resend code option.", err, nil).Render(rw)
+		default:
 			log.Ctx(ctx).Errorf("authenticating user: %s", err.Error())
 			httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		}
