@@ -89,9 +89,14 @@ func Test_walletCapabilitiesFor(t *testing.T) {
 
 // Test_APIKeyWalletReadScope covers the hole the Owner-only route gate left open: on the API-key
 // path RequirePermission never calls the role middleware it was handed, so a key with
-// read:distribution_wallets reaches the admin reads directly. The handlers must therefore filter
-// to the key creator's own scope. The creator here is deliberately not an owner — an owner
-// short-circuits every membership lookup and would pass regardless of what the handlers do.
+// read:distribution_wallets reaches the admin reads directly. The handlers must therefore
+// re-apply, themselves, what the route gate only intended. The creator here is deliberately not
+// an owner — an owner short-circuits every membership lookup and would pass regardless of what
+// the handlers do.
+//
+// The two gates differ by endpoint, because the endpoints differ in kind: the three admin reads
+// are Owner-only and refuse a non-owner outright, while /{id}/capabilities reports the caller's
+// own capabilities and so is merely membership-scoped.
 func Test_APIKeyWalletReadScope(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -161,27 +166,34 @@ func Test_APIKeyWalletReadScope(t *testing.T) {
 		return rr
 	}
 
-	endpoints := map[string]string{
-		"wallet":       "",
-		"memberships":  "/memberships",
-		"audit":        "/audit",
-		"capabilities": "/capabilities",
+	// The admin reads are Owner-only, so a key created by a non-owner is refused whether or not
+	// the wallet is in the creator's scope: scope alone would have admitted them to walletA,
+	// where they hold a membership, and handed them its roster and its grant/revoke history.
+	adminReads := map[string]string{
+		"wallet":      "",
+		"memberships": "/memberships",
+		"audit":       "/audit",
 	}
-	for name, suffix := range endpoints {
-		t.Run(name+": outside the creator's scope returns 404", func(t *testing.T) {
-			rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s%s", walletBID, suffix))
-			assert.Equal(t, http.StatusNotFound, rr.Code)
-			assert.NotContains(t, rr.Body.String(), "api-key-wallet-b")
-			assert.NotContains(t, rr.Body.String(), "leaked-")
-		})
-
-		t.Run(name+": inside the creator's scope is served", func(t *testing.T) {
-			rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s%s", walletA.ID, suffix))
-			assert.Equal(t, http.StatusOK, rr.Code)
-		})
+	scopes := map[string]string{"in the creator's scope": walletA.ID, "outside it": walletBID}
+	for name, suffix := range adminReads {
+		for scopeName, walletID := range scopes {
+			t.Run(fmt.Sprintf("%s: owner-only, %s returns 403", name, scopeName), func(t *testing.T) {
+				rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s%s", walletID, suffix))
+				assert.Equal(t, http.StatusForbidden, rr.Code)
+				assert.NotContains(t, rr.Body.String(), "api-key-wallet-b")
+				assert.NotContains(t, rr.Body.String(), "leaked-")
+			})
+		}
 	}
 
-	t.Run("capabilities follow the creator's membership role, not the key's permissions", func(t *testing.T) {
+	t.Run("capabilities: outside the creator's scope returns 404", func(t *testing.T) {
+		rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s/capabilities", walletBID))
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "api-key-wallet-b")
+	})
+
+	t.Run("capabilities: inside the creator's scope it is served, and follows the creator's "+
+		"membership role rather than the key's permissions", func(t *testing.T) {
 		rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s/capabilities", walletA.ID))
 		require.Equal(t, http.StatusOK, rr.Code)
 		body := rr.Body.String()

@@ -592,6 +592,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:                     o.Models,
 				SubmitterEngine:            o.SubmitterEngine,
 				DistributionAccountService: o.DistributionAccountService,
+				AuthManager:                authManager,
 			}
 
 			// Read operations
@@ -650,7 +651,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				}
 
-				// Owner-only reads (admin views).
+				// Owner-only reads (admin views). As with the write group below, the Owner
+				// requirement here only binds the JWT path, so each handler re-checks it via
+				// ensureCallerIsOwner and then applies its read scope.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
@@ -663,6 +666,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				// Membership-scoped reads (the dashboard picker + Total Balance tile): any
 				// business role at the route; the handlers filter to the caller's read scope
 				// (Owners: everything; members: their wallets; 404 outside per-wallet scope).
+				// /{id}/capabilities also serves the grant picker via ?user_id=/?role=, which
+				// reports a THIRD party's capabilities and is Owner-gated inside the handler.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),

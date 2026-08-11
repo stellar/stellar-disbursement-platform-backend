@@ -208,6 +208,38 @@ func (m *DistributionWalletModel) UpdateAddress(ctx context.Context, sqlExec db.
 	return &wallet, nil
 }
 
+// SetRotatedAddress repoints an ACTIVE wallet at the account produced by a distribution-account
+// rotation. UpdateAddress deliberately refuses to overwrite an address (it only ever attaches
+// the first one); rotation is the single sanctioned exception, so it gets its own narrow
+// writer rather than relaxing UpdateAddress.
+//
+// The write is idempotent and re-runnable — applying the same address twice is a no-op — which
+// is what lets `distribution-account rotate` repoint the row before it deletes the superseded
+// key: a failure after this point leaves the row pointing at an account whose key still exists.
+func (m *DistributionWalletModel) SetRotatedAddress(ctx context.Context, sqlExec db.SQLExecuter, id, address string) (*DistributionWallet, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address is required: %w", ErrMissingInput)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE distribution_wallets
+		SET distribution_account_address = $2
+		WHERE id = $1 AND status = 'ACTIVE'
+		RETURNING %s
+	`, distributionWalletColumns)
+
+	var wallet DistributionWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, id, address)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("repointing distribution wallet %q at %q (missing or not active): %w", id, address, ErrRecordNotFound)
+		}
+		return nil, fmt.Errorf("repointing distribution wallet %q at %q: %w", id, address, err)
+	}
+
+	return &wallet, nil
+}
+
 // Activate promotes a PENDING wallet to ACTIVE once its on-chain account has been generated and
 // funded. Only a PENDING wallet can be activated — this is not a general status-flip method.
 func (m *DistributionWalletModel) Activate(ctx context.Context, sqlExec db.SQLExecuter, id string) (*DistributionWallet, error) {
