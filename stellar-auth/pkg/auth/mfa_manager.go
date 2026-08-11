@@ -105,33 +105,31 @@ func (m *defaultMFAManager) GenerateMFACode(ctx context.Context, deviceID, userI
 // Each failed validation increments a per-device counter; once mfaMaxValidationAttempts is
 // reached the device is locked out (ErrMFAAttemptsExhausted) until a new code is issued.
 func (m *defaultMFAManager) ValidateMFACode(ctx context.Context, deviceID, code string) (string, error) {
-	return db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
-		mc, err := m.getByDeviceAndCode(ctx, deviceID, code)
+	mc, err := m.getByDeviceAndCode(ctx, deviceID, code)
+	if err != nil {
+		if errors.Is(err, ErrMFANoCodeForUserDevice) {
+			// The submitted code matches no pending code for the device. Count the failed
+			// attempt against the device's live code and lock out once the cap is reached.
+			return "", m.failValidation(ctx, deviceID)
+		}
+		return "", fmt.Errorf("error validating MFA code for device ID %s: %w", deviceID, err)
+	}
+
+	// The device is already locked out: reject even a correct code until a new one is issued.
+	if mc.Attempts >= mfaMaxValidationAttempts {
+		return "", ErrMFAAttemptsExhausted
+	}
+
+	if mc.Code == code && mc.CodeExpiresAt != nil && mc.CodeExpiresAt.After(time.Now()) {
+		err = m.expireMFACode(ctx, deviceID, code)
 		if err != nil {
-			if errors.Is(err, ErrMFANoCodeForUserDevice) {
-				// The submitted code matches no pending code for the device. Count the failed
-				// attempt against the device's live code and lock out once the cap is reached.
-				return "", m.failValidation(ctx, deviceID)
-			}
-			return "", fmt.Errorf("error validating MFA code for device ID %s: %w", deviceID, err)
+			return "", fmt.Errorf("error expiring MFA code for device ID %s and code %s: %w", deviceID, code, err)
 		}
+		return mc.UserID, nil
+	}
 
-		// The device is already locked out: reject even a correct code until a new one is issued.
-		if mc.Attempts >= mfaMaxValidationAttempts {
-			return "", ErrMFAAttemptsExhausted
-		}
-
-		if mc.Code == code && mc.CodeExpiresAt != nil && mc.CodeExpiresAt.After(time.Now()) {
-			err = m.expireMFACode(ctx, deviceID, code)
-			if err != nil {
-				return "", fmt.Errorf("error expiring MFA code for device ID %s and code %s: %w", deviceID, code, err)
-			}
-			return mc.UserID, nil
-		}
-
-		// The code matched a row but was expired: count it as a failed attempt too.
-		return "", m.failValidation(ctx, deviceID)
-	})
+	// The code matched a row but was expired: count it as a failed attempt too.
+	return "", m.failValidation(ctx, deviceID)
 }
 
 // failValidation records a failed MFA validation for the device and returns the error to
@@ -194,25 +192,24 @@ func (m *defaultMFAManager) ForgetAllDevices(ctx context.Context, userID string)
 }
 
 // registerFailedMFAAttempt increments the failed-attempt counter for the device's live MFA
-// code and reports whether the per-device attempt cap has now been reached. It is a no-op
-// (returns false) when the device has no unexpired code to count against, so guesses against
-// an already-expired code (which can never succeed) do not push the user toward a lockout.
+// code and reports whether the per-device attempt cap has now been reached.
 func (m *defaultMFAManager) registerFailedMFAAttempt(ctx context.Context, deviceID string) (bool, error) {
 	if deviceID == "" {
 		return false, fmt.Errorf("device ID is required")
 	}
 	const query = `
-		WITH updated AS (
-			UPDATE auth_user_mfa_codes
-			SET attempts = attempts + 1
-			WHERE device_id = $1 AND code_expires_at > NOW()
-			RETURNING attempts
-		)
-		SELECT COALESCE(MAX(attempts), 0) FROM updated
+		UPDATE auth_user_mfa_codes
+		SET attempts = LEAST(attempts + 1, $2)
+		WHERE device_id = $1 AND code_expires_at > NOW()
+		RETURNING attempts
 	`
 	var attempts int
-	err := m.dbConnectionPool.GetContext(ctx, &attempts, query, deviceID)
+	err := m.dbConnectionPool.GetContext(ctx, &attempts, query, deviceID, mfaMaxValidationAttempts)
 	if err != nil {
+		// No live code matched (expired or absent): nothing to count against, not a lockout.
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
 		return false, fmt.Errorf("error registering failed MFA attempt for device ID %s: %w", deviceID, err)
 	}
 	return attempts >= mfaMaxValidationAttempts, nil

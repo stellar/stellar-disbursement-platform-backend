@@ -264,6 +264,28 @@ func Test_defaultMFAManager_ValidateMFACode(t *testing.T) {
 		require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
 	})
 
+	t.Run("Test the attempt counter stays capped once the device is locked out", func(t *testing.T) {
+		testDeviceID := "capped-device"
+		testCode := "424244"
+		// Seed the device already at the cap with a live code.
+		_, err := dbConnectionPool.ExecContext(ctx, `
+            INSERT INTO auth_user_mfa_codes (device_id, code, auth_user_id, device_expires_at, code_expires_at, attempts)
+            VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour', NOW() + INTERVAL '1 hour', $4)`,
+			testDeviceID, testCode, randUser.ID, mfaMaxValidationAttempts)
+		require.NoError(t, err)
+
+		// Further wrong guesses keep reporting the lockout without inflating the stored counter.
+		for i := 0; i < 3; i++ {
+			_, err = m.ValidateMFACode(ctx, testDeviceID, "000000")
+			require.ErrorIs(t, err, ErrMFAAttemptsExhausted)
+		}
+
+		// The counter is held at the cap rather than running away past it.
+		mc, err := m.getByDeviceAndUser(ctx, testDeviceID, randUser.ID)
+		require.NoError(t, err)
+		assert.Equal(t, mfaMaxValidationAttempts, mc.Attempts)
+	})
+
 	t.Run("Test issuing a new code resets the attempt counter", func(t *testing.T) {
 		testDeviceID := "reset-device"
 		oldCode := "111111"
