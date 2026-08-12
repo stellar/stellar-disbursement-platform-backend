@@ -12,7 +12,7 @@ import (
 var ErrInvalidToken = fmt.Errorf("invalid token")
 
 const (
-	DefaultSEP24JWTExpirationSeconds        = 300
+	DefaultSEP24JWTExpirationSeconds        = 600
 	MaxRecommendedSEP24JWTExpirationSeconds = 60 * 60
 )
 
