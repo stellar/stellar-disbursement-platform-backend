@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- Make SEP-24 interactive JWT expiration configurable and raise default to 10 minutes. [#1182](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1182)
+
+
 ### Fixed
 
 - Verify automated release cloudformation version migration. [#1158](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1158)
