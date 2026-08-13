@@ -28,6 +28,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -90,10 +91,26 @@ type PatchUserPasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+func (h ProfileHandler) ensureCallerIsOwner(ctx context.Context) (*auth.User, *httperror.HTTPError) {
+	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
+	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return nil, httperror.Unauthorized("", err, nil)
+		}
+		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+	}
+
+	if !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+		return nil, httperror.Forbidden("", nil, nil)
+	}
+
+	return user, nil
+}
+
 func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	_, user, httpErr := getTokenAndUser(ctx, h.AuthManager)
+	user, httpErr := h.ensureCallerIsOwner(ctx)
 	if httpErr != nil {
 		httpErr.Render(rw)
 		return

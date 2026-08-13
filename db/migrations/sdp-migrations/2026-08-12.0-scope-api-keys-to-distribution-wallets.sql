@@ -15,7 +15,20 @@ UPDATE api_keys
 SET distribution_wallet_ids = ARRAY [(SELECT id FROM distribution_wallets WHERE is_default LIMIT 1)]
 WHERE EXISTS (SELECT 1 FROM distribution_wallets WHERE is_default);
 
+-- The audit trigger writes an explicit column list, so the new column has to reach api_keys_audit
+-- too or scope changes go unrecorded. create_audit_table only CREATE TABLE IF NOT EXISTS, so the
+-- column is added by hand; re-running it then regenerates the trigger function over all columns.
+ALTER TABLE api_keys_audit
+    ADD COLUMN distribution_wallet_ids VARCHAR(36) [];
+
+SELECT create_audit_table('api_keys');
+
 -- +migrate Down
 
 ALTER TABLE api_keys
     DROP COLUMN IF EXISTS distribution_wallet_ids;
+
+ALTER TABLE api_keys_audit
+    DROP COLUMN IF EXISTS distribution_wallet_ids;
+
+SELECT create_audit_table('api_keys');
