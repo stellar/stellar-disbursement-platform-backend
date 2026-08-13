@@ -45,6 +45,17 @@ type CreateAPIKeyRequest struct {
 	DistributionWalletIDs []string                `json:"distribution_wallet_ids,omitempty"`
 }
 
+// normalizeWalletIDs sorts and dedupes a requested scope, never returning nil: slices.Sorted over
+// an empty request yields nil, which downstream reads as "leave the scope untouched" — the opposite
+// of the explicit [] the caller sent.
+func normalizeWalletIDs(requested []string) []string {
+	normalized := slices.Compact(slices.Sorted(slices.Values(requested)))
+	if normalized == nil {
+		return []string{}
+	}
+	return normalized
+}
+
 // grantableWallets returns the wallets the caller may put on a key, for creation and for edits.
 //
 // Only active wallets can be added, mirroring the enforce_wallet_membership_wallet_active trigger
@@ -143,7 +154,7 @@ func (h APIKeyHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	if req.DistributionWalletIDs == nil {
 		walletIDs = grantable
 	} else {
-		walletIDs = slices.Compact(slices.Sorted(slices.Values(req.DistributionWalletIDs)))
+		walletIDs = normalizeWalletIDs(req.DistributionWalletIDs)
 		for _, walletID := range walletIDs {
 			if !slices.Contains(grantable, walletID) {
 				httperror.Forbidden(
@@ -266,7 +277,7 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		walletIDs = slices.Compact(slices.Sorted(slices.Values(req.DistributionWalletIDs)))
+		walletIDs = normalizeWalletIDs(req.DistributionWalletIDs)
 		grantable, scopeErr := h.grantableWallets(ctx, current.WalletScope())
 		if scopeErr != nil {
 			scopeErr.Render(w)

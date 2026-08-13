@@ -250,6 +250,44 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 			"once dropped, an archived account cannot be put back")
 	})
 
+	// An explicit [] on edit has to clear the scope. Omitting the field is what means "leave it
+	// alone", and the two must not collapse into each other on the way to the DB.
+	t.Run("an explicit empty list on edit clears the scope, omitting it does not", func(t *testing.T) {
+		handler, ctx, walletA, _ := setup(t, owner)
+
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "scope-clearing key", "permissions": []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+		var created data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &created))
+
+		patch := func(body map[string]any) data.APIKey {
+			b, marshalErr := json.Marshal(body)
+			require.NoError(t, marshalErr)
+			req := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api-keys/"+created.ID, bytes.NewReader(b))
+			chiCtx := chi.NewRouteContext()
+			chiCtx.URLParams.Add("id", created.ID)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+			rr := httptest.NewRecorder()
+			handler.UpdateKey(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code)
+
+			var updated data.APIKey
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &updated))
+			return updated
+		}
+
+		kept := patch(map[string]any{"permissions": []string{"read:payments", "read:exports"}})
+		assert.Equal(t, []string{walletA.ID}, []string(kept.DistributionWalletIDs))
+
+		cleared := patch(map[string]any{
+			"permissions": []string{"read:payments"}, "distribution_wallet_ids": []string{},
+		})
+		assert.Empty(t, cleared.DistributionWalletIDs, "an explicit [] must reach the DB as empty, not nil")
+	})
+
 	t.Run("a key minting a key cannot widen the scope it holds", func(t *testing.T) {
 		handler, ctx, walletA, walletBID := setup(t, developer)
 		// The acting key names only walletA, so walletB is out of reach even though the request
