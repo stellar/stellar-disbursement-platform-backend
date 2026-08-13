@@ -97,4 +97,37 @@ func Test_ReceiverVisibility_R1(t *testing.T) {
 		rr = doAs(owner.ID, fmt.Sprintf("/receivers/%s", receiverFromB.ID))
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
+
+	// Receivers are created tenant-wide by roles with no say in which account pays them, so an
+	// unpaid receiver belongs to no account and stays visible to everyone. Its first payment is
+	// what assigns it, and from then on the filter applies.
+	t.Run("an unpaid receiver is tenant-wide until its first payment", func(t *testing.T) {
+		unpaid := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+
+		rr := doAs(memberA.ID, "/receivers")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), unpaid.ID, "the creator must be able to find what they just created")
+
+		rr = doAs(memberA.ID, fmt.Sprintf("/receivers/%s", unpaid.ID))
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		// Paid from walletB, which memberA holds no membership on: it now belongs to that account.
+		d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: "recv-disb-claims-unpaid", SourceWalletID: walletBID, Status: data.StartedDisbursementStatus,
+		})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, unpaid.ID, d.Wallet.ID, data.ReadyReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: d, Asset: *d.Asset, Amount: "3", Status: data.DraftPaymentStatus,
+		})
+
+		rr = doAs(memberA.ID, "/receivers")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.NotContains(t, rr.Body.String(), unpaid.ID)
+
+		rr = doAs(memberA.ID, fmt.Sprintf("/receivers/%s", unpaid.ID))
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+
+		rr = doAs(owner.ID, fmt.Sprintf("/receivers/%s", unpaid.ID))
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
 }

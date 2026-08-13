@@ -134,11 +134,13 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "key whose creator was deactivated is rejected, not a 500",
+			// The key answers out of its own wallet scope and never loads its creator, so
+			// offboarding the person who minted it does not take the integration down with them.
+			name:           "key whose creator was deactivated keeps working",
 			method:         http.MethodGet,
 			path:           "/disbursements",
 			apiKey:         deactivatedCreatorAPIKey.Key,
-			expectedStatus: http.StatusUnauthorized,
+			expectedStatus: http.StatusOK,
 		},
 	}
 
@@ -705,7 +707,12 @@ func createTestAPIKey(t *testing.T, db db.DBConnectionPool, name string, perms [
 		expiry = &exp
 	}
 
-	apiKey, err := models.APIKeys.Insert(ctx, name, perms, allowedIPs, expiry, createdBy)
+	// Scoped to the default wallet, matching what the migration does to every key that predates
+	// wallet scoping and what CreateAPIKey defaults a single-wallet tenant's new keys to.
+	defaultWallet, err := models.DistributionWallets.GetDefault(ctx, db)
+	require.NoError(t, err)
+
+	apiKey, err := models.APIKeys.Insert(ctx, name, perms, allowedIPs, []string{defaultWallet.ID}, expiry, createdBy)
 	require.NoError(t, err)
 	require.NotNil(t, apiKey)
 

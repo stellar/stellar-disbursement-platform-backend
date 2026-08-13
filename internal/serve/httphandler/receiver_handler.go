@@ -65,7 +65,8 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 			if scope != nil {
 				var visible bool
 				if visErr := dbTx.GetContext(ctx, &visible, `
-					SELECT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = $1 AND pw.source_wallet_id = ANY($2))`,
+					SELECT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = $1 AND pw.source_wallet_id = ANY($2))
+						OR NOT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = $1)`,
 					receiverID, pq.Array(scope)); visErr != nil {
 					return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
 				}

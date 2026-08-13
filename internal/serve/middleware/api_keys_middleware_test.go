@@ -26,7 +26,7 @@ func Test_APIKeyOrJWTAuthenticate_SuccessfulAPIKey(t *testing.T) {
 	expiry := time.Now().Add(1 * time.Hour)
 	keyObj, err := apiKeyModel.Insert(context.Background(),
 		"Ahrimanskey", []data.APIKeyPermission{data.ReadStatistics},
-		[]string{"127.0.0.1"}, &expiry, "11111111-1111-1111-1111-111111111111",
+		[]string{"127.0.0.1"}, nil, &expiry, "11111111-1111-1111-1111-111111111111",
 	)
 	require.NoError(t, err)
 
@@ -58,7 +58,7 @@ func Test_APIKeyOrJWTAuthenticate_ExpiredKey(t *testing.T) {
 	expiry := time.Now().Add(-1 * time.Hour)
 	keyObj, err := apiKeyModel.Insert(context.Background(),
 		"Ahrimanskey", []data.APIKeyPermission{data.ReadStatistics},
-		nil, &expiry, "22222222-2222-2222-2222-222222222222",
+		nil, nil, &expiry, "22222222-2222-2222-2222-222222222222",
 	)
 	require.NoError(t, err)
 
@@ -84,7 +84,7 @@ func Test_APIKeyOrJWTAuthenticate_IPRestriction(t *testing.T) {
 	expiry := time.Now().Add(1 * time.Hour)
 	keyObj, err := apiKeyModel.Insert(context.Background(),
 		"Ahrimanskey", []data.APIKeyPermission{data.ReadStatistics},
-		[]string{"10.0.0.6", "10.0.0.8", "10.0.0.5"}, &expiry, "33333333-3333-3333-3333-333333333333",
+		[]string{"10.0.0.6", "10.0.0.8", "10.0.0.5"}, nil, &expiry, "33333333-3333-3333-3333-333333333333",
 	)
 	require.NoError(t, err)
 
@@ -241,7 +241,7 @@ func setupCrossTenantAPIKeys(t *testing.T) (apiKeys *data.APIKeyModel, ctxA, ctx
 
 	key, err := models.APIKeys.Insert(ctxA,
 		"Cross Tenant Probe", []data.APIKeyPermission{data.ReadStatistics},
-		nil, nil, "11111111-1111-1111-1111-111111111111",
+		nil, nil, nil, "11111111-1111-1111-1111-111111111111",
 	)
 	require.NoError(t, err)
 

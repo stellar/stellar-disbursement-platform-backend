@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -152,10 +153,11 @@ func Test_APIKeyWalletReadScope(t *testing.T) {
 	})
 
 	apiKey := &data.APIKey{
-		ID:          "api-key-1",
-		Name:        "reader",
-		CreatedBy:   creator.ID,
-		Permissions: data.APIKeyPermissions{data.ReadDistributionWallets},
+		ID:                    "api-key-1",
+		Name:                  "reader",
+		CreatedBy:             creator.ID,
+		Permissions:           data.APIKeyPermissions{data.ReadDistributionWallets},
+		DistributionWalletIDs: pq.StringArray{walletA.ID},
 	}
 	withAPIKey := func(path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -186,13 +188,13 @@ func Test_APIKeyWalletReadScope(t *testing.T) {
 		}
 	}
 
-	t.Run("capabilities: outside the creator's scope returns 404", func(t *testing.T) {
+	t.Run("capabilities: outside the key's scope returns 404", func(t *testing.T) {
 		rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s/capabilities", walletBID))
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 		assert.NotContains(t, rr.Body.String(), "api-key-wallet-b")
 	})
 
-	t.Run("capabilities: inside the creator's scope it is served, and follows the creator's "+
+	t.Run("capabilities: inside the key's scope it is served, and follows the creator's "+
 		"membership role rather than the key's permissions", func(t *testing.T) {
 		rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s/capabilities", walletA.ID))
 		require.Equal(t, http.StatusOK, rr.Code)
@@ -202,6 +204,58 @@ func Test_APIKeyWalletReadScope(t *testing.T) {
 		assert.Contains(t, body, `"can_create_disbursement": false`)
 		assert.Contains(t, body, `"can_start_disbursement": false`)
 	})
+
+	// The wallet the key may reach is now the key's own column, not a live read of the creator's
+	// memberships: revoking that membership leaves the key's reach untouched.
+	t.Run("capabilities: scope follows the key, not the creator's memberships", func(t *testing.T) {
+		_, err := dbConnectionPool.ExecContext(ctx,
+			`DELETE FROM wallet_memberships WHERE user_id = $1`, creator.ID)
+		require.NoError(t, err)
+
+		rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s/capabilities", walletA.ID))
+		assert.Equal(t, http.StatusOK, rr.Code, "the key still reaches the wallet named on it")
+	})
+}
+
+// Test_APIKeyWalletScopeIsItsOwn pins the decoupling: a key's reach is the column on the key, not
+// a live projection of its creator's memberships, so it neither moves when those memberships
+// change nor collapses when the creator is deactivated or deleted.
+func Test_APIKeyWalletScopeIsItsOwn(t *testing.T) {
+	ctx := context.Background()
+
+	authManagerMock := &auth.AuthManagerMock{}
+	// Any user lookup at all is a regression here: the key must answer without one. The mock is
+	// deliberately left with no expectations, so a call fails the test.
+
+	scopedKey := &data.APIKey{ID: "k1", DistributionWalletIDs: pq.StringArray{"wallet-a", "wallet-b"}}
+	unscopedKey := &data.APIKey{ID: "k2"}
+
+	t.Run("read scope is the key's own list", func(t *testing.T) {
+		reqCtx := sdpcontext.SetAPIKeyInContext(ctx, scopedKey)
+		scope, httpErr := resolveWalletReadScope(reqCtx, authManagerMock, nil)
+		require.Nil(t, httpErr)
+		assert.Equal(t, []string{"wallet-a", "wallet-b"}, scope)
+	})
+
+	t.Run("an empty scope is empty, never tenant-wide", func(t *testing.T) {
+		reqCtx := sdpcontext.SetAPIKeyInContext(ctx, unscopedKey)
+		scope, httpErr := resolveWalletReadScope(reqCtx, authManagerMock, nil)
+		require.Nil(t, httpErr)
+		require.NotNil(t, scope, "nil would read as owner/tenant-wide downstream")
+		assert.Empty(t, scope)
+		assert.False(t, walletInReadScope(scope, "wallet-a"))
+	})
+
+	t.Run("actions are gated on the key's scope", func(t *testing.T) {
+		reqCtx := sdpcontext.SetAPIKeyInContext(ctx, scopedKey)
+		require.Nil(t, ensureWalletActionAllowed(reqCtx, authManagerMock, nil, "wallet-a"))
+
+		httpErr := ensureWalletActionAllowed(reqCtx, authManagerMock, nil, "wallet-c")
+		require.NotNil(t, httpErr)
+		assert.Equal(t, http.StatusForbidden, httpErr.StatusCode)
+	})
+
+	authManagerMock.AssertExpectations(t)
 }
 
 // capabilityEnforcementSites points each matrix entry at the code that actually enforces it:

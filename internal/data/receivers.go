@@ -278,9 +278,12 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQL
 		qb.AddCondition("r.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
 	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
-		// Membership-filtered visibility: a receiver is visible to callers whose
-		// wallets have paid them at least once.
-		qb.AddCondition("EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = r.id AND pw.source_wallet_id = ANY(?))", pq.Array(walletIDs))
+		// A receiver is visible to callers whose wallets have paid them. One nobody has paid yet
+		// belongs to no account, so it stays tenant-wide until its first payment.
+		qb.AddCondition(`(
+			EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = r.id AND pw.source_wallet_id = ANY(?))
+			OR NOT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = r.id)
+		)`, pq.Array(walletIDs))
 	}
 
 	switch queryType {

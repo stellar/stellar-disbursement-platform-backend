@@ -20,6 +20,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -161,10 +162,16 @@ func (c AssetsHandler) getBalanceInfo(
 // path that never had one, and no 400. resolveSourceWalletForWrite's own header-less fallback is
 // deliberately not reused here — it 400s tenants with more than one active wallet, which would
 // break the existing add/remove-asset flow for them instead of extending it.
+//
+// An API key never takes the header-less shortcut: its scope is explicit, so falling back to the
+// tenant default would let a key scoped to one wallet edit another wallet's trustlines.
 func (c AssetsHandler) resolveTrustlineAccountForWrite(req *http.Request, noFundedAccountMsg string) (schema.TransactionAccount, *httperror.HTTPError) {
 	ctx := req.Context()
 
-	if req.Header.Get(XWalletIDHeader) == "" {
+	_, keyErr := sdpcontext.GetAPIKeyFromContext(ctx)
+	viaAPIKey := keyErr == nil
+
+	if req.Header.Get(XWalletIDHeader) == "" && !viaAPIKey {
 		distributionAccount, err := c.DistributionAccountFromContext(ctx)
 		if err != nil {
 			err = fmt.Errorf("resolving distribution account from context: %w", err)
