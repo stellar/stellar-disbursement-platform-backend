@@ -195,7 +195,7 @@ The following environment variables are required for SEP10/SEP24 functionality:
 - `SEP24_JWT_SECRET` - JWT secret for SEP24 token signing
 
 **Optional Variables:**
-- `SEP24_JWT_EXPIRATION_SECONDS` - How long SEP24 tokens stay valid, in seconds. Defaults to 600. Values above 3600 log a warning at startup.
+- `SEP24_JWT_EXPIRATION_SECONDS` - How long SEP24 tokens stay valid, in seconds. Defaults to 600. Minimum 5. Values above 3600 log a warning at startup.
 - `BASE_URL` - Base URL for generating SEP endpoint URLs in stellar.toml
 
 **Development Setup:**

@@ -203,7 +203,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		{
 			Name: "sep24-jwt-expiration-seconds",
 			Usage: fmt.Sprintf(
-				"Duration that the SEP-24 JWT token remains valid, in seconds. This token is embedded in the interactive registration URL, so it has to outlive the whole receiver registration flow, including OTP delivery over SMS/email. Values above %d log a warning at startup.",
+				"Duration that the SEP-24 JWT token remains valid, in seconds. This token is embedded in the interactive registration URL, so it has to outlive the whole receiver registration flow, including OTP delivery over SMS/email. Minimum 5. Values above %d log a warning at startup.",
 				sepauth.MaxRecommendedSEP24JWTExpirationSeconds,
 			),
 			OptType:     types.Int,
