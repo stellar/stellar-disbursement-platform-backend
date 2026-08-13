@@ -200,9 +200,9 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Sep10Service = sep10Service
 
 	if opts.EnableSep45 {
-		sep45NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
-		if err != nil {
-			return fmt.Errorf("initializing SEP 45 nonce store: %w", err)
+		sep45NonceStore, nonceErr := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
+		if nonceErr != nil {
+			return fmt.Errorf("initializing SEP 45 nonce store: %w", nonceErr)
 		}
 		rpcClient, rpcErr := dependencyinjection.NewRPCClient(context.Background(), opts.RPCConfig)
 		if rpcErr != nil {

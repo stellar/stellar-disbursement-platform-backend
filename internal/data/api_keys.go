@@ -429,12 +429,11 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 		`
 
 		var a APIKey
-		err := tx.QueryRowxContext(ctx, selectQ, id).Scan(
+		if scanErr := tx.QueryRowxContext(ctx, selectQ, id).Scan(
 			&a.ID, &a.KeyHash, &a.Salt, &a.ExpiryDate,
 			&a.Permissions, &a.AllowedIPs, &a.DistributionWalletIDs, &a.CreatedBy, &a.LastUsedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("API key not found: %w", err)
+		); scanErr != nil {
+			return nil, fmt.Errorf("API key not found: %w", scanErr)
 		}
 
 		// 3) Verify hash
@@ -455,11 +454,11 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 			          distribution_wallet_ids, created_by, last_used_at
 		`
 
-		if err := tx.QueryRowxContext(ctx, updateQ, id).Scan(
+		if updateErr := tx.QueryRowxContext(ctx, updateQ, id).Scan(
 			&a.ID, &a.KeyHash, &a.Salt, &a.ExpiryDate,
 			&a.Permissions, &a.AllowedIPs, &a.DistributionWalletIDs, &a.CreatedBy, &a.LastUsedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to update last_used_at: %w", err)
+		); updateErr != nil {
+			return nil, fmt.Errorf("failed to update last_used_at: %w", updateErr)
 		}
 
 		return &a, nil
