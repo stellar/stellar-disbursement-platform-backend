@@ -162,19 +162,34 @@ func ValidateAllowedIPs(ips []string) error {
 }
 
 type APIKey struct {
-	ID          string            `db:"id" json:"id"`
-	Name        string            `db:"name" json:"name"`
-	KeyHash     string            `db:"key_hash" json:"-"`
-	Salt        string            `db:"salt" json:"-"`
-	ExpiryDate  *time.Time        `db:"expiry_date" json:"expiry_date,omitempty"`
-	Permissions APIKeyPermissions `db:"permissions" json:"permissions"`
-	AllowedIPs  IPList            `db:"allowed_ips" json:"allowed_ips,omitempty"`
-	CreatedAt   time.Time         `db:"created_at" json:"created_at"`
-	CreatedBy   string            `db:"created_by" json:"created_by,omitempty"`
-	UpdatedAt   time.Time         `db:"updated_at" json:"updated_at"`
-	UpdatedBy   string            `db:"updated_by" json:"updated_by,omitempty"`
-	LastUsedAt  *time.Time        `db:"last_used_at" json:"last_used_at,omitempty"`
-	Key         string            `db:"-" json:"key,omitempty"`
+	ID                    string            `db:"id" json:"id"`
+	Name                  string            `db:"name" json:"name"`
+	KeyHash               string            `db:"key_hash" json:"-"`
+	Salt                  string            `db:"salt" json:"-"`
+	ExpiryDate            *time.Time        `db:"expiry_date" json:"expiry_date,omitempty"`
+	Permissions           APIKeyPermissions `db:"permissions" json:"permissions"`
+	AllowedIPs            IPList            `db:"allowed_ips" json:"allowed_ips,omitempty"`
+	DistributionWalletIDs pq.StringArray    `db:"distribution_wallet_ids" json:"distribution_wallet_ids"`
+	CreatedAt             time.Time         `db:"created_at" json:"created_at"`
+	CreatedBy             string            `db:"created_by" json:"created_by,omitempty"`
+	UpdatedAt             time.Time         `db:"updated_at" json:"updated_at"`
+	UpdatedBy             string            `db:"updated_by" json:"updated_by,omitempty"`
+	LastUsedAt            *time.Time        `db:"last_used_at" json:"last_used_at,omitempty"`
+	Key                   string            `db:"-" json:"key,omitempty"`
+}
+
+// WalletScope returns the wallets this key may act on, never nil: the shared read-scope helpers
+// read a nil scope as "owner, show everything".
+func (a *APIKey) WalletScope() []string {
+	if a.DistributionWalletIDs == nil {
+		return []string{}
+	}
+	return a.DistributionWalletIDs
+}
+
+// CanActOnWallet reports whether walletID is inside this key's scope.
+func (a *APIKey) CanActOnWallet(walletID string) bool {
+	return slices.Contains(a.DistributionWalletIDs, walletID)
 }
 
 func (a *APIKey) HasPermission(req APIKeyPermission) bool {
@@ -252,12 +267,16 @@ func (m *APIKeyModel) Insert(
 	name string,
 	permissions []APIKeyPermission,
 	allowedIPs []string,
+	distributionWalletIDs []string,
 	expiry *time.Time,
 	createdBy string,
 ) (*APIKey, error) {
 	var apiKey *APIKey
 	if allowedIPs == nil {
 		allowedIPs = IPList{}
+	}
+	if distributionWalletIDs == nil {
+		distributionWalletIDs = []string{}
 	}
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -283,28 +302,30 @@ func (m *APIKeyModel) Insert(
 		keyHash := hex.EncodeToString(h.Sum(nil))
 
 		candidate := &APIKey{
-			Name:        name,
-			KeyHash:     keyHash,
-			Salt:        salt,
-			ExpiryDate:  expiry,
-			Permissions: APIKeyPermissions(permissions),
-			AllowedIPs:  IPList(allowedIPs),
-			CreatedBy:   createdBy,
-			UpdatedBy:   createdBy,
+			Name:                  name,
+			KeyHash:               keyHash,
+			Salt:                  salt,
+			ExpiryDate:            expiry,
+			Permissions:           APIKeyPermissions(permissions),
+			AllowedIPs:            IPList(allowedIPs),
+			DistributionWalletIDs: pq.StringArray(distributionWalletIDs),
+			CreatedBy:             createdBy,
+			UpdatedBy:             createdBy,
 		}
 
 		const q = `
             INSERT INTO api_keys (
                 name, key_hash, salt,
-                expiry_date, permissions, allowed_ips,
+                expiry_date, permissions, allowed_ips, distribution_wallet_ids,
                 created_by, updated_by
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
             RETURNING id, created_at, updated_at
         `
 
 		row := m.dbConnectionPool.QueryRowxContext(ctx, q,
 			candidate.Name, candidate.KeyHash, candidate.Salt,
 			candidate.ExpiryDate, candidate.Permissions, candidate.AllowedIPs,
+			candidate.DistributionWalletIDs,
 			candidate.CreatedBy, candidate.UpdatedBy,
 		)
 		if err := row.Scan(&candidate.ID, &candidate.CreatedAt, &candidate.UpdatedAt); err != nil {
@@ -332,14 +353,15 @@ func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string) ([]*APIKey, 
 	apiKeys := []*APIKey{}
 	query := `
         SELECT
-            id, 
+            id,
 			name,
-    		expiry_date, 
-			permissions, 
+    		expiry_date,
+			permissions,
 			allowed_ips,
-    		created_at, 
+			distribution_wallet_ids,
+    		created_at,
 			created_by,
-    		updated_at, 
+    		updated_at,
 			updated_by,
     		last_used_at
         FROM
@@ -362,7 +384,7 @@ func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKe
 	const q = `
       SELECT
         id, name,
-        expiry_date, permissions, allowed_ips,
+        expiry_date, permissions, allowed_ips, distribution_wallet_ids,
         created_at, created_by,
         updated_at, updated_by,
         last_used_at
@@ -392,13 +414,14 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 	result, err := db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(tx db.DBTransaction) (*APIKey, error) {
 		// 2) Fetch data and update last_used_at
 		const selectQ = `
-		SELECT 
+		SELECT
 			id,
 			key_hash,
 			salt,
 			expiry_date,
 			permissions,
 			allowed_ips,
+			distribution_wallet_ids,
 			created_by,
 			last_used_at
 		FROM api_keys
@@ -406,12 +429,11 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 		`
 
 		var a APIKey
-		err := tx.QueryRowxContext(ctx, selectQ, id).Scan(
+		if scanErr := tx.QueryRowxContext(ctx, selectQ, id).Scan(
 			&a.ID, &a.KeyHash, &a.Salt, &a.ExpiryDate,
-			&a.Permissions, &a.AllowedIPs, &a.CreatedBy, &a.LastUsedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("API key not found: %w", err)
+			&a.Permissions, &a.AllowedIPs, &a.DistributionWalletIDs, &a.CreatedBy, &a.LastUsedAt,
+		); scanErr != nil {
+			return nil, fmt.Errorf("API key not found: %w", scanErr)
 		}
 
 		// 3) Verify hash
@@ -425,17 +447,18 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 
 		// 4) Update last_used_at
 		const updateQ = `
-			UPDATE api_keys 
-			SET last_used_at = NOW() 
+			UPDATE api_keys
+			SET last_used_at = NOW()
 			WHERE id = $1
-			RETURNING id, key_hash, salt, expiry_date, permissions, allowed_ips, created_by, last_used_at
+			RETURNING id, key_hash, salt, expiry_date, permissions, allowed_ips,
+			          distribution_wallet_ids, created_by, last_used_at
 		`
 
-		if err := tx.QueryRowxContext(ctx, updateQ, id).Scan(
+		if updateErr := tx.QueryRowxContext(ctx, updateQ, id).Scan(
 			&a.ID, &a.KeyHash, &a.Salt, &a.ExpiryDate,
-			&a.Permissions, &a.AllowedIPs, &a.CreatedBy, &a.LastUsedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to update last_used_at: %w", err)
+			&a.Permissions, &a.AllowedIPs, &a.DistributionWalletIDs, &a.CreatedBy, &a.LastUsedAt,
+		); updateErr != nil {
+			return nil, fmt.Errorf("failed to update last_used_at: %w", updateErr)
 		}
 
 		return &a, nil
@@ -447,24 +470,33 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 	return result, nil
 }
 
-func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms APIKeyPermissions, ips []string) (*APIKey, error) {
+// Update replaces the key's permissions and allowed IPs. A nil walletIDs leaves the key's wallet
+// scope as it is; a non-nil one replaces it (including empty, meaning no wallet access).
+func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms APIKeyPermissions, ips []string, walletIDs []string) (*APIKey, error) {
+	var walletParam any
+	if walletIDs != nil {
+		walletParam = pq.StringArray(walletIDs)
+	}
+
 	query := `
 		UPDATE api_keys
 			SET permissions = $1,
 				allowed_ips = $2,
-				updated_at = NOW()
+				distribution_wallet_ids = COALESCE($5::VARCHAR(36)[], distribution_wallet_ids),
+				updated_at = NOW(),
+				updated_by = $4
 			WHERE id = $3
 			AND created_by = $4
 		 RETURNING
 		   id, name,
-		   expiry_date, permissions, allowed_ips,
+		   expiry_date, permissions, allowed_ips, distribution_wallet_ids,
 		   created_at, created_by,
 		   updated_at, updated_by,
 		   last_used_at
 	`
 
 	var key APIKey
-	if err := m.dbConnectionPool.GetContext(ctx, &key, query, perms, IPList(ips), id, createdBy); err != nil {
+	if err := m.dbConnectionPool.GetContext(ctx, &key, query, perms, IPList(ips), id, createdBy, walletParam); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}

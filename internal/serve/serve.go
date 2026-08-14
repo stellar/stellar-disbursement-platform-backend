@@ -201,9 +201,9 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Sep10Service = sep10Service
 
 	if opts.EnableSep45 {
-		sep45NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
-		if err != nil {
-			return fmt.Errorf("initializing SEP 45 nonce store: %w", err)
+		sep45NonceStore, nonceErr := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
+		if nonceErr != nil {
+			return fmt.Errorf("initializing SEP 45 nonce store: %w", nonceErr)
 		}
 		rpcClient, rpcErr := dependencyinjection.NewRPCClient(context.Background(), opts.RPCConfig)
 		if rpcErr != nil {
@@ -415,6 +415,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		)).Route("/api-keys", func(r chi.Router) {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models:           o.Models,
+				AuthManager:      authManager,
 				CacheInvalidator: apiKeyAuthenticator,
 			}
 			r.Get("/{id}", apiKeyHandler.GetAPIKeyByID)
@@ -738,7 +739,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Write operations with different role permissions
 			r.With(middleware.RequirePermission(
 				data.WriteOrganization,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 			)).Patch("/", profileHandler.PatchOrganizationProfile)
 
 			r.With(middleware.RequirePermission(
@@ -746,6 +747,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 			)).Patch("/circle-config", httphandler.CircleConfigHandler{
 				NetworkType:                 o.NetworkType,
+				AuthManager:                 authManager,
 				CircleFactory:               circle.NewClient,
 				TenantManager:               o.tenantManager,
 				Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},

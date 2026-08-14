@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add append-only audit tables for disbursements, payments, and distribution-wallet memberships, with an owner-only endpoint to read membership history. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 - Add `distribution-account rotate --wallet-id` to rotate any distribution wallet's account, and `distribution-account rotate-wallet-dek` to rotate a wallet's signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 - Add optional Prometheus/Grafana wiring and wallet-tagged structured transaction logging for the SDP and TSS services. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add distribution-account scoping when creating or editing API-key [#1183](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1183)
 
 ### Fixed
 

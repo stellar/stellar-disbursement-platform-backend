@@ -195,9 +195,16 @@ func (h DistributionWalletsHandler) ensureWalletInReadScope(ctx context.Context,
 // "The acting user must be an Owner" is the rule, mirroring what the route gate intended, rather
 // than a per-wallet scope check: these operations are tenant-wide (create, promote-to-default) or
 // hand out authority itself, and Owner is deliberately not grantable per wallet
-// (PostDistributionWalletMembership rejects it), so no membership can stand in for it. On the API
-// key path the acting identity is the key's creator — the middleware sets
+// (PostDistributionWalletMembership rejects it), so no membership can stand in for it.
+//
+// On the API key path the acting identity is the key's creator — the middleware sets
 // SetUserIDInContext(apiKey.CreatedBy) — so a key minted by a non-owner is denied here.
+//
+// This is the one place a key still resolves its creator. Ownership is not expressible on a key:
+// its permissions and wallet scope say what it may touch, never that it speaks for the tenant. The
+// alternative to asking the creator is refusing keys outright, which would take a capability
+// owner-minted keys have today. Note the consequence — deactivating or deleting the creator
+// withdraws their keys from tenant administration, while leaving every other endpoint working.
 //
 // It fails closed: an acting user that cannot be resolved (missing from the context, deleted
 // since the key was created) is rejected, never passed through.

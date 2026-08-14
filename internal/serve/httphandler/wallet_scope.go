@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -20,7 +21,15 @@ import (
 // resolveWalletReadScope computes the caller's read-visibility scope for
 // membership-filtered endpoints (taxonomy): nil = Owner, no filtering; non-nil = the exact
 // wallet set the caller may see (possibly empty).
+//
+// An API key answers from its own stored scope and never loads a user: a key's reach is fixed at
+// creation, so it neither depends on its creator still being active nor moves when their
+// memberships change.
 func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		return apiKey.WalletScope(), nil
+	}
+
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
@@ -83,7 +92,17 @@ func resolveWalletListScope(ctx context.Context, req *http.Request, authManager 
 // ensureWalletActionAllowed gates a state transition on the caller's wallet membership
 // Owners pass; everyone else needs a qualifying role on the wallet. Returns a 403
 // that discloses no wallet details.
+//
+// For an API key the wallet dimension is its own scope and the role dimension is its permission
+// set, already checked by RequirePermission on the route — so the key's scope is the whole answer.
 func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, walletID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		if !apiKey.CanActOnWallet(walletID) {
+			return httperror.Forbidden(services.ErrWalletActionForbidden.Error(), nil, nil)
+		}
+		return nil
+	}
+
 	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
@@ -244,17 +263,35 @@ const XWalletIDHeader = "X-Wallet-Id"
 //     indistinguishable to non-owners); Owners get an honest 404 for unknown ids
 //   - archived wallets accept no new disbursements or payments → 400 (only after the caller
 //     proves entitlement, so archived-ness is not leaked)
+//
+// An API key resolves against its own scope throughout: it never loads a user, a key naming exactly
+// one wallet keeps working without the header, and an unknown id is always a 403 (a key has no
+// owner identity to earn the honest 404). The header only selects — it never grants.
 func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models, requiredRoles ...data.UserRole) (*data.DistributionWallet, *httperror.HTTPError) {
-	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
-	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, httperror.Unauthorized("", err, nil)
+	apiKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx)
+	viaAPIKey := keyErr == nil
+
+	var user *auth.User
+	if !viaAPIKey {
+		var err error
+		user, err = ctxHelper.GetUserFromContext(ctx, authManager)
+		if err != nil {
+			if errors.Is(err, auth.ErrUserNotFound) {
+				return nil, httperror.Unauthorized("", err, nil)
+			}
+			return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 		}
-		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
 
 	dbPool := models.DBConnectionPool
 	headerWalletID := req.Header.Get(XWalletIDHeader)
+
+	// A key naming one wallet is unambiguous without the header. The tenant-level fallback below
+	// only fires when exactly one wallet is active, so without this an existing integration would
+	// start failing the moment its tenant adds a second wallet.
+	if headerWalletID == "" && viaAPIKey && len(apiKey.WalletScope()) == 1 {
+		headerWalletID = apiKey.WalletScope()[0]
+	}
 
 	var wallet *data.DistributionWallet
 	if headerWalletID == "" {
@@ -275,7 +312,7 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 			}
 			// Unknown wallet: Owners get an honest 404; everyone else gets the same 403 as
 			// an unentitled wallet — existence is never disclosed.
-			if user.IsOwner {
+			if !viaAPIKey && user.IsOwner {
 				return nil, httperror.NotFound("distribution wallet not found", getErr, nil)
 			}
 			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), getErr, nil)
@@ -283,7 +320,11 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 		wallet = loaded
 	}
 
-	if authzErr := services.EnsureUserCanActOnWallet(ctx, dbPool, models.WalletMemberships, user, wallet.ID, requiredRoles...); authzErr != nil {
+	if viaAPIKey {
+		if !apiKey.CanActOnWallet(wallet.ID) {
+			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), nil, nil)
+		}
+	} else if authzErr := services.EnsureUserCanActOnWallet(ctx, dbPool, models.WalletMemberships, user, wallet.ID, requiredRoles...); authzErr != nil {
 		if errors.Is(authzErr, services.ErrWalletActionForbidden) {
 			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), authzErr, nil)
 		}

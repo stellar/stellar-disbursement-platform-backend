@@ -137,7 +137,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 	require.NoError(t, err)
 
 	url := "/profile/organization"
-	user := &auth.User{ID: "user-id"}
+	user := &auth.User{ID: "user-id", IsOwner: true}
 	testCases := []struct {
 		name              string
 		token             string
@@ -148,22 +148,21 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		networkType       utils.NetworkType
 	}{
 		{
-			name: "returns Unauthorized when no token is found",
+			name: "fails closed when no acting user can be resolved",
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return httptest.NewRequest(http.MethodPatch, url, nil).WithContext(ctx)
 			},
-			wantStatusCode: http.StatusUnauthorized,
-			wantRespBody:   `{"error": "Not authorized."}`,
+			wantStatusCode: http.StatusInternalServerError,
+			wantRespBody:   `{"error": "Cannot get user from context"}`,
 		},
 		{
-			// The route admits Financial Controllers as well as Owners, but the webhook URL is
-			// where every payment and disbursement event in the tenant is delivered — a non-owner
-			// must not be able to redirect the event stream to an endpoint they control.
+			// The whole endpoint is Owner-only now, enforced in the handler so it holds on the API
+			// key path too — a non-owner no longer reaches the webhook URL's own check.
 			name:  "returns Forbidden when a non-owner tries to set the webhook URL",
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(&auth.User{
 						ID:    "fc-user-id",
 						Roles: []string{data.FinancialControllerUserRole.String()},
@@ -178,7 +177,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 					`{"webhook_url": "https://attacker.example.com/hook"}`, buf)
 			},
 			wantStatusCode: http.StatusForbidden,
-			wantRespBody:   `{"error": "only owners can change the webhook URL"}`,
+			wantRespBody:   `{"error": "You don't have permission to perform this action."}`,
 		},
 		{
 			// Same request shape, owner instead — must get past the gate. It fails later on the
@@ -188,7 +187,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(&auth.User{
 						ID:      "owner-user-id",
 						IsOwner: true,
@@ -212,7 +211,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -227,7 +226,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -247,7 +246,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -267,7 +266,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -287,7 +286,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -310,7 +309,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -333,7 +332,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -357,7 +356,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -381,7 +380,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -405,7 +404,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -429,7 +428,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -456,6 +455,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			ctx := context.Background()
 			if tc.token != "" {
 				ctx = sdpcontext.SetTokenInContext(ctx, tc.token)
+				ctx = sdpcontext.SetUserIDInContext(ctx, "test-user-id")
 			}
 
 			// Setup password validator
@@ -520,7 +520,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 	require.NoError(t, err)
 
 	url := "/profile/organization"
-	user := &auth.User{ID: "user-id"}
+	user := &auth.User{ID: "user-id", IsOwner: true}
 	testCases := []struct {
 		name                     string
 		token                    string
@@ -535,7 +535,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -552,7 +552,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -569,7 +569,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -610,7 +610,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
-					On("GetUser", mock.Anything, "token").
+					On("GetUserByID", mock.Anything, mock.Anything).
 					Return(user, nil).
 					Once()
 			},
@@ -664,6 +664,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 			ctx := context.Background()
 			if tc.token != "" {
 				ctx = sdpcontext.SetTokenInContext(ctx, tc.token)
+				ctx = sdpcontext.SetUserIDInContext(ctx, "test-user-id")
 			}
 
 			// Assert DB before
