@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,9 +34,28 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 
 	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
+	// The API keys' creator must exist as a real (owner) user: read/write paths resolve the
+	// acting user for wallet-scoped visibility and authorization.
+	data.EnsureDefaultDistributionWalletFixture(t, context.Background(), dbConnectionPool)
+	_, seedErr := dbConnectionPool.ExecContext(context.Background(), `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles)
+		VALUES ($1, 'x', 'api-key-auth-owner@test.com', 'API', 'Key', TRUE, ARRAY['owner'])
+		ON CONFLICT (id) DO NOTHING`, "00000000-0000-0000-0000-000000000000")
+	require.NoError(t, seedErr)
+
+	// A deactivated creator: GetUser's is_active=true filter makes this user invisible to
+	// GetUserFromContext, so any request made with a key this user created should 401 rather
+	// than 500 (deactivation is normal offboarding, not an internal error).
+	_, seedErr = dbConnectionPool.ExecContext(context.Background(), `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles, is_active)
+		VALUES ($1, 'x', 'api-key-auth-deactivated@test.com', 'Deactivated', 'Owner', TRUE, ARRAY['owner'], FALSE)
+		ON CONFLICT (id) DO NOTHING`, "00000000-0000-0000-0000-000000000099")
+	require.NoError(t, seedErr)
+
 	handlerMux := handleHTTP(serveOptions)
 
 	testUserID := "00000000-0000-0000-0000-000000000000"
+	deactivatedUserID := "00000000-0000-0000-0000-000000000099"
 
 	validAPIKey := createTestAPIKey(t, dbConnectionPool, "Valid Admin Key",
 		[]data.APIKeyPermission{data.ReadAll, data.WriteAll}, nil, 30, testUserID)
@@ -51,6 +71,9 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 
 	disbursementOnlyAPIKey := createTestAPIKey(t, dbConnectionPool, "Disbursement Only Key",
 		[]data.APIKeyPermission{data.ReadDisbursements, data.WriteDisbursements}, nil, 30, testUserID)
+
+	deactivatedCreatorAPIKey := createTestAPIKey(t, dbConnectionPool, "Deactivated Creator Key",
+		[]data.APIKeyPermission{data.ReadAll, data.WriteAll}, nil, 30, deactivatedUserID)
 
 	testCases := []struct {
 		name           string
@@ -110,6 +133,13 @@ func Test_handleHTTP_APIKeyAuthentication(t *testing.T) {
 			apiKey:         "SDP_INVALID_KEY",
 			expectedStatus: http.StatusUnauthorized,
 		},
+		{
+			name:           "key whose creator was deactivated is rejected, not a 500",
+			method:         http.MethodGet,
+			path:           "/disbursements",
+			apiKey:         deactivatedCreatorAPIKey.Key,
+			expectedStatus: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -135,7 +165,7 @@ func Test_handleHTTP_APIKeyReadAllPermissions(t *testing.T) {
 	res := setupAPIKeyTestResources(t)
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "inquisitor@ordohereticus.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "inquisitor@ordohereticus.gov", IsOwner: true} // wallet authz covered by Test_WalletScopedAuthorization
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -212,7 +242,7 @@ func Test_handleHTTP_APIKeyWriteAllPermissions(t *testing.T) {
 	receiverID := receiver.ID
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "chapter.master@ultramar.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "chapter.master@ultramar.gov", IsOwner: true} // wallet authz covered by Test_WalletScopedAuthorization
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -281,6 +311,11 @@ func Test_handleHTTP_APIKeyWriteAllPermissions(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			resp := executeRequest(t, mux, tc.method, tc.path, tc.body, writeAllKey.Key)
+			if resp.StatusCode != tc.expectedStatus {
+				b, readErr := io.ReadAll(resp.Body)
+				require.NoError(t, readErr)
+				t.Logf("unexpected status %d body: %s", resp.StatusCode, string(b))
+			}
 			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 		})
 	}
@@ -294,7 +329,7 @@ func Test_handleHTTP_APIKeyFullAccessPermissions(t *testing.T) {
 	receiverID := receiver.ID
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "roboute.guilliman@imperium.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "roboute.guilliman@imperium.gov", IsOwner: true}
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -383,7 +418,7 @@ func Test_handleHTTP_APIKeySpecificPermissions(t *testing.T) {
 	receiverID := receiver.ID
 
 	authMock := &auth.AuthManagerMock{}
-	usr := &auth.User{ID: res.TestUserID, Email: "logistics@munitorum.gov"}
+	usr := &auth.User{ID: res.TestUserID, Email: "logistics@munitorum.gov", IsOwner: true}
 	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
 
 	monitorMock := monitorMocks.NewMockMonitorService(t)
@@ -472,6 +507,103 @@ func Test_handleHTTP_APIKeySpecificPermissions(t *testing.T) {
 	}
 }
 
+// Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately reproduces (and
+// guards against regressing) a bug where the API-key auth cache kept serving a
+// key's pre-PATCH permissions/allowed_ips: a revoked scope kept being accepted
+// and a newly-granted one kept being rejected, for as long as the cache entry's
+// TTL window lasted, unless the exact same PATCH was resubmitted a second time.
+//
+// This exercises the real, fully-wired mux (handleHTTP) so the PATCH goes
+// through the same APIKeyAuthenticator instance that authenticates every other
+// request - a test that only called the model/handler layer directly could not
+// have caught the missing cache invalidation.
+func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) {
+	res := setupAPIKeyTestResources(t)
+
+	authMock := &auth.AuthManagerMock{}
+	usr := &auth.User{ID: res.TestUserID, Email: "inquisitor.fiscus@ordo-hereticus.gov", IsOwner: true}
+	authMock.On("GetUserByID", mock.Anything, mock.Anything).Return(usr, nil)
+
+	monitorMock := monitorMocks.NewMockMonitorService(t)
+	monitorMock.
+		On("MonitorCounters", mock.Anything, mock.AnythingOfType("map[string]string")).
+		Return(nil).
+		Maybe()
+	monitorMock.
+		On("MonitorHTTPRequestDuration", mock.AnythingOfType("time.Duration"), mock.AnythingOfType("monitor.HTTPRequestLabels")).
+		Return(nil).
+		Maybe()
+
+	mux := createHandler(t, res, authMock, monitorMock)
+
+	// adminKey only exists to authenticate the PATCH call itself. In production
+	// this would be an owner's JWT session; an API key with WriteAll satisfies
+	// the same RequirePermission check and keeps this test self-contained.
+	adminKey := createTestAPIKey(t, res.DBPool, "Ordo Fiscus Admin Key",
+		[]data.APIKeyPermission{data.WriteAll}, nil, 30, res.TestUserID)
+
+	// The key under test: starts with read:statistics only, and an allowed_ips
+	// restriction that will be reverted back to its original value later.
+	targetKey := createTestAPIKey(t, res.DBPool, "Rotatable Munitorum Key",
+		[]data.APIKeyPermission{data.ReadStatistics}, []string{"192.168.1.0"}, 30, res.TestUserID)
+
+	// Sanity check before any PATCH: granted scope works, ungranted scope doesn't.
+	resp := executeRequest(t, mux, http.MethodGet, "/statistics", nil, targetKey.Key)
+	require.Equal(t, http.StatusOK, resp.StatusCode, "granted read:statistics should work before the PATCH")
+
+	resp = executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode, "not-yet-granted read:receivers should be rejected before the PATCH")
+
+	t.Run("permission change enforced on the very next request", func(t *testing.T) {
+		// Revoke read:statistics, grant read:receivers instead - in a single PATCH.
+		patchResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
+			"permissions": []string{"read:receivers"},
+			"allowed_ips": []string{"192.168.1.0"},
+		}, adminKey.Key)
+		body, readErr := io.ReadAll(patchResp.Body)
+		require.NoError(t, readErr)
+		require.Equal(t, http.StatusOK, patchResp.StatusCode, "PATCH /api-keys/%s failed: %s", targetKey.ID, string(body))
+
+		// No sleep, no retry, no second identical PATCH: the very next request
+		// using this exact key must already reflect the change.
+		oldScopeResp := executeRequest(t, mux, http.MethodGet, "/statistics", nil, targetKey.Key)
+		assert.Equal(t, http.StatusForbidden, oldScopeResp.StatusCode,
+			"revoked read:statistics must be rejected on the very next request, not after a cache TTL window or a duplicate PATCH")
+
+		newScopeResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+		assert.Equal(t, http.StatusOK, newScopeResp.StatusCode,
+			"newly granted read:receivers must be accepted on the very next request")
+	})
+
+	t.Run("allowed_ips revert enforced on the very next request", func(t *testing.T) {
+		// Tighten the allowlist to an IP that won't match the test's RemoteAddr...
+		tightenResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
+			"permissions": []string{"read:receivers"},
+			"allowed_ips": []string{"10.10.10.10"},
+		}, adminKey.Key)
+		require.Equal(t, http.StatusOK, tightenResp.StatusCode)
+
+		blockedResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+		require.Equal(t, http.StatusForbidden, blockedResp.StatusCode,
+			"the tightened allowed_ips must be enforced on the very next request")
+
+		// ...then immediately revert it back to the original value. This is the
+		// exact "revert to original value" case from the live repro: a second,
+		// different-looking PATCH, not a duplicate of the previous one.
+		revertResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
+			"permissions": []string{"read:receivers"},
+			"allowed_ips": []string{"192.168.1.0"},
+		}, adminKey.Key)
+		require.Equal(t, http.StatusOK, revertResp.StatusCode)
+
+		// No sleep, no duplicate PATCH: access from the original, now-restored IP
+		// must work again immediately.
+		restoredResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
+		assert.Equal(t, http.StatusOK, restoredResp.StatusCode,
+			"the reverted allowed_ips must be enforced on the very next request, not after a cache TTL window or a duplicate PATCH")
+	})
+}
+
 func createTestReceiver(t *testing.T, dbPool db.DBConnectionPool) (*data.Receiver, error) {
 	t.Helper()
 
@@ -531,6 +663,15 @@ func setupAPIKeyTestResources(t *testing.T) *TestResources {
 	ctx := context.Background()
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbPool)
 	asset := data.GetAssetFixture(t, ctx, dbPool, data.FixtureAssetUSDC)
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbPool)
+
+	// The API key's creator must exist as a real (owner) user: the disbursement-creation
+	// path resolves the acting user for wallet-scoped authorization.
+	_, err = dbPool.ExecContext(ctx, `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles)
+		VALUES ($1, 'x', 'api-key-owner@test.com', 'API', 'Key', TRUE, ARRAY['owner'])
+		ON CONFLICT (id) DO NOTHING`, testUserID)
+	require.NoError(t, err)
 
 	return &TestResources{
 		DBPool:     dbPool,

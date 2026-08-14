@@ -25,6 +25,7 @@ type Payment struct {
 	Status                  PaymentStatus        `json:"status" db:"status"`
 	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
 	Type                    PaymentType          `json:"type" db:"type"`
+	SourceWalletID          string               `json:"source_wallet_id" db:"source_wallet_id"`
 	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
 	Asset                   Asset                `json:"asset"`
 	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
@@ -69,8 +70,11 @@ var (
 )
 
 type PaymentInsert struct {
-	ReceiverID        string      `db:"receiver_id"`
-	DisbursementID    *string     `db:"disbursement_id"`
+	ReceiverID     string  `db:"receiver_id"`
+	DisbursementID *string `db:"disbursement_id"`
+	// SourceWalletID is REQUIRED for direct payments (no disbursement); disbursement
+	// payments inherit their disbursement's wallet at the DB layer.
+	SourceWalletID    string      `db:"source_wallet_id"`
 	PaymentType       PaymentType `db:"type"`
 	Amount            string      `db:"amount"`
 	AssetID           string      `db:"asset_id"`
@@ -177,6 +181,7 @@ func PaymentColumnNames(tableReference, resultAlias string) string {
 			"status",
 			"status_history",
 			"type",
+			"source_wallet_id",
 			"created_at",
 			"updated_at",
 		},
@@ -431,6 +436,38 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 	return nil
 }
 
+// CancelAllDraftForDisbursement cancels every DRAFT payment belonging to a disbursement. It's
+// intentionally scoped to DRAFT (rather than going through UpdateStatusByDisbursementID / the
+// general PaymentStatus state machine's CanceledPaymentStatus.SourceStatuses(), which only
+// allows READY -> CANCELED): a disbursement's payments only reach DRAFT before the disbursement
+// itself is ever started, which is exactly the scope for canceling a whole disbursement (DRAFT
+// or READY status; a STARTED disbursement is never canceled this way, and its payments are
+// never DRAFT). Deliberately NOT adding DRAFT -> CANCELED to the general payment state machine
+// keeps the existing single-payment PATCH /payments/{id}/status endpoint's behavior unchanged -
+// it must keep rejecting a DRAFT payment as "not ready to cancel".
+func (p *PaymentModel) CancelAllDraftForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
+	query := `
+		UPDATE payments
+		SET status = $1,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, NULL))
+		WHERE disbursement_id = $2
+		AND status = $3
+	`
+
+	result, err := sqlExec.ExecContext(ctx, query, CanceledPaymentStatus, disbursementID, DraftPaymentStatus)
+	if err != nil {
+		return fmt.Errorf("error canceling draft payments for disbursement %s: %w", disbursementID, err)
+	}
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
+
+	log.Ctx(ctx).Infof("Canceled %d draft payments for disbursement %s", numRowsAffected, disbursementID)
+
+	return nil
+}
+
 var getReadyPaymentsBaseQuery = basePaymentQuery + `
 	WHERE
 		p.status = $1 -- 'READY'::payment_status
@@ -663,6 +700,13 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLE
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		addArrayOrSingleCondition[PaymentStatus](qb, "p.status", queryParams.Filters[FilterKeyStatus])
 	}
+	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
+		// Membership-filtered visibility. p.source_wallet_id is persisted and NOT NULL on every
+		// payment row: disbursement payments inherit it from their disbursement via the
+		// derive_payment_source_wallet trigger, and direct payments must state it explicitly
+		// (the trigger rejects the insert otherwise) — no default-wallet fallback needed.
+		qb.AddCondition("p.source_wallet_id = ANY(?)", pq.Array(walletIDs))
+	}
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])
 	}
@@ -780,6 +824,9 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 	if err := insert.Validate(); err != nil {
 		return "", fmt.Errorf("validating payment: %w", err)
 	}
+	if insert.SourceWalletID == "" {
+		return "", fmt.Errorf("direct payments must state their source distribution wallet explicitly: %w", ErrMissingInput)
+	}
 
 	query := `
         INSERT INTO payments (
@@ -789,11 +836,12 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
             receiver_wallet_id,
             external_payment_id,
             type,
+            source_wallet_id,
             status,
             status_history
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7,
-            ARRAY[create_payment_status_history(NOW(), $7::payment_status, $8)]
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            ARRAY[create_payment_status_history(NOW(), $8::payment_status, $9)]
         )
         RETURNING id
     `
@@ -807,6 +855,7 @@ func (p *PaymentModel) CreateDirectPayment(ctx context.Context, sqlExec db.SQLEx
 		insert.ReceiverWalletID,
 		insert.ExternalPaymentID,
 		insert.PaymentType,
+		insert.SourceWalletID,
 		ReadyPaymentStatus,
 		statusMessage,
 	); err != nil {

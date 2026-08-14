@@ -39,6 +39,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 var defaultPreconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
@@ -2055,5 +2056,326 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{changeTrustOp}, distAccount)
 		assert.NoError(t, err)
+	})
+}
+
+// Test_AssetsHandler_XWalletIDRouting pins the trustline-remediation fix: every assets endpoint
+// that touches an account must act on the wallet named by X-Wallet-Id, not on the tenant default.
+//
+// Before this, CreateAsset/DeleteAsset/GetAssets(enabled) all resolved through
+// DistributionAccountFromContext and issued their ChangeTrust against the tenant default account
+// only — so a secondary wallet (which does not inherit the default's trustlines, and re-derives
+// its own from the enabled wallet providers) could never acquire a trustline after creation by
+// any route. The tenant-default behaviour when the header is absent is pinned here too: it is the
+// pre-multi-wallet path and must not shift.
+func Test_AssetsHandler_XWalletIDRouting(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// Tenant default wallet (the only account the old code could ever reach) + a second wallet.
+	defaultKP := keypair.MustRandom()
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, defaultWallet.ID, defaultKP.Address())
+	require.NoError(t, err)
+
+	walletBKP := keypair.MustRandom()
+	var walletBID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type, distribution_account_address)
+		VALUES ('assets-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', $1) RETURNING id`, walletBKP.Address()))
+
+	// A wallet still mid-provisioning: reserved row, no on-chain account yet.
+	var pendingWalletID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &pendingWalletID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type, status)
+		VALUES ('assets-wallet-pending', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', 'PENDING') RETURNING id`))
+
+	walletBAccount := schema.TransactionAccount{
+		Address: walletBKP.Address(),
+		Type:    schema.DistributionAccountStellarDBVault,
+		Status:  schema.AccountStatusActive,
+	}
+	tenantDefaultAccount := schema.NewDefaultStellarTransactionAccount(defaultKP.Address())
+
+	// fcOnB holds financial_controller globally, plus on wallet B and the pending wallet;
+	// fcOnDefault holds it globally and on the default wallet only, so wallet B is outside both
+	// its read scope and its write entitlement.
+	fcOnB := &auth.User{ID: "assets-fc-b", Email: "fc-b@assets.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+	fcOnDefault := &auth.User{ID: "assets-fc-default", Email: "fc-d@assets.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, fcOnB.ID, walletBID, data.FinancialControllerUserRole, nil)
+	require.NoError(t, err)
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, fcOnB.ID, pendingWalletID, data.FinancialControllerUserRole, nil)
+	require.NoError(t, err)
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, fcOnDefault.ID, defaultWallet.ID, data.FinancialControllerUserRole, nil)
+	require.NoError(t, err)
+
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, fcOnB.ID).Return(fcOnB, nil)
+	authManagerMock.On("GetUserByID", mock.Anything, fcOnDefault.ID).Return(fcOnDefault, nil)
+
+	// Each subtest gets its own mock set: an unexpected call on any of them (for example the
+	// tenant-default resolver being consulted on a header-routed request) fails that subtest.
+	newHandler := func(t *testing.T) (*AssetsHandler, *horizonclient.MockClient, *sigMocks.MockSignerRouter, *sigMocks.MockDistributionAccountResolver, *mocks.MockDistributionAccountService) {
+		t.Helper()
+
+		horizonClientMock := &horizonclient.MockClient{}
+		signatureService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
+		mockDistAccService := &mocks.MockDistributionAccountService{}
+
+		return &AssetsHandler{
+			Models: models,
+			SubmitterEngine: engine.SubmitterEngine{
+				SignatureService:    signatureService,
+				HorizonClient:       horizonClientMock,
+				LedgerNumberTracker: preconditionsMocks.NewMockLedgerNumberTracker(t),
+				MaxBaseFee:          200,
+			},
+			DistributionAccountService: mockDistAccService,
+			AuthManager:                authManagerMock,
+			GetPreconditionsFn:         func() txnbuild.Preconditions { return defaultPreconditions },
+		}, horizonClientMock, sigRouter, distAccResolver, mockDistAccService
+	}
+
+	// expectChangeTrust wires the horizon + signing mocks for exactly one ChangeTrust submitted
+	// from `kp`'s account, and returns nothing: a mismatch on the account is a mock failure, which
+	// is the whole point — it is how "the wrong wallet was charged" is detected.
+	expectChangeTrust := func(t *testing.T, horizonClientMock *horizonclient.MockClient, sigRouter *sigMocks.MockSignerRouter,
+		kp *keypair.Full, account schema.TransactionAccount, balances []horizon.Balance, asset txnbuild.CreditAsset, limit string,
+	) {
+		t.Helper()
+
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: kp.Address()}).
+			Return(horizon.Account{AccountID: kp.Address(), Sequence: 123, Balances: balances}, nil).
+			Once()
+
+		expectedTx, txErr := txnbuild.NewTransaction(txnbuild.TransactionParams{
+			SourceAccount:        &txnbuild.SimpleAccount{AccountID: kp.Address(), Sequence: 124},
+			IncrementSequenceNum: false,
+			Operations: []txnbuild.Operation{&txnbuild.ChangeTrust{
+				Line:          txnbuild.ChangeTrustAssetWrapper{Asset: asset},
+				Limit:         limit,
+				SourceAccount: kp.Address(),
+			}},
+			BaseFee:       200,
+			Preconditions: defaultPreconditions,
+		})
+		require.NoError(t, txErr)
+
+		signedTx, signErr := expectedTx.Sign(network.TestNetworkPassphrase, kp)
+		require.NoError(t, signErr)
+
+		sigRouter.On("SignStellarTransaction", mock.Anything, expectedTx, account).Return(signedTx, nil).Once()
+		horizonClientMock.
+			On("SubmitTransactionWithOptions", signedTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).
+			Once()
+	}
+
+	postAsset := func(t *testing.T, handler *AssetsHandler, userID, headerWalletID, code, issuer string) *httptest.ResponseRecorder {
+		t.Helper()
+
+		body, mErr := json.Marshal(AssetRequest{Code: code, Issuer: issuer})
+		require.NoError(t, mErr)
+
+		req := httptest.NewRequest(http.MethodPost, "/assets", bytes.NewReader(body))
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+		if headerWalletID != "" {
+			req.Header.Set(XWalletIDHeader, headerWalletID)
+		}
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+		return rr
+	}
+
+	const (
+		assetCode   = "USDT"
+		assetIssuer = "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
+	)
+	creditAsset := txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}
+
+	t.Run("POST /assets routes the ChangeTrust to the wallet named by X-Wallet-Id", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		handler, horizonClientMock, sigRouter, _, _ := newHandler(t)
+
+		expectChangeTrust(t, horizonClientMock, sigRouter, walletBKP, walletBAccount, []horizon.Balance{}, creditAsset, "")
+
+		rr := postAsset(t, handler, fcOnB.ID, walletBID, assetCode, assetIssuer)
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+
+		horizonClientMock.AssertExpectations(t)
+
+		createdAssets, aErr := models.Assets.GetAll(ctx)
+		require.NoError(t, aErr)
+		require.Len(t, createdAssets, 1)
+		assert.Equal(t, assetCode, createdAssets[0].Code)
+	})
+
+	t.Run("POST /assets is idempotent remediation: an existing asset still gets the wallet's trustline", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		existing := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, sigRouter, _, _ := newHandler(t)
+
+		expectChangeTrust(t, horizonClientMock, sigRouter, walletBKP, walletBAccount, []horizon.Balance{}, creditAsset, "")
+
+		rr := postAsset(t, handler, fcOnB.ID, walletBID, assetCode, assetIssuer)
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+		assert.Contains(t, rr.Body.String(), existing.ID, "re-adding an existing asset must reuse the row, not fail")
+
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("POST /assets without the header keeps using the tenant default account", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		handler, horizonClientMock, sigRouter, distAccResolver, _ := newHandler(t)
+
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(tenantDefaultAccount, nil).Once()
+		expectChangeTrust(t, horizonClientMock, sigRouter, defaultKP, tenantDefaultAccount, []horizon.Balance{}, creditAsset, "")
+
+		// fcOnDefault holds no membership on any other wallet, and the tenant has three wallets:
+		// the header-less path must still work, with no membership gate and no "which wallet?" 400.
+		rr := postAsset(t, handler, fcOnDefault.ID, "", assetCode, assetIssuer)
+		require.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("POST /assets rejects a wallet the caller holds no membership on, and creates nothing", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		handler, _, _, _, _ := newHandler(t)
+
+		rr := postAsset(t, handler, fcOnDefault.ID, walletBID, assetCode, assetIssuer)
+		require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+		assert.NotContains(t, rr.Body.String(), "assets-wallet-b", "403 must not disclose wallet details")
+
+		remaining, aErr := models.Assets.GetAll(ctx)
+		require.NoError(t, aErr)
+		assert.Empty(t, remaining, "a rejected request must not insert the asset")
+	})
+
+	t.Run("POST /assets rejects a wallet that is not active yet", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		handler, _, _, _, _ := newHandler(t)
+
+		rr := postAsset(t, handler, fcOnB.ID, pendingWalletID, assetCode, assetIssuer)
+		require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+		assert.Contains(t, rr.Body.String(), "not active")
+	})
+
+	t.Run("DELETE /assets/{id} removes the trustline from the wallet named by X-Wallet-Id", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, sigRouter, _, _ := newHandler(t)
+
+		expectChangeTrust(t, horizonClientMock, sigRouter, walletBKP, walletBAccount,
+			[]horizon.Balance{{Asset: base.Asset{Type: "credit_alphanum4", Code: assetCode, Issuer: assetIssuer}, Balance: "0.0000000"}},
+			creditAsset, "0")
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, fcOnB.ID))
+		req.Header.Set(XWalletIDHeader, walletBID)
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("id", asset.ID)
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handler.DeleteAsset).ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	getAssets := func(t *testing.T, handler *AssetsHandler, userID, headerWalletID, query string) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest(http.MethodGet, "/assets?"+query, nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+		if headerWalletID != "" {
+			req.Header.Set(XWalletIDHeader, headerWalletID)
+		}
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+		return rr
+	}
+
+	t.Run("GET /assets?enabled reports the balances of the wallet named by X-Wallet-Id", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, _, _, _, mockDistAccService := newHandler(t)
+
+		mockDistAccService.
+			On("GetBalance", mock.Anything, mock.MatchedBy(func(account *schema.TransactionAccount) bool {
+				return account != nil && account.Address == walletBKP.Address()
+			}), mock.Anything).
+			Return(decimal.NewFromInt(42), nil).
+			Once()
+
+		rr := getAssets(t, handler, fcOnB.ID, walletBID, "enabled=true")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+		require.Len(t, responseAssets, 1)
+		assert.Equal(t, asset.ID, responseAssets[0].ID)
+		assert.True(t, responseAssets[0].Enabled)
+
+		mockDistAccService.AssertExpectations(t)
+	})
+
+	t.Run("GET /assets?enabled 404s a wallet outside the caller's read scope", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, _, _, _, _ := newHandler(t)
+
+		rr := getAssets(t, handler, fcOnDefault.ID, walletBID, "enabled=true")
+		require.Equal(t, http.StatusNotFound, rr.Code, rr.Body.String())
+	})
+
+	t.Run("GET /assets?enabled=false reports every asset for a wallet with no on-chain account yet", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, _, _, _, _ := newHandler(t)
+
+		// No GetBalance expectation: an unprovisioned wallet must not be queried at all.
+		rr := getAssets(t, handler, fcOnB.ID, pendingWalletID, "enabled=false")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+		require.Len(t, responseAssets, 1)
+		assert.False(t, responseAssets[0].Enabled)
+		assert.Nil(t, responseAssets[0].Balance)
+	})
+
+	t.Run("GET /assets?enabled without the header keeps using the tenant default account", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, _, _, distAccResolver, mockDistAccService := newHandler(t)
+
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(tenantDefaultAccount, nil).Once()
+		mockDistAccService.
+			On("GetBalance", mock.Anything, mock.MatchedBy(func(account *schema.TransactionAccount) bool {
+				return account != nil && account.Address == defaultKP.Address()
+			}), mock.Anything).
+			Return(decimal.NewFromInt(7), nil).
+			Once()
+
+		rr := getAssets(t, handler, fcOnDefault.ID, "", "enabled=true")
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		var responseAssets []AssetWithEnabledInfo
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &responseAssets))
+		require.Len(t, responseAssets, 1)
+
+		mockDistAccService.AssertExpectations(t)
 	})
 }

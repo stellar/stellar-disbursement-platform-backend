@@ -87,6 +87,20 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err == nil {
+		// Membership-filtered visibility: 404 outside the caller's scope — existence
+		// is never disclosed. payment.SourceWalletID is the payment's own persisted source
+		// wallet (guaranteed non-empty for both disbursement and direct payments).
+		scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
+		if scopeErr != nil {
+			scopeErr.Render(w)
+			return
+		}
+		if scope != nil && !walletInReadScope(scope, payment.SourceWalletID) {
+			httperror.NotFound("payment not found", nil, nil).Render(w)
+			return
+		}
+	}
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
@@ -125,6 +139,17 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// Per-account list scope: narrow to the selected account (X-Wallet-Id) when set, else full
+	// visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, p.AuthManager, p.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+	}
 
 	response, err := p.getPaymentsWithCount(ctx, queryParams)
 	if err != nil {
@@ -167,6 +192,24 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	if err := reqBody.validate(); err != nil {
 		err.Render(rw)
 		return
+	}
+
+	// retrying is a state transition — gate each payment on its source wallet.
+	for _, retryPaymentID := range reqBody.PaymentIDs {
+		retryPayment, getErr := p.Models.Payment.Get(ctx, retryPaymentID, p.DBConnectionPool)
+		if getErr != nil {
+			if errors.Is(getErr, data.ErrRecordNotFound) {
+				httperror.NotFound("payment not found", getErr, nil).Render(rw)
+			} else {
+				httperror.InternalError(ctx, "Cannot load payment", getErr, nil).Render(rw)
+			}
+			return
+		}
+		if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, retryPayment.SourceWalletID,
+			data.FinancialControllerUserRole, data.BusinessUserRole); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
 	}
 
 	err = db.RunInTransaction(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
@@ -252,6 +295,22 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	paymentID := chi.URLParam(r, "id")
 
+	// every state transition is gated on the payment's source wallet.
+	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound(services.ErrPaymentNotFound.Error(), err, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Cannot load payment", err, nil).Render(w)
+		}
+		return
+	}
+	if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, payment.SourceWalletID,
+		data.FinancialControllerUserRole); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
 	switch toStatus {
 	case data.CanceledPaymentStatus:
 		err = paymentManagementService.CancelPayment(ctx, paymentID)
@@ -313,9 +372,19 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		ExternalPaymentID: validatedReq.ExternalPaymentID,
 	}
 
-	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "resolving distribution account", err, nil).Render(w)
+	// Routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, p.AuthManager, p.Models,
+		data.FinancialControllerUserRole, data.BusinessUserRole)
+	if walletErr != nil {
+		walletErr.Render(w)
+		return
+	}
+	serviceReq.SourceWalletID = sourceWallet.ID
+
+	distAccount, accountErr := resolveSourceDistributionAccount(ctx, p.DistributionAccountResolver, sourceWallet,
+		"the source wallet has no funded distribution account yet")
+	if accountErr != nil {
+		accountErr.Render(w)
 		return
 	}
 

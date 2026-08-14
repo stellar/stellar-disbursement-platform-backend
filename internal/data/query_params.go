@@ -50,6 +50,9 @@ const (
 	FilterKeyCreatedAtBefore  FilterKey = "created_at_before"
 	FilterKeySyncAttempts     FilterKey = "sync_attempts"
 	FilterKeyPaymentType      FilterKey = "type"
+	// FilterKeySourceWalletIDs restricts results to the given distribution wallets —
+	// membership-filtered read visibility. Value type: []string.
+	FilterKeySourceWalletIDs FilterKey = "source_wallet_ids"
 )
 
 func (fk FilterKey) Equals() string {

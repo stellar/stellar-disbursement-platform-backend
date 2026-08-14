@@ -13,6 +13,11 @@ const (
 	StartedDisbursementStatus   DisbursementStatus = "STARTED"
 	PausedDisbursementStatus    DisbursementStatus = "PAUSED"
 	CompletedDisbursementStatus DisbursementStatus = "COMPLETED"
+	// CanceledDisbursementStatus is a terminal state for disbursements that were manually
+	// canceled before being started. Only DRAFT/READY disbursements can reach it - once a
+	// disbursement is STARTED, real on-chain submissions may already be in flight, so PAUSE
+	// (not cancel) is the correct action.
+	CanceledDisbursementStatus DisbursementStatus = "CANCELED"
 )
 
 var NotStartedDisbursementStatuses = []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus}
@@ -24,7 +29,7 @@ func (status DisbursementStatus) TransitionTo(targetState DisbursementStatus) er
 
 // DisbursementStatuses returns a list of all possible disbursement statuses
 func DisbursementStatuses() []DisbursementStatus {
-	return []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus, StartedDisbursementStatus, PausedDisbursementStatus, CompletedDisbursementStatus}
+	return []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus, StartedDisbursementStatus, PausedDisbursementStatus, CompletedDisbursementStatus, CanceledDisbursementStatus}
 }
 
 // SourceStatuses returns a list of states that the payment status can transition from given the target state
@@ -48,6 +53,8 @@ func DisbursementStateMachineWithInitialState(initialState DisbursementStatus) *
 		{From: StartedDisbursementStatus.State(), To: PausedDisbursementStatus.State()},    // user pauses disbursement
 		{From: PausedDisbursementStatus.State(), To: StartedDisbursementStatus.State()},    // user resumes disbursement
 		{From: StartedDisbursementStatus.State(), To: CompletedDisbursementStatus.State()}, // all payments went through
+		{From: DraftDisbursementStatus.State(), To: CanceledDisbursementStatus.State()},    // user cancels before starting
+		{From: ReadyDisbursementStatus.State(), To: CanceledDisbursementStatus.State()},    // user cancels before starting
 	}
 
 	return NewStateMachine(initialState.State(), transitions)
@@ -56,7 +63,7 @@ func DisbursementStateMachineWithInitialState(initialState DisbursementStatus) *
 // Validate validates the disbursement status
 func (status DisbursementStatus) Validate() error {
 	switch DisbursementStatus(strings.ToUpper(string(status))) {
-	case DraftDisbursementStatus, ReadyDisbursementStatus, StartedDisbursementStatus, PausedDisbursementStatus, CompletedDisbursementStatus:
+	case DraftDisbursementStatus, ReadyDisbursementStatus, StartedDisbursementStatus, PausedDisbursementStatus, CompletedDisbursementStatus, CanceledDisbursementStatus:
 		return nil
 	default:
 		return fmt.Errorf("invalid disbursement status: %s", status)

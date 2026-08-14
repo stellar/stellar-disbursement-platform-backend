@@ -8,6 +8,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -21,6 +22,10 @@ var ErrDistributionAccountIsEmpty = fmt.Errorf("distribution account is empty")
 type DistributionAccountResolver interface {
 	DistributionAccount(ctx context.Context, tenantID string) (schema.TransactionAccount, error)
 	DistributionAccountFromContext(ctx context.Context) (schema.TransactionAccount, error)
+	// DistributionAccountForWallet returns the account for a specific distribution wallet
+	// within a tenant (multi-wallet routing). walletID empty falls back to the tenant's
+	// legacy/default account, for legacy transaction rows and non-payment transaction types.
+	DistributionAccountForWallet(ctx context.Context, tenantID, walletID string) (schema.TransactionAccount, error)
 	HostDistributionAccount() schema.TransactionAccount
 }
 
@@ -54,6 +59,7 @@ func NewDistributionAccountResolver(config DistributionAccountResolverOptions) (
 		tenantManager:                 tenant.NewManager(tenant.WithDatabase(config.AdminDBConnectionPool)),
 		hostDistributionAccountPubKey: config.HostDistributionAccountPublicKey,
 		circleConfigModel:             circle.NewClientConfigModel(config.MTNDBConnectionPool),
+		mtnDBConnectionPool:           config.MTNDBConnectionPool,
 	}, nil
 }
 
@@ -64,6 +70,7 @@ type DistributionAccountResolverImpl struct {
 	tenantManager                 tenant.ManagerInterface
 	hostDistributionAccountPubKey string
 	circleConfigModel             circle.ClientConfigModelInterface
+	mtnDBConnectionPool           db.DBConnectionPool
 }
 
 // DistributionAccount returns the tenant's distribution account stored in the database.
@@ -84,6 +91,35 @@ func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx con
 		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
 	}
 	return r.getDistributionAccount(ctx, tnt)
+}
+
+// DistributionAccountForWallet returns the account for a specific distribution wallet within a
+// tenant. An empty walletID falls back to the tenant's legacy/default account (legacy
+// transaction rows and non-payment transaction types carry no wallet ID).
+func (r *DistributionAccountResolverImpl) DistributionAccountForWallet(ctx context.Context, tenantID, walletID string) (schema.TransactionAccount, error) {
+	tnt, err := r.tenantManager.GetTenantByIDIncludingDeactivated(ctx, tenantID)
+	if err != nil {
+		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
+	}
+	ctx = sdpcontext.SetTenantInContext(ctx, tnt)
+
+	if walletID == "" {
+		return r.getDistributionAccount(ctx, tnt)
+	}
+
+	wallet, err := (&data.DistributionWalletModel{}).Get(ctx, r.mtnDBConnectionPool, walletID)
+	if err != nil {
+		return schema.TransactionAccount{}, fmt.Errorf("getting distribution wallet %q: %w", walletID, err)
+	}
+	if wallet.Address == nil || *wallet.Address == "" {
+		return schema.TransactionAccount{}, ErrDistributionAccountIsEmpty
+	}
+
+	return schema.TransactionAccount{
+		Address: *wallet.Address,
+		Type:    wallet.AccountType,
+		Status:  wallet.AccountStatus,
+	}, nil
 }
 
 // getDistributionAccount extracts the distribution account from the tenant if it exists.

@@ -108,6 +108,7 @@ func Test_NewDistributionAccountResolver(t *testing.T) {
 				tenantManager:                 tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 				hostDistributionAccountPubKey: hostDistPublicKey,
 				circleConfigModel:             circle.NewClientConfigModel(dbConnectionPool),
+				mtnDBConnectionPool:           dbConnectionPool,
 			},
 		},
 	}

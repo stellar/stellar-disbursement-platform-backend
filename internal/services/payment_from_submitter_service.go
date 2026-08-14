@@ -8,6 +8,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
@@ -131,7 +132,18 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 
 	if payment.Type == data.PaymentTypeDisbursement {
 		// Update the disbursement to complete if it has all payments in the end state.
-		err = s.sdpModels.Disbursements.CompleteDisbursements(ctx, sdpDBTx, []string{payment.Disbursement.ID})
+		completedIDs, err := s.sdpModels.Disbursements.CompleteDisbursements(ctx, sdpDBTx, []string{payment.Disbursement.ID})
+		if err == nil {
+			// Outbox: disbursement.completed for each disbursement that actually
+			// completed, same transaction as the status change.
+			for _, completedID := range completedIDs {
+				if err = events.Write(ctx, sdpDBTx, events.DisbursementCompleted, payment.SourceWalletID, map[string]any{
+					"disbursement_id": completedID,
+				}); err != nil {
+					break
+				}
+			}
+		}
 		if err != nil {
 			return fmt.Errorf("completing disbursement: %w", err)
 		}

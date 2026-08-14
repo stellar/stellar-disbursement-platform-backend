@@ -16,14 +16,36 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
-const apiKeyCacheTTL = 3 * time.Minute
+// apiKeyCacheTTL bounds how long a validated API key can be served from cache
+// without a fresh DB check. It exists only as defense-in-depth (e.g. across
+// multiple server instances, each with their own in-process cache); within a
+// single instance, Invalidate is called synchronously by the API key
+// handler on every permission/IP-allowlist change and on delete, so a given
+// instance never needs to wait out the TTL to observe an update. Keep this
+// short: it is a security control (permissions, IP allowlist), not a
+// read-through cache for inert data, so a stale hit has real consequences.
+const apiKeyCacheTTL = 10 * time.Second
 
-type apiKeyAuthenticator struct {
+// APIKeyAuthenticator authenticates SDP_-prefixed bearer tokens and caches
+// validated keys - keyed by "<tenant ID>:<API key ID>", never by the raw
+// secret and never by ID alone - so most requests avoid a DB round trip.
+// Tenant-scoping the cache key prevents a raw key that is only valid for one
+// tenant's schema from being served out of a cache entry warmed by a
+// different tenant's context: the request's tenant comes from the
+// attacker-controlled SDP-Tenant-Name header, so without this scoping a
+// replayed key could ride another tenant's cached validation and bypass the
+// schema-scoped DB lookup that is the sole mechanism binding a key to its
+// tenant. Callers that mutate an API key's permissions, allowed IPs, or
+// existence (update/delete) MUST call Invalidate(ctx, id) as part of that
+// operation, or the cache can keep authorizing requests against the stale,
+// pre-change permission set.
+type APIKeyAuthenticator struct {
 	model *data.APIKeyModel
 	cache *ristretto.Cache
 }
 
-func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
+// NewAPIKeyAuthenticator builds an APIKeyAuthenticator backed by model.
+func NewAPIKeyAuthenticator(model *data.APIKeyModel) *APIKeyAuthenticator {
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 10_000,
 		MaxCost:     1_000,
@@ -31,24 +53,69 @@ func newAPIKeyAuthenticator(model *data.APIKeyModel) *apiKeyAuthenticator {
 	})
 	if err != nil {
 		log.Errorf("Failed to create API key cache: %v", err)
-		return &apiKeyAuthenticator{model: model}
+		return &APIKeyAuthenticator{model: model}
 	}
 
 	cache.Wait()
 
-	return &apiKeyAuthenticator{
+	return &APIKeyAuthenticator{
 		model: model,
 		cache: cache,
 	}
 }
 
-func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*data.APIKey, error) {
-	cacheKey := ""
-	if tenant, err := sdpcontext.GetTenantFromContext(ctx); err == nil && tenant != nil && tenant.ID != "" {
-		cacheKey = tenant.ID + ":" + rawKey
+// cacheKeyFor builds the tenant-scoped cache key for the API key with the
+// given ID, using the tenant resolved from ctx. ok is false (and key empty)
+// when the tenant can't be resolved, in which case the cache must not be
+// consulted at all - see validate for why.
+func cacheKeyFor(ctx context.Context, id string) (key string, ok bool) {
+	tenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil || tenant == nil || tenant.ID == "" {
+		return "", false
+	}
+	return tenant.ID + ":" + id, true
+}
+
+// Invalidate evicts any cached validation result for the API key with the
+// given ID, scoped to the tenant resolved from ctx (the same tenant the
+// request that is updating/deleting the key is itself running under). It
+// must be called whenever that key's permissions or allowed_ips are updated,
+// or when the key is deleted, so the very next request using it is forced to
+// re-fetch current authorization data from the DB instead of serving a stale
+// cache hit.
+func (a *APIKeyAuthenticator) Invalidate(ctx context.Context, id string) {
+	if a == nil || a.cache == nil {
+		return
+	}
+	if cacheKey, ok := cacheKeyFor(ctx, id); ok {
+		a.cache.Del(cacheKey)
+	}
+}
+
+func (a *APIKeyAuthenticator) validate(ctx context.Context, rawKey string) (*data.APIKey, error) {
+	// The cache is keyed by "<tenant ID>:<API key ID>" rather than the raw
+	// secret:
+	//  - Tenant-scoping closes a cross-tenant cache-poisoning hole (see the
+	//    type doc above): without it, a key cached while serving tenant A
+	//    could be replayed under tenant B's name and served straight out of
+	//    cache, bypassing the schema-scoped DB lookup that binds a key to
+	//    its tenant.
+	//  - Keying on the ID (not the secret) is what lets the /api-keys/{id}
+	//    update/delete handlers evict exactly this entry: the raw secret is
+	//    never persisted after creation, so those handlers have no way to
+	//    derive it, only the ID.
+	// The secret is still verified against the cached hash on every request
+	// (cache hit or not), so a cache hit never skips authentication - it
+	// only skips the DB round trip.
+	id, secret, parseErr := data.ParseRawAPIKey(rawKey)
+
+	var cacheKey string
+	cacheable := false
+	if parseErr == nil {
+		cacheKey, cacheable = cacheKeyFor(ctx, id)
 	}
 
-	if a.cache == nil || cacheKey == "" {
+	if a.cache == nil || !cacheable {
 		apiKey, err := a.model.ValidateRawKeyAndUpdateLastUsed(ctx, rawKey)
 		if err != nil {
 			return nil, fmt.Errorf("validating API key (cacheless): %w", err)
@@ -57,7 +124,9 @@ func (a *apiKeyAuthenticator) validate(ctx context.Context, rawKey string) (*dat
 	}
 
 	if cached, found := a.cache.Get(cacheKey); found {
-		if apiKey, ok := cached.(*data.APIKey); ok && !apiKey.IsExpired() {
+		if apiKey, ok := cached.(*data.APIKey); ok &&
+			!apiKey.IsExpired() &&
+			apiKey.VerifySecret(secret) {
 			return apiKey, nil
 		}
 		a.cache.Del(cacheKey)
@@ -101,10 +170,8 @@ func extractClientIP(r *http.Request) string {
 	return host
 }
 
-// APIKeyOrJWTAuthenticate first checks for an SDP_ key, then falls back to JWT.
-func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
-	auth := newAPIKeyAuthenticator(apiKeyModel)
-
+// Middleware first checks for an SDP_ key, then falls back to JWT.
+func (a *APIKeyAuthenticator) Middleware(jwtAuth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := extractToken(r)
@@ -114,7 +181,7 @@ func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Ha
 				return
 			}
 
-			apiKey, err := auth.validate(r.Context(), token)
+			apiKey, err := a.validate(r.Context(), token)
 			if err != nil {
 				httperror.Unauthorized("Invalid API key", nil, nil).Render(w)
 				return
@@ -134,6 +201,15 @@ func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Ha
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// APIKeyOrJWTAuthenticate builds a one-off APIKeyAuthenticator and returns its
+// middleware. Prefer constructing an APIKeyAuthenticator once (via
+// NewAPIKeyAuthenticator) and sharing it with whatever also needs to call
+// Invalidate (e.g. the API key management handlers) - this helper is kept for
+// callers (and tests) that don't need to invalidate the cache themselves.
+func APIKeyOrJWTAuthenticate(apiKeyModel *data.APIKeyModel, jwtAuth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return NewAPIKeyAuthenticator(apiKeyModel).Middleware(jwtAuth)
 }
 
 // RequirePermission ensures the caller has the given APIKeyPermission or (if no APIKey in context) passes through to the next role-check.

@@ -130,6 +130,10 @@ func (h BridgeIntegrationHandler) Patch(w http.ResponseWriter, r *http.Request) 
 	// Get user from context
 	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot retrieve user from context", err, nil).Render(w)
 		return
 	}

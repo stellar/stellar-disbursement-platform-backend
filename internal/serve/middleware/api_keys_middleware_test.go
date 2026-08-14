@@ -194,7 +194,7 @@ func Test_apiKeyAuthenticator_validate_CrossTenantIsolation(t *testing.T) {
 
 	apiKeys, ctxA, ctxB, rawKey := setupCrossTenantAPIKeys(t)
 
-	auth := newAPIKeyAuthenticator(apiKeys)
+	auth := NewAPIKeyAuthenticator(apiKeys)
 
 	// Warm cache as tenant A, then block until ristretto has applied the write.
 	warmed, err := auth.validate(ctxA, rawKey)

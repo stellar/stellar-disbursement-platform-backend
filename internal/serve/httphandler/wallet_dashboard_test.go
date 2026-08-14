@@ -1,0 +1,257 @@
+package httphandler
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+)
+
+// Test_W4_WalletAwareDashboards proves the dashboard backend: statistics scope to the
+// caller's wallets (header narrows; Owners aggregate tenant-wide), and the balance endpoints
+// serve per-wallet (membership-scoped) and Owner-only aggregate views.
+func Test_W4_WalletAwareDashboards(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	walletA := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	var walletBID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type, distribution_account_address)
+		VALUES ('dash-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', 'GDASHWALLETBADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA') RETURNING id`))
+
+	memberA := &auth.User{ID: "dash-member-a", Email: "a@dash.test", Roles: []string{string(data.BusinessUserRole)}}
+	owner := &auth.User{ID: "dash-owner", Email: "o@dash.test", IsOwner: true}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, memberA.ID, walletA.ID, data.BusinessUserRole, nil)
+	require.NoError(t, err)
+
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, memberA.ID).Return(memberA, nil)
+	authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+	// The disbursements list hydrates created-by/started-by users; fixtures have none.
+	authManagerMock.On("GetUsersByID", mock.Anything, mock.Anything, mock.Anything).
+		Return([]*auth.User{}, nil).Maybe()
+
+	// One disbursement + one DRAFT payment per wallet (amount 10 from A, 25 from B).
+	mkPayment := func(name, walletID, amount string) {
+		d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: name, SourceWalletID: walletID, Status: data.StartedDisbursementStatus,
+		})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, d.Wallet.ID, data.ReadyReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: d, Asset: *d.Asset, Amount: amount, Status: data.DraftPaymentStatus,
+		})
+	}
+	mkPayment("dash-disb-a", walletA.ID, "10")
+	mkPayment("dash-disb-b", walletBID, "25")
+
+	statsHandler := StatisticsHandler{DBConnectionPool: dbConnectionPool, Models: models, AuthManager: authManagerMock}
+
+	statsAs := func(userID, headerWalletID string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/statistics", nil)
+		if headerWalletID != "" {
+			req.Header.Set(XWalletIDHeader, headerWalletID)
+		}
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+		rr := httptest.NewRecorder()
+		statsHandler.GetStatistics(rr, req)
+		return rr
+	}
+
+	t.Run("statistics: member sees only their wallets; owner sees tenant-wide", func(t *testing.T) {
+		rr := statsAs(memberA.ID, "")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"total_disbursements": 1`)
+
+		rr = statsAs(owner.ID, "")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"total_disbursements": 2`)
+	})
+
+	t.Run("statistics: header narrows; out-of-scope header → 404 no-disclosure", func(t *testing.T) {
+		rr := statsAs(owner.ID, walletBID)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"total_disbursements": 1`)
+
+		rr = statsAs(memberA.ID, walletBID)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "dash-wallet-b")
+	})
+
+	t.Run("disbursements list: X-Wallet-Id narrows to the selected account, owners included", func(t *testing.T) {
+		disbHandler := DisbursementHandler{
+			Models:                        models,
+			AuthManager:                   authManagerMock,
+			DisbursementManagementService: &services.DisbursementManagementService{Models: models, AuthManager: authManagerMock},
+		}
+		dr := chi.NewRouter()
+		dr.Get("/disbursements", disbHandler.GetDisbursements)
+		listAs := func(userID, headerWalletID string) *httptest.ResponseRecorder {
+			req := httptest.NewRequest(http.MethodGet, "/disbursements", nil)
+			if headerWalletID != "" {
+				req.Header.Set(XWalletIDHeader, headerWalletID)
+			}
+			req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+			rr := httptest.NewRecorder()
+			dr.ServeHTTP(rr, req)
+			return rr
+		}
+
+		// Owner, no header ("All accounts"): sees both accounts' disbursements.
+		rr := listAs(owner.ID, "")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "dash-disb-a")
+		assert.Contains(t, rr.Body.String(), "dash-disb-b")
+
+		// Owner selecting wallet B narrows to wallet B only (the fix — previously saw both).
+		rr = listAs(owner.ID, walletBID)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "dash-disb-a")
+		assert.Contains(t, rr.Body.String(), "dash-disb-b")
+
+		// Member of wallet A, no header: only wallet A.
+		rr = listAs(memberA.ID, "")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "dash-disb-a")
+		assert.NotContains(t, rr.Body.String(), "dash-disb-b")
+
+		// Member of A selecting wallet B (not theirs): sees nothing, no cross-account disclosure.
+		rr = listAs(memberA.ID, walletBID)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "dash-disb-a")
+		assert.NotContains(t, rr.Body.String(), "dash-disb-b")
+	})
+
+	// ===== Balances =====
+	// Give wallet A an on-chain address (the ensured default has none — pending path).
+	_, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, walletA.ID, "GDASHWALLETAADDRESSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	require.NoError(t, err)
+
+	mDistAccSvc := &svcMocks.MockDistributionAccountService{}
+	usdc := data.Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"}
+	mDistAccSvc.On("GetBalances", mock.Anything, mock.Anything).
+		Return(map[data.Asset]decimal.Decimal{usdc: decimal.NewFromInt(40)}, nil)
+
+	walletsHandler := DistributionWalletsHandler{
+		Service: &mockDistributionWalletService{getFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+			return models.DistributionWallets.Get(ctx, dbConnectionPool, id)
+		}, listFn: func(_ context.Context, includeArchived bool) ([]data.DistributionWallet, error) {
+			return models.DistributionWallets.GetAll(ctx, dbConnectionPool, includeArchived)
+		}},
+		AuthManager:                authManagerMock,
+		Models:                     models,
+		DistributionAccountService: mDistAccSvc,
+	}
+	r := chi.NewRouter()
+	r.Get("/distribution-wallets/balance", walletsHandler.GetDistributionWalletsTotalBalance)
+	r.Get("/distribution-wallets/{id}/balance", walletsHandler.GetDistributionWalletBalance)
+
+	balanceAs := func(userID, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr
+	}
+
+	t.Run("per-wallet balance: member-scoped, 404 outside scope", func(t *testing.T) {
+		rr := balanceAs(memberA.ID, fmt.Sprintf("/distribution-wallets/%s/balance", walletA.ID))
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "40"`)
+
+		rr = balanceAs(memberA.ID, fmt.Sprintf("/distribution-wallets/%s/balance", walletBID))
+		assert.Equal(t, http.StatusNotFound, rr.Code, "no existence disclosure outside scope")
+	})
+
+	t.Run("per-wallet balance: the path wins over a conflicting X-Wallet-Id", func(t *testing.T) {
+		// The header picks the dashboard's active wallet, but /distribution-wallets/{id}/* names
+		// its wallet explicitly. Nothing else pins that precedence, so a refactor making the
+		// header authoritative would silently redirect every one of those requests to another
+		// account. This is the regression guard that fails first.
+		walletB, err := models.DistributionWallets.Get(ctx, dbConnectionPool, walletBID)
+		require.NoError(t, err)
+
+		// The shared mock returns 40 for either wallet, so the balance alone would prove nothing.
+		// Give wallet B a distinct one; wallet A keeps 40 so honouring the header fails on the
+		// value rather than panicking on an unexpected call.
+		conflictDistAccSvc := &svcMocks.MockDistributionAccountService{}
+		conflictDistAccSvc.On("GetBalances", mock.Anything, mock.MatchedBy(func(account *schema.TransactionAccount) bool {
+			return account.Address == *walletB.Address
+		})).Return(map[data.Asset]decimal.Decimal{usdc: decimal.NewFromInt(55)}, nil)
+		conflictDistAccSvc.On("GetBalances", mock.Anything, mock.Anything).
+			Return(map[data.Asset]decimal.Decimal{usdc: decimal.NewFromInt(40)}, nil)
+
+		conflictHandler := walletsHandler
+		conflictHandler.DistributionAccountService = conflictDistAccSvc
+		cr := chi.NewRouter()
+		cr.Get("/distribution-wallets/{id}/balance", conflictHandler.GetDistributionWalletBalance)
+
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/distribution-wallets/%s/balance", walletBID), nil)
+		req.Header.Set(XWalletIDHeader, walletA.ID)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, owner.ID))
+		rr := httptest.NewRecorder()
+		cr.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "55"`,
+			"wallet B from the path, not wallet A from the header")
+	})
+
+	t.Run("aggregate balance: Owner sums all wallets; member sums only their scope", func(t *testing.T) {
+		rr := balanceAs(owner.ID, "/distribution-wallets/balance")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "80"`, "40 + 40 across two wallets")
+
+		// Member aggregate mirrors /statistics: their membership set only — wallet B's
+		// balance never reaches them.
+		rr = balanceAs(memberA.ID, "/distribution-wallets/balance")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), `"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5": "40"`, "wallet A only")
+	})
+
+	t.Run("wallet listing: members see only their wallets (the picker source)", func(t *testing.T) {
+		listHandler := walletsHandler
+		lr := chi.NewRouter()
+		lr.Get("/distribution-wallets", listHandler.GetDistributionWallets)
+
+		req := httptest.NewRequest(http.MethodGet, "/distribution-wallets", nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, memberA.ID))
+		rr := httptest.NewRecorder()
+		lr.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), walletA.ID)
+		assert.NotContains(t, rr.Body.String(), walletBID, "no cross-wallet disclosure in the listing")
+
+		req = httptest.NewRequest(http.MethodGet, "/distribution-wallets", nil)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, owner.ID))
+		rr = httptest.NewRecorder()
+		lr.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), walletA.ID)
+		assert.Contains(t, rr.Body.String(), walletBID)
+	})
+}

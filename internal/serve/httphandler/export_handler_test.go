@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
@@ -34,7 +35,8 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ExportHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -111,6 +113,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 				url += "?" + tc.queryParams
 			}
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
@@ -161,7 +164,8 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ExportHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -261,6 +265,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				url += "?" + tc.queryParams
 			}
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
@@ -332,7 +337,8 @@ func Test_ExportHandler_ExportReceivers(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ExportHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -413,6 +419,7 @@ func Test_ExportHandler_ExportReceivers(t *testing.T) {
 				url += "?" + tc.queryParams
 			}
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)

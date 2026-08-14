@@ -115,6 +115,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 		}),
 		scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+		scheduler.WithEventDeliveryJobOption(models),
 		scheduler.WithSendReceiverWalletsInvitationJobOption(jobs.SendReceiverWalletsInvitationJobOptions{
 			Models:                      models,
 			MessageDispatcher:           serveOpts.MessageDispatcher,
@@ -517,6 +518,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.BaseURL = globalOptions.BaseURL
 			serveOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			serveOpts.DistAccEncryptionPassphrase = txSubmitterOpts.SignatureServiceOptions.DistAccEncryptionPassphrase
+			// lokiHook is nil unless LOG_SHIPPING_URL is set (see
+			// registerLogShippingHook in cmd/root.go). Guard the assignment
+			// explicitly rather than always assigning the *observability.LokiHook
+			// pointer, since a nil concrete pointer stored in the
+			// serve.LogFlusher interface would no longer compare equal to nil.
+			if lokiHook != nil {
+				serveOpts.LogShippingHook = lokiHook
+			}
 
 			// Inject metrics server dependencies
 			metricsServeOpts.MonitorService = monitorService

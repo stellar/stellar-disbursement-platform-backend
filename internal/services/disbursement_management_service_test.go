@@ -225,8 +225,10 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 		Status:         schema.AccountStatusActive,
 	}
 
-	ownerUser := &auth.User{ID: "owner-user", Email: "owner@test.com"}
-	financialUser := &auth.User{ID: "financial-user", Email: "financial@test.com"}
+	// IsOwner: these tests exercise transition mechanics; wallet-scoped authorization has its
+	// own dedicated suite (Test_WalletScopedAuthorization).
+	ownerUser := &auth.User{ID: "owner-user", Email: "owner@test.com", IsOwner: true}
+	financialUser := &auth.User{ID: "financial-user", Email: "financial@test.com", IsOwner: true}
 
 	// Shared mocks preparation
 	prepareHorizonMockFn := func(mHorizonClient *horizonclient.MockClient) {
@@ -459,6 +461,10 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 
+	// Failure-path actor: owner bypasses wallet-scoped authorization, so each subtest reaches
+	// its intended failure (authz itself is covered by Test_WalletScopedAuthorization).
+	failureUser := &auth.User{ID: "failure-user", Email: "failure@test.com", IsOwner: true}
+
 	// Create fixtures: disbursements
 	draftDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:   "draft disbursement",
@@ -485,14 +491,14 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
 		defer data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, &distributionAcc)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, failureUser, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
 	})
 
 	t.Run("returns an error if the disbursement status is not READY", func(t *testing.T) {
 		service := DisbursementManagementService{Models: models}
 
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, &distributionAcc)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, failureUser, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
@@ -518,8 +524,9 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		})
 
 		user := &auth.User{
-			ID:    userID,
-			Email: "email@email.com",
+			ID:      userID,
+			Email:   "email@email.com",
+			IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 		}
 
 		// Enable approval workflow for org.
@@ -615,7 +622,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, &distributionAcc)
+		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, failureUser, &distributionAcc)
 		expectedErr := InsufficientBalanceError{
 			DisbursementAsset:   *usdt,
 			DistributionAddress: distributionAcc.ID(),
@@ -630,6 +637,114 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
 		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account (stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
 		assert.Contains(t, buf.String(), expectedErrStr)
+	})
+}
+
+// Test_DisbursementManagementService_StartDisbursement_multiWalletIsolation is a regression
+// test for a real bug found live: validateBalanceForDisbursement's "pending amount" query had
+// no wallet filter at all, so a busy/over-committed wallet A could wrongly block a disbursement
+// on a completely separate, healthy wallet B just by tenant-wide coincidence. Two wallets, two
+// disbursements: wallet A is deliberately over-committed and must fail; wallet B has ample
+// headroom and must succeed even though wallet A's pending amount alone would exceed it.
+func Test_DisbursementManagementService_StartDisbursement_multiWalletIsolation(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	user := &auth.User{ID: "owner-user", Email: "owner@test.com", IsOwner: true}
+
+	walletAAddress := "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV"
+	walletBAddress := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
+
+	distWalletA, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+		Name: "Wallet A (over-committed)", AccountType: schema.DistributionAccountStellarDBVault,
+	})
+	require.NoError(t, err)
+	distWalletA, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWalletA.ID, walletAAddress)
+	require.NoError(t, err)
+	// Insert leaves the wallet PENDING; CreateWallet promotes it once funded, and only an
+	// ACTIVE wallet may source a disbursement.
+	distWalletA, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, distWalletA.ID)
+	require.NoError(t, err)
+
+	distWalletB, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+		Name: "Wallet B (healthy)", AccountType: schema.DistributionAccountStellarDBVault,
+	})
+	require.NoError(t, err)
+	distWalletB, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWalletB.ID, walletBAddress)
+	require.NoError(t, err)
+	distWalletB, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, distWalletB.ID)
+	require.NoError(t, err)
+
+	// Wallet A: an existing in-progress payment (80) already commits most of its balance (100).
+	disbursementA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "wallet A - existing commitment", Status: data.StartedDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWalletA.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: disbursementA, Asset: *asset,
+		Amount: "80", Status: data.PendingPaymentStatus,
+	})
+	newDisbursementA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "wallet A - new (should fail)", Status: data.ReadyDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWalletA.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: newDisbursementA, Asset: *asset,
+		Amount: "30", Status: data.ReadyPaymentStatus,
+	})
+
+	// Wallet B: no pre-existing commitments; a modest new disbursement fits comfortably.
+	newDisbursementB := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "wallet B - new (should succeed)", Status: data.ReadyDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWalletB.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: newDisbursementB, Asset: *asset,
+		Amount: "25", Status: data.ReadyPaymentStatus,
+	})
+
+	mockDistAccSvc := mocks.NewMockDistributionAccountService(t)
+	// Wallet A holds 100; Wallet B holds 100 too - but only A has a pre-existing 80 commitment.
+	mockDistAccSvc.On("GetBalance", mock.Anything,
+		mock.MatchedBy(func(a *schema.TransactionAccount) bool { return a.Address == walletAAddress }),
+		mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(100), nil)
+	mockDistAccSvc.On("GetBalance", mock.Anything,
+		mock.MatchedBy(func(a *schema.TransactionAccount) bool { return a.Address == walletBAddress }),
+		mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(100), nil)
+
+	service := &DisbursementManagementService{
+		Models:                     models,
+		DistributionAccountService: mockDistAccSvc,
+	}
+
+	accountA := &schema.TransactionAccount{Address: walletAAddress, Type: schema.DistributionAccountStellarDBVault}
+	accountB := &schema.TransactionAccount{Address: walletBAddress, Type: schema.DistributionAccountStellarDBVault}
+
+	t.Run("wallet A: over-committed, correctly fails", func(t *testing.T) {
+		err := service.StartDisbursement(ctx, newDisbursementA.ID, user, accountA)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "insufficient")
+		require.ErrorContains(t, err, walletAAddress)
+	})
+
+	t.Run("wallet B: healthy, succeeds even though wallet A alone is already over its own balance", func(t *testing.T) {
+		err := service.StartDisbursement(ctx, newDisbursementB.ID, user, accountB)
+		require.NoError(t, err)
 	})
 }
 
@@ -653,8 +768,9 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	ctx = sdpcontext.SetTokenInContext(ctx, token)
 
 	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
+		ID:      "user-id",
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
 	}
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
@@ -877,6 +993,237 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	hMock.AssertExpectations(t)
+}
+
+// Test_DisbursementManagementService_CancelDisbursement covers the acceptance criteria for the
+// bulk "cancel disbursement" action: it's only reachable from DRAFT/READY (never-started), it
+// cancels all of the disbursement's own (DRAFT) payments along with the disbursement itself, and
+// a STARTED disbursement is correctly rejected (PauseDisbursement is the right action there
+// instead, since on-chain submissions may already be in flight). Wrong-wallet authorization is
+// covered by Test_WalletScopedAuthorization.
+func Test_DisbursementManagementService_CancelDisbursement(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	user := &auth.User{
+		ID:      "user-id",
+		Email:   "email@email.com",
+		IsOwner: true, // wallet authz covered by Test_WalletScopedAuthorization
+	}
+
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+
+	service := &DisbursementManagementService{Models: models}
+
+	t.Run("disbursement doesn't exist", func(t *testing.T) {
+		err := service.CancelDisbursement(ctx, "5e1f1c7f5b6c9c0001c1b1b1", user)
+		require.ErrorIs(t, err, ErrDisbursementNotFound)
+	})
+
+	t.Run("started disbursement can't be canceled", func(t *testing.T) {
+		startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: "started disbursement", Status: data.StartedDisbursementStatus, Asset: asset, Wallet: wallet,
+		})
+
+		err := service.CancelDisbursement(ctx, startedDisbursement.ID, user)
+		require.ErrorIs(t, err, ErrDisbursementNotReadyToCancel)
+
+		// State unchanged.
+		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, startedDisbursement.ID)
+		require.NoError(t, gErr)
+		require.Equal(t, data.StartedDisbursementStatus, got.Status)
+	})
+
+	t.Run("paused disbursement can't be canceled", func(t *testing.T) {
+		pausedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: "paused disbursement", Status: data.PausedDisbursementStatus, Asset: asset, Wallet: wallet,
+		})
+
+		err := service.CancelDisbursement(ctx, pausedDisbursement.ID, user)
+		require.ErrorIs(t, err, ErrDisbursementNotReadyToCancel)
+	})
+
+	t.Run("draft disbursement is canceled along with its draft payments", func(t *testing.T) {
+		draftDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: "draft disbursement to cancel", Status: data.DraftDisbursementStatus, Asset: asset, Wallet: wallet,
+		})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: draftDisbursement, Asset: *asset, Amount: "42", Status: data.DraftPaymentStatus,
+		})
+
+		err := service.CancelDisbursement(ctx, draftDisbursement.ID, user)
+		require.NoError(t, err)
+
+		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, draftDisbursement.ID)
+		require.NoError(t, gErr)
+		require.Equal(t, data.CanceledDisbursementStatus, got.Status)
+
+		gotPayment, pErr := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, pErr)
+		require.Equal(t, data.CanceledPaymentStatus, gotPayment.Status)
+
+		// Cancellation is terminal: canceling again is rejected, not silently re-applied.
+		err = service.CancelDisbursement(ctx, draftDisbursement.ID, user)
+		require.ErrorIs(t, err, ErrDisbursementNotReadyToCancel)
+	})
+
+	t.Run("ready disbursement (never started) is canceled along with its draft payments and stops counting toward wallet-balance accounting", func(t *testing.T) {
+		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: "ready disbursement to cancel", Status: data.ReadyDisbursementStatus, Asset: asset, Wallet: wallet,
+		})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: readyDisbursement, Asset: *asset, Amount: "10", Status: data.DraftPaymentStatus,
+		})
+		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: readyDisbursement, Asset: *asset, Amount: "20", Status: data.DraftPaymentStatus,
+		})
+
+		err := service.CancelDisbursement(ctx, readyDisbursement.ID, user)
+		require.NoError(t, err)
+
+		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, readyDisbursement.ID)
+		require.NoError(t, gErr)
+		require.Equal(t, data.CanceledDisbursementStatus, got.Status)
+
+		for _, p := range []*data.Payment{payment1, payment2} {
+			gotPayment, pErr := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			require.NoError(t, pErr)
+			require.Equal(t, data.CanceledPaymentStatus, gotPayment.Status)
+		}
+
+		// Canceled payments never appear in "in progress" accounting - the exact mechanism
+		// validateBalanceForDisbursement uses to compute pending commitments against a wallet's
+		// balance for OTHER disbursements' start attempts (see the dedicated same-wallet test
+		// below for why this specific disbursement's payments were never counted here to begin
+		// with, cancellation or not).
+		inProgress, ipErr := models.Payment.GetAll(ctx, &data.QueryParams{
+			Filters: map[data.FilterKey]interface{}{
+				data.FilterKeyStatus:          data.PaymentInProgressStatuses(),
+				data.FilterKeySourceWalletIDs: []string{readyDisbursement.SourceWalletID},
+			},
+		}, dbConnectionPool, data.QueryTypeSelectAll)
+		require.NoError(t, ipErr)
+		for _, p := range inProgress {
+			require.NotEqual(t, payment1.ID, p.ID)
+			require.NotEqual(t, payment2.ID, p.ID)
+		}
+
+		// An event was recorded in the outbox for the cancellation (reusing the frozen
+		// "disbursement.rejected" type - see ACTION-ITEMS.md for why no new event type was added).
+		var eventCount int
+		countErr := dbConnectionPool.GetContext(ctx, &eventCount,
+			`SELECT count(*) FROM events WHERE event_type = 'disbursement.rejected' AND payload::text LIKE '%' || $1 || '%'`,
+			readyDisbursement.ID)
+		require.NoError(t, countErr)
+		require.Equal(t, 1, eventCount)
+	})
+}
+
+// Test_DisbursementManagementService_CancelDisbursement_sameWalletBalanceIsolation documents a
+// real scope boundary: validateBalanceForDisbursement only counts payments in
+// PaymentInProgressStatuses (READY/PENDING/PAUSED) as "pending" commitments against a wallet's
+// balance - and a disbursement only reaches those payment statuses once it has been STARTED. A
+// DRAFT/READY disbursement's payments are always DraftPaymentStatus, which was never counted in
+// the first place. So canceling disbursement A (DRAFT/READY, never started) is provably inert
+// with respect to whether disbursement B (on the SAME wallet) can start: the outcome for B is
+// identical whether A is left alone or canceled. Genuine "release of reserved capacity" only
+// applies to a disbursement that already reserved capacity by being STARTED, which is
+// intentionally out of scope for cancellation (on-chain submissions may already be in flight) -
+// see ACTION-ITEMS.md for the full write-up.
+func Test_DisbursementManagementService_CancelDisbursement_sameWalletBalanceIsolation(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	user := &auth.User{ID: "owner-user", Email: "owner@test.com", IsOwner: true}
+
+	distWalletAddress := "GDGZWPLLHX7TQFRIZDCWMFDR6L5NHY4EOTZ7YMHDXRBMBYNPNW3ZIVQE"
+	distWallet, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+		Name: "Wallet (balance isolation)", AccountType: schema.DistributionAccountStellarDBVault,
+	})
+	require.NoError(t, err)
+	distWallet, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, distWallet.ID, distWalletAddress)
+	require.NoError(t, err)
+	// Insert leaves the wallet PENDING; only an ACTIVE wallet may source a disbursement.
+	distWallet, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, distWallet.ID)
+	require.NoError(t, err)
+
+	// Balance is 100. Disbursement A (READY, never started) has an 80 draft payment - large
+	// enough that it WOULD block disbursement B (30) if it counted, but it never does.
+	disbursementA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name: "A - not started, big amount", Status: data.ReadyDisbursementStatus,
+		Asset: asset, Wallet: wallet, SourceWalletID: distWallet.ID,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady, Disbursement: disbursementA, Asset: *asset,
+		Amount: "80", Status: data.DraftPaymentStatus,
+	})
+
+	newDisbursementBCount := 0
+	newDisbursementB := func() *data.Disbursement {
+		newDisbursementBCount++
+		d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:   fmt.Sprintf("B - modest, should always fit #%d", newDisbursementBCount),
+			Status: data.ReadyDisbursementStatus,
+			Asset:  asset, Wallet: wallet, SourceWalletID: distWallet.ID,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady, Disbursement: d, Asset: *asset,
+			Amount: "30", Status: data.DraftPaymentStatus,
+		})
+		return d
+	}
+
+	mockDistAccSvc := mocks.NewMockDistributionAccountService(t)
+	mockDistAccSvc.On("GetBalance", mock.Anything,
+		mock.MatchedBy(func(a *schema.TransactionAccount) bool { return a.Address == distWalletAddress }),
+		mock.AnythingOfType("data.Asset")).
+		Return(decimal.NewFromInt(100), nil)
+
+	service := &DisbursementManagementService{
+		Models:                     models,
+		DistributionAccountService: mockDistAccSvc,
+	}
+	account := &schema.TransactionAccount{Address: distWalletAddress, Type: schema.DistributionAccountStellarDBVault}
+
+	disbursementBBefore := newDisbursementB()
+	t.Run("B starts successfully with A left alone (A's draft payment was never counted)", func(t *testing.T) {
+		err := service.StartDisbursement(ctx, disbursementBBefore.ID, user, account)
+		require.NoError(t, err)
+	})
+
+	require.NoError(t, service.CancelDisbursement(ctx, disbursementA.ID, user))
+
+	disbursementBAfter := newDisbursementB()
+	t.Run("B starts successfully after A is canceled too - identical outcome", func(t *testing.T) {
+		err := service.StartDisbursement(ctx, disbursementBAfter.ID, user, account)
+		require.NoError(t, err)
+	})
 }
 
 func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testing.T) {

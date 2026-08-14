@@ -23,6 +23,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
@@ -32,7 +33,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -102,6 +102,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
 		return
 	}
@@ -122,7 +126,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			httperror.BadRequest(err.Error(), err, nil).Render(w)
 			return
 		}
-		disbursement, httpErr = d.postDisbursementOnly(ctx, req, user)
+		disbursement, httpErr = d.postDisbursementOnly(ctx, r, req, user)
 	}
 
 	if httpErr != nil {
@@ -133,7 +137,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	httpjson.RenderStatus(w, http.StatusCreated, disbursement, httpjson.JSON)
 }
 
-func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
+func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq *http.Request, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
 	var wallet *data.Wallet
 	var err error
 
@@ -167,8 +171,18 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 		return nil, httperror.BadRequest("asset ID could not be retrieved", err, nil)
 	}
 
+	//  routing: the source wallet is explicit via X-Wallet-Id (400 absent on multi-wallet
+	// tenants, 403 unentitled); single-wallet tenants legitimately omit it and use their
+	// default wallet. Entitlement and archived-status checks happen inside.
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, httpReq, d.AuthManager, d.Models,
+		data.FinancialControllerUserRole, data.InitiatorUserRole)
+	if walletErr != nil {
+		return nil, walletErr
+	}
+
 	// Insert disbursement
 	disbursement := data.Disbursement{
+		SourceWalletID:                      sourceWallet.ID,
 		Asset:                               asset,
 		Name:                                req.Name,
 		ReceiverRegistrationMessageTemplate: req.ReceiverRegistrationMessageTemplate,
@@ -190,6 +204,15 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 			return nil, httperror.BadRequest("could not create disbursement", err, nil)
 		}
 	}
+
+	// Outbox: disbursement.created, same executor as the insert.
+	if err = events.Write(ctx, sqlExec, events.DisbursementCreated, sourceWallet.ID, map[string]any{
+		"disbursement_id": newID,
+		"name":            disbursement.Name,
+		"actor_user_id":   userID,
+	}); err != nil {
+		return nil, httperror.InternalError(ctx, "Cannot write disbursement.created event", err, nil)
+	}
 	newDisbursement, err := d.Models.Disbursements.Get(ctx, sqlExec, newID)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newID)
@@ -203,8 +226,9 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, sqlExec 
 
 func (d DisbursementHandler) recordCreateDisbursementMetrics(ctx context.Context, disbursement *data.Disbursement) {
 	labels := monitor.DisbursementLabels{
-		Asset:  disbursement.Asset.Code,
-		Wallet: disbursement.Wallet.Name,
+		Asset:    disbursement.Asset.Code,
+		Wallet:   disbursement.Wallet.Name,
+		WalletID: disbursement.SourceWalletID,
 		CommonLabels: monitor.CommonLabels{
 			TenantName: sdpcontext.MustGetTenantNameFromContext(ctx),
 		},
@@ -233,6 +257,12 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 			return nil, ErrDisbursementStarted
 		}
 
+		// deletion is a state transition — gate on the disbursement's source wallet.
+		if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
+			data.FinancialControllerUserRole, data.InitiatorUserRole); httpErr != nil {
+			return nil, httpErr
+		}
+
 		// Delete associated payments
 		err = d.Models.Payment.DeleteAllDraftForDisbursement(ctx, tx, disbursementID)
 		if err != nil {
@@ -245,6 +275,15 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 			return nil, fmt.Errorf("deleting draft or ready disbursement: %w", err)
 		}
 
+		// Outbox: a deleted draft is a rejected disbursement, same transaction.
+		if err = events.Write(ctx, tx, events.DisbursementRejected, disbursement.SourceWalletID, map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"reason":          "draft_deleted",
+		}); err != nil {
+			return nil, fmt.Errorf("writing disbursement.rejected event: %w", err)
+		}
+
 		return disbursement, nil
 	})
 	if err != nil {
@@ -254,6 +293,11 @@ func (d DisbursementHandler) DeleteDisbursement(w http.ResponseWriter, r *http.R
 		case errors.Is(err, ErrDisbursementStarted):
 			httperror.BadRequest("Cannot delete a disbursement that has started", err, nil).Render(w)
 		default:
+			var httpErr *httperror.HTTPError
+			if errors.As(err, &httpErr) {
+				httpErr.Render(w)
+				return
+			}
 			httperror.InternalError(ctx, "Cannot delete disbursement", err, nil).Render(w)
 		}
 		return
@@ -279,6 +323,18 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
+
+	// Per-account list scope: narrow to the selected account (X-Wallet-Id) when set, else full
+	// visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+	}
+
 	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
@@ -304,6 +360,10 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 
 	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		msg := fmt.Sprintf("Cannot get user from context token when processing instructions for disbursement with ID %s", disbursementID)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
@@ -317,6 +377,13 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	if err = db.RunInTransaction(ctx, d.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// check if disbursement exists
 		disbursement, getErr := d.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if getErr == nil {
+			// instruction upload routes funds from the disbursement's wallet — gate it.
+			if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
+				data.FinancialControllerUserRole, data.InitiatorUserRole); httpErr != nil {
+				return httpErr
+			}
+		}
 		if getErr != nil {
 			return httperror.BadRequest("disbursement ID is invalid", getErr, nil)
 		}
@@ -457,6 +524,18 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Membership-filtered visibility: respond 404 outside the caller's scope —
+	// existence is never disclosed (read-leakage rules).
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if !walletInReadScope(scope, disbursement.SourceWalletID) {
+		httperror.NotFound("disbursement not found", nil, nil).Render(w)
+		return
+	}
+
 	response, err := d.DisbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
 	if err != nil {
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
@@ -479,6 +558,12 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 
 	if validator.HasErrors() {
 		httperror.BadRequest("request invalid", nil, validator.Errors).Render(w)
+		return
+	}
+
+	// Membership-filtered visibility: 404 outside the caller's scope.
+	if httpErr := d.ensureDisbursementInReadScope(ctx, disbursementID); httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
@@ -512,6 +597,27 @@ type UpdateDisbursementStatusResponseBody struct {
 	Message string `json:"message"`
 }
 
+// ensureDisbursementInReadScope loads the disbursement and verifies the caller's wallet
+// scope covers its source wallet, returning 404 (never 403) outside the scope.
+func (d DisbursementHandler) ensureDisbursementInReadScope(ctx context.Context, disbursementID string) *httperror.HTTPError {
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return httperror.NotFound("disbursement not found", err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot load disbursement", err, nil)
+	}
+
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		return scopeErr
+	}
+	if !walletInReadScope(scope, disbursement.SourceWalletID) {
+		return httperror.NotFound("disbursement not found", nil, nil)
+	}
+	return nil
+}
+
 // PatchDisbursementStatus updates the status of a disbursement
 func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -536,15 +642,38 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	user, err := ctxHelper.GetUserFromContext(ctx, d.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(w)
 		return
 	}
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		var distributionAccount schema.TransactionAccount
-		if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
-			httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
+		// The balance check must run against THIS disbursement's own source wallet, so the
+		// disbursement is loaded here purely to reach it (see resolveSourceDistributionAccount).
+		disbursement, getErr := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
+		if getErr != nil {
+			if errors.Is(getErr, data.ErrRecordNotFound) {
+				httperror.NotFound("disbursement not found", getErr, nil).Render(w)
+				return
+			}
+			httperror.InternalError(ctx, "Cannot get disbursement", getErr, nil).Render(w)
+			return
+		}
+
+		sourceWallet, walletErr := d.Models.DistributionWallets.Get(ctx, d.Models.DBConnectionPool, disbursement.SourceWalletID)
+		if walletErr != nil {
+			httperror.InternalError(ctx, "Cannot get distribution account", walletErr, nil).Render(w)
+			return
+		}
+
+		distributionAccount, accountErr := resolveSourceDistributionAccount(ctx, d.DistributionAccountResolver, sourceWallet,
+			"the disbursement's source wallet has no funded distribution account yet")
+		if accountErr != nil {
+			accountErr.Render(w)
 			return
 		}
 
@@ -553,6 +682,9 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 	case data.PausedDisbursementStatus:
 		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement paused"
+	case data.CanceledDisbursementStatus:
+		err = d.DisbursementManagementService.CancelDisbursement(ctx, disbursementID, user)
+		response.Message = "Disbursement canceled"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
 	}
@@ -566,10 +698,14 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementNotReadyToStart.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementNotReadyToPause):
 			httperror.BadRequest(services.ErrDisbursementNotReadyToPause.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementNotReadyToCancel):
+			httperror.BadRequest(services.ErrDisbursementNotReadyToCancel.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStatusCantBeChanged):
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
+		case errors.Is(err, services.ErrWalletActionForbidden):
+			httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		case errors.As(err, &insufficientBalanceErr):
@@ -592,6 +728,17 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.NotFound("disbursement not found", err, nil).Render(w)
+		return
+	}
+
+	// Membership-filtered visibility: 404 outside the caller's scope.
+	scope, scopeErr := resolveWalletReadScope(ctx, d.AuthManager, d.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if !walletInReadScope(scope, disbursement.SourceWalletID) {
+		httperror.NotFound("disbursement not found", nil, nil).Render(w)
 		return
 	}
 
@@ -625,7 +772,7 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 
 	disbursement, err := db.RunInTransactionWithResult(ctx, d.Models.DBConnectionPool, nil, func(tx db.DBTransaction) (*data.Disbursement, error) {
 		// 1. Create the Disbursement
-		disbursement, httpErr := d.createNewDisbursement(ctx, tx, user.ID, req)
+		disbursement, httpErr := d.createNewDisbursement(ctx, r, tx, user.ID, req)
 		if httpErr != nil {
 			return nil, httpErr
 		}
@@ -648,13 +795,13 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 	return disbursement, nil
 }
 
-func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
+func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, r *http.Request, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
 	v := d.validateRequest(ctx, req)
 	if v.HasErrors() {
 		return nil, httperror.BadRequest("", nil, v.Errors)
 	}
 
-	return d.createNewDisbursement(ctx, d.Models.DBConnectionPool, user.ID, req)
+	return d.createNewDisbursement(ctx, r, d.Models.DBConnectionPool, user.ID, req)
 }
 
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
