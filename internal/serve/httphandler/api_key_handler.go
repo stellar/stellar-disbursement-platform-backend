@@ -86,7 +86,7 @@ func (h APIKeyHandler) grantableWallets(ctx context.Context, alreadyHeld []strin
 		return grantable
 	}
 
-	if actingKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx); keyErr == nil && actingKey != nil {
+	if actingKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx); keyErr == nil {
 		return withinReach(actingKey.WalletScope()), nil
 	}
 

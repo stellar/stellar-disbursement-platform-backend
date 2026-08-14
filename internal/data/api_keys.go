@@ -483,7 +483,8 @@ func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms AP
 			SET permissions = $1,
 				allowed_ips = $2,
 				distribution_wallet_ids = COALESCE($5::VARCHAR(36)[], distribution_wallet_ids),
-				updated_at = NOW()
+				updated_at = NOW(),
+				updated_by = $4
 			WHERE id = $3
 			AND created_by = $4
 		 RETURNING

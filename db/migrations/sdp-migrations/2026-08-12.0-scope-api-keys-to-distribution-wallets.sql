@@ -9,7 +9,7 @@ ALTER TABLE api_keys
 COMMENT ON COLUMN api_keys.distribution_wallet_ids IS
     'Distribution wallets this key may act on. Empty = no wallet-scoped access, never "all".';
 
--- Existing keys have only ever transacted on the default wallet, so scoping them to it is the
+-- Existing keys pre-dating multi-wallet support have only ever transacted on the default wallet, so scoping them to it is the
 -- no-change answer. Guarded on the default row existing so this stays a no-op on an unseeded schema.
 UPDATE api_keys
 SET distribution_wallet_ids = ARRAY [(SELECT id FROM distribution_wallets WHERE is_default LIMIT 1)]

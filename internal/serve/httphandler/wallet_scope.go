@@ -26,7 +26,7 @@ import (
 // creation, so it neither depends on its creator still being active nor moves when their
 // memberships change.
 func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
-	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil && apiKey != nil {
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
 		return apiKey.WalletScope(), nil
 	}
 
@@ -96,7 +96,7 @@ func resolveWalletListScope(ctx context.Context, req *http.Request, authManager 
 // For an API key the wallet dimension is its own scope and the role dimension is its permission
 // set, already checked by RequirePermission on the route — so the key's scope is the whole answer.
 func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, walletID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
-	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil && apiKey != nil {
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
 		if !apiKey.CanActOnWallet(walletID) {
 			return httperror.Forbidden(services.ErrWalletActionForbidden.Error(), nil, nil)
 		}
@@ -269,7 +269,7 @@ const XWalletIDHeader = "X-Wallet-Id"
 // owner identity to earn the honest 404). The header only selects — it never grants.
 func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models, requiredRoles ...data.UserRole) (*data.DistributionWallet, *httperror.HTTPError) {
 	apiKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx)
-	viaAPIKey := keyErr == nil && apiKey != nil
+	viaAPIKey := keyErr == nil
 
 	var user *auth.User
 	if !viaAPIKey {
