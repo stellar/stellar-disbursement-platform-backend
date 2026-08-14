@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Pin cargo-audit install in contract build job with --locked flag. [#1171](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1171)
 - Evict the API-key auth cache synchronously on permission and allowed-IP changes, keyed by API key ID per tenant instead of the raw secret, so revocations take effect on the next request rather than after the cache TTL. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Make SEP-24 interactive JWT expiration configurable and raise default to 10 minutes. [#1182](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1182)
 
 ## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
 

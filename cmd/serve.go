@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -199,6 +200,17 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:   types.String,
 			ConfigKey: &serveOpts.SEP24JWTSecret,
 			Required:  true,
+		},
+		{
+			Name: "sep24-jwt-expiration-seconds",
+			Usage: fmt.Sprintf(
+				"Duration that the SEP-24 JWT token remains valid, in seconds. This token is embedded in the interactive registration URL, so it has to outlive the whole receiver registration flow, including OTP delivery over SMS/email. Minimum 5. Values above %d log a warning at startup.",
+				sepauth.MaxRecommendedSEP24JWTExpirationSeconds,
+			),
+			OptType:     types.Int,
+			ConfigKey:   &serveOpts.SEP24JWTExpirationSeconds,
+			FlagDefault: sepauth.DefaultSEP24JWTExpirationSeconds,
+			Required:    false,
 		},
 		{
 			Name:           "sep10-signing-public-key",

@@ -80,6 +80,7 @@ type ServeOptions struct {
 	EmailMessengerClient           message.MessengerClient
 	MessageDispatcher              message.MessageDispatcherInterface
 	SEP24JWTSecret                 string
+	SEP24JWTExpirationSeconds      int
 	sep24JWTManager                *sepauth.JWTManager
 	BaseURL                        string
 	ResetTokenExpirationHours      int
@@ -165,9 +166,9 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Setup SEP24 JWT manager
-	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 300000)
+	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, int64(opts.SEP24JWTExpirationSeconds)*1000)
 	if err != nil {
-		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
+		return fmt.Errorf("error creating SEP-24 JWT manager with SEP24_JWT_EXPIRATION_SECONDS=%d: %w", opts.SEP24JWTExpirationSeconds, err)
 	}
 	opts.sep24JWTManager = sep24JWTManager
 
@@ -268,6 +269,13 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	}
 	if opts.DisableReCAPTCHA {
 		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
+	if opts.SEP24JWTExpirationSeconds > sepauth.MaxRecommendedSEP24JWTExpirationSeconds {
+		log.Warnf(
+			"SEP-24 JWT expiration is set to %d seconds, above the recommended maximum of %d. This token is a bearer credential carried in the registration URL, so a longer lifetime widens the window in which a leaked link stays usable.",
+			opts.SEP24JWTExpirationSeconds, sepauth.MaxRecommendedSEP24JWTExpirationSeconds,
+		)
 	}
 
 	return nil
