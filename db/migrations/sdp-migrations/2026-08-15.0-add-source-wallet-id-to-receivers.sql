@@ -41,7 +41,38 @@ ALTER TABLE receivers_audit ADD COLUMN source_wallet_id VARCHAR(36);
 
 SELECT create_audit_table('receivers');
 
+-- The backfill only covers rows that exist now; legacy rows copied in later (v1 to v2 tenant
+-- migration) arrive with no wallet. Mirrors derive_disbursement_source_wallet (2026-08-07.0).
+
+-- +migrate StatementBegin
+CREATE OR REPLACE FUNCTION derive_receiver_source_wallet()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.source_wallet_id IS NULL THEN
+        EXECUTE format(
+            'SELECT id FROM %I.distribution_wallets WHERE is_default',
+            TG_TABLE_SCHEMA
+        ) INTO NEW.source_wallet_id;
+
+        IF NEW.source_wallet_id IS NULL THEN
+            RAISE EXCEPTION 'cannot create receiver: no default distribution wallet for this tenant'
+                USING ERRCODE = 'not_null_violation', CONSTRAINT = 'receivers_source_wallet_required';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+-- +migrate StatementEnd
+
+DROP TRIGGER IF EXISTS derive_receiver_source_wallet_trigger ON receivers;
+CREATE TRIGGER derive_receiver_source_wallet_trigger
+    BEFORE INSERT ON receivers
+    FOR EACH ROW EXECUTE PROCEDURE derive_receiver_source_wallet();
+
 -- +migrate Down
+
+DROP TRIGGER IF EXISTS derive_receiver_source_wallet_trigger ON receivers;
+DROP FUNCTION IF EXISTS derive_receiver_source_wallet();
 
 DROP INDEX receivers_source_wallet_id_idx;
 
