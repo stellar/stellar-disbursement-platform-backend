@@ -419,6 +419,43 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.Equal(t, disbursementUpdate.FileName, actualDisbursement.FileName)
 	})
 
+	// Overwriting an unconfirmed verification is how a re-upload corrects a typo, but it is also a way
+	// to rewrite the KYC answer of a receiver belonging to another distribution account. Uploads may
+	// only overwrite receivers their own account can already reach.
+	t.Run("failure - unconfirmed verification of another distribution account's receiver", func(t *testing.T) {
+		defer cleanup()
+		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
+
+		var otherWalletID string
+		require.NoError(t, dbTx.GetContext(ctx, &otherWalletID, `
+			INSERT INTO distribution_wallets (name, distribution_account_type)
+			VALUES ('instr-other-account', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
+
+		foreignReceiver := CreateReceiverFixture(t, ctx, dbTx, &Receiver{
+			PhoneNumber:    smsInstruction1.Phone,
+			SourceWalletID: otherWalletID,
+		})
+		CreateReceiverVerificationFixture(t, ctx, dbTx, ReceiverVerificationInsert{
+			ReceiverID:        foreignReceiver.ID,
+			VerificationField: VerificationTypeDateOfBirth,
+			VerificationValue: "1985-05-05",
+		})
+
+		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            smsInstructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
+		require.ErrorIs(t, err, ErrReceiverVerificationMismatch)
+
+		verifications, getErr := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{foreignReceiver.ID}, VerificationTypeDateOfBirth)
+		require.NoError(t, getErr)
+		require.Len(t, verifications, 1)
+		assert.True(t, CompareVerificationValue(verifications[0].HashedValue, "1985-05-05"), "the stored KYC answer must survive")
+	})
+
 	t.Run("success - existing receiver wallet", func(t *testing.T) {
 		defer cleanup()
 		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)

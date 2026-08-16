@@ -577,6 +577,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
+				AuthManager:        authManager,
 			}
 
 			r.With(middleware.RequirePermission(

@@ -53,6 +53,11 @@ const (
 	// FilterKeySourceWalletIDs restricts results to the given distribution wallets —
 	// membership-filtered read visibility. Value type: []string.
 	FilterKeySourceWalletIDs FilterKey = "source_wallet_ids"
+	// FilterKeyStatsSourceWalletIDs restricts a receiver's payment counters to the given
+	// distribution wallets, so the totals match the payments the caller can actually see. It is
+	// separate from FilterKeySourceWalletIDs because it narrows the counters on a row, never which
+	// rows come back. Value type: []string.
+	FilterKeyStatsSourceWalletIDs FilterKey = "stats_source_wallet_ids"
 )
 
 func (fk FilterKey) Equals() string {

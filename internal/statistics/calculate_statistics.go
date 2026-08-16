@@ -285,8 +285,8 @@ func getTotalReceivers(ctx context.Context, sqlExec db.SQLExecuter, disbursement
 		query += " JOIN payments p ON p.receiver_id = r.id WHERE p.disbursement_id = $1"
 		args = append(args, disbursementID)
 	} else if walletIDs != nil {
-		query += " WHERE EXISTS (SELECT 1 FROM payments p WHERE p.receiver_id = r.id AND p.source_wallet_id = ANY($1))"
-		args = append(args, pq.Array(walletIDs))
+		query = sqlExec.Rebind(query + " WHERE " + data.ReceiverInScopeCondition)
+		args = append(args, data.ReceiverInScopeArgs(walletIDs)...)
 	}
 
 	var totalReceivers int64

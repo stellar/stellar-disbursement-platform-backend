@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Speed up test DB setup via template cloning to end flaky CI timeout [#1160](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1160) 
 - Migrations only soft-delete Vibrant Assist when it has no receiver wallets [#1162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1162)
 - Harden MFA code validation and device trust. [#1177](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1177)
+- Fix and harden distribution-account scoping on receiver reads and writes. [#1186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1186)
 
 ### Security and Dependencies
 

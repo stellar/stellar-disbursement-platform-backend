@@ -227,6 +227,7 @@ func (e ExportHandler) ExportReceivers(rw http.ResponseWriter, r *http.Request) 
 	}
 	if scope != nil {
 		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+		queryParams.Filters[data.FilterKeyStatsSourceWalletIDs] = scope
 	}
 
 	receivers, err := e.Models.Receiver.GetAll(ctx, e.Models.DBConnectionPool, queryParams, data.QueryTypeSelectAll)

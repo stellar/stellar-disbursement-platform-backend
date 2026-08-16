@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
 
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -56,25 +55,22 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	response, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *GetReceiverResponse, innerErr error) {
-		receiver, innerErr := rh.Models.Receiver.Get(ctx, dbTx, receiverID)
-		if innerErr == nil {
-			scope, scopeHTTPErr := resolveWalletReadScope(ctx, rh.AuthManager, rh.Models)
-			if scopeHTTPErr != nil {
-				return nil, fmt.Errorf("resolving wallet scope: %w", scopeHTTPErr)
-			}
-			if scope != nil {
-				var visible bool
-				if visErr := dbTx.GetContext(ctx, &visible, `
-					SELECT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = $1 AND pw.source_wallet_id = ANY($2))
-						OR NOT EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = $1)`,
-					receiverID, pq.Array(scope)); visErr != nil {
-					return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
-				}
-				if !visible {
-					return nil, data.ErrRecordNotFound
-				}
-			}
+		// Two different questions. Visibility is about membership and never narrows with the account
+		// picker, or an Owner would 404 on a receiver outside the selected account. The counters
+		// follow the picker, so the totals match the payment list rendered beneath them.
+		scope, scopeHTTPErr := resolveWalletReadScope(ctx, rh.AuthManager, rh.Models)
+		if scopeHTTPErr != nil {
+			return nil, fmt.Errorf("resolving wallet scope: %w", scopeHTTPErr)
 		}
+		visible, visErr := rh.Models.Receiver.IsInScope(ctx, dbTx, receiverID, scope)
+		if visErr != nil {
+			return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
+		}
+		if !visible {
+			return nil, data.ErrRecordNotFound
+		}
+
+		receiver, innerErr := rh.Models.Receiver.GetWithStatsScope(ctx, dbTx, receiverID, narrowScopeToSelectedWallet(scope, r))
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting receiver by ID: %w", innerErr)
 		}
@@ -130,6 +126,7 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope != nil {
 		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+		queryParams.Filters[data.FilterKeyStatsSourceWalletIDs] = scope
 	}
 
 	httpResponse, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*httpresponse.PaginatedResponse, error) {
@@ -192,15 +189,24 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 		return
 	}
 
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, rh.AuthManager, rh.Models,
+		data.FinancialControllerUserRole, data.BusinessUserRole, data.InitiatorUserRole,
+		data.ApproverUserRole, data.DeveloperUserRole)
+	if walletErr != nil {
+		walletErr.Render(rw)
+		return
+	}
+
 	var response *GetReceiverResponse
 	response, err = db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {
 		var txErr error
 
 		// Step 1: Prepare the receiver data for insertion into the database
 		receiverInsert := data.ReceiverInsert{
-			Email:       &req.Email,
-			PhoneNumber: &req.PhoneNumber,
-			ExternalID:  &req.ExternalID,
+			Email:          &req.Email,
+			PhoneNumber:    &req.PhoneNumber,
+			ExternalID:     &req.ExternalID,
+			SourceWalletID: sourceWallet.ID,
 		}
 
 		if req.Email == "" {
