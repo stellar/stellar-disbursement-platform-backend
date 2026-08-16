@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go-stellar-sdk/keypair"
@@ -24,7 +25,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
+
+// rwOwnerAuthMock is the tenant-wide Owner these tests act as: they cover receiver wallet handler
+// logic, not scoping, which receiver_visibility_test.go covers.
+func rwOwnerAuthMock(ctx context.Context) (*auth.AuthManagerMock, context.Context) {
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, "rw-owner").
+		Return(&auth.User{ID: "rw-owner", IsOwner: true}, nil).Maybe()
+	return authManagerMock, sdpcontext.SetUserIDInContext(ctx, "rw-owner")
+}
 
 func Test_RetryInvitation(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -38,9 +49,10 @@ func Test_RetryInvitation(t *testing.T) {
 	require.NoError(t, err)
 	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+	authManagerMock, ctx := rwOwnerAuthMock(ctx)
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
-		handler := ReceiverWalletsHandler{Models: models}
+		handler := ReceiverWalletsHandler{Models: models, AuthManager: authManagerMock}
 		r := chi.NewRouter()
 		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
 
@@ -58,7 +70,8 @@ func Test_RetryInvitation(t *testing.T) {
 
 	t.Run("successfuly retry invitation", func(t *testing.T) {
 		handler := ReceiverWalletsHandler{
-			Models: models,
+			Models:      models,
+			AuthManager: authManagerMock,
 		}
 		r := chi.NewRouter()
 		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
@@ -97,7 +110,7 @@ func Test_ReceiverWalletsHandler_PatchReceiverWalletStatus(t *testing.T) {
 		expectedJSON   string
 	}
 
-	ctx := context.Background()
+	authManagerMock, ctx := rwOwnerAuthMock(context.Background())
 
 	tests := []TestCase{
 		{
@@ -273,7 +286,7 @@ func Test_ReceiverWalletsHandler_PatchReceiverWalletStatus(t *testing.T) {
 
 			models, receiverWalletID := tc.setup(ctx, t)
 
-			handler := ReceiverWalletsHandler{Models: models}
+			handler := ReceiverWalletsHandler{Models: models, AuthManager: authManagerMock}
 			router := chi.NewRouter()
 			router.Patch("/receivers/wallets/{receiver_wallet_id}/status", handler.PatchReceiverWalletStatus)
 
@@ -326,7 +339,8 @@ func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *
 	rw1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, userManagedWallet.ID, data.DraftReceiversWalletStatus)
 	rw2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
-	handler := ReceiverWalletsHandler{Models: models}
+	authManagerMock, ctx := rwOwnerAuthMock(ctx)
+	handler := ReceiverWalletsHandler{Models: models, AuthManager: authManagerMock}
 	router := chi.NewRouter()
 	router.Patch("/receivers/{receiver_id}/wallets/{receiver_wallet_id}", handler.PatchReceiverWallet)
 
@@ -416,7 +430,8 @@ func Test_ReceiverwalletsHandler_PatchReceiverWallet_MemoValidation(t *testing.T
 	tnt := schema.Tenant{ID: "tenant-id"}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
 
-	handler := ReceiverWalletsHandler{Models: models}
+	authManagerMock, ctx := rwOwnerAuthMock(ctx)
+	handler := ReceiverWalletsHandler{Models: models, AuthManager: authManagerMock}
 	router := chi.NewRouter()
 	router.Patch("/receivers/{receiver_id}/wallets/{receiver_wallet_id}", handler.PatchReceiverWallet)
 

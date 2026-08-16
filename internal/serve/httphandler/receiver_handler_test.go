@@ -1858,6 +1858,7 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 			require.NoError(t, err)
 
 			req := httptest.NewRequest("POST", "/receivers", bytes.NewBuffer(reqBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -2014,6 +2015,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+			data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
 			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
@@ -2022,6 +2024,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 			require.NoError(t, err)
 
 			req, err := http.NewRequest("POST", "/receivers", bytes.NewBuffer(jsonBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -2049,6 +2052,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 
 	ctx := context.Background()
 	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	handler := &ReceiverHandler{
 		Models:           models,
@@ -2151,6 +2155,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 			require.NoError(t, err)
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -2170,6 +2175,7 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 
 	ctx := context.Background()
 	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	handler := &ReceiverHandler{
 		Models:           models,
@@ -2236,6 +2242,7 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 			require.NoError(t, err)
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -2265,6 +2272,7 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 
 				// Clean up
 				data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+				data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 			}
 		})
 	}

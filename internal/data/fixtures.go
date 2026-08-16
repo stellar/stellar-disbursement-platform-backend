@@ -295,23 +295,28 @@ func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		r.UpdatedAt = &now
 	}
 
+	if r.SourceWalletID == "" {
+		r.SourceWalletID = EnsureDefaultDistributionWalletFixture(t, ctx, sqlExec).ID
+	}
+
 	const query = `
 		INSERT INTO receivers
-			(email, phone_number, external_id, created_at, updated_at)
+			(email, phone_number, external_id, created_at, updated_at, source_wallet_id)
 		VALUES
-			($1, $2, $3, $4, $5)
+			($1, $2, $3, $4, $5, $6)
 		RETURNING
-			id, email, phone_number, external_id, created_at, updated_at
+			id, email, phone_number, external_id, created_at, updated_at, source_wallet_id
 	`
 
 	var receiver Receiver
-	err = sqlExec.QueryRowxContext(ctx, query, r.Email, r.PhoneNumber, r.ExternalID, r.CreatedAt, r.UpdatedAt).Scan(
+	err = sqlExec.QueryRowxContext(ctx, query, r.Email, r.PhoneNumber, r.ExternalID, r.CreatedAt, r.UpdatedAt, r.SourceWalletID).Scan(
 		&receiver.ID,
 		&receiver.Email,
 		&receiver.PhoneNumber,
 		&receiver.ExternalID,
 		&receiver.CreatedAt,
 		&receiver.UpdatedAt,
+		&receiver.SourceWalletID,
 	)
 	require.NoError(t, err)
 
@@ -327,16 +332,20 @@ func InsertReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		r.ExternalID = &randString
 	}
 
+	if r.SourceWalletID == "" {
+		r.SourceWalletID = EnsureDefaultDistributionWalletFixture(t, ctx, sqlExec).ID
+	}
+
 	query := `
 		INSERT INTO receivers
-			(email, phone_number, external_id)
+			(email, phone_number, external_id, source_wallet_id)
 		VALUES
-			($1, $2, $3)
+			($1, $2, $3, $4)
 		RETURNING
 			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
-	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalID)
+	err := sqlExec.GetContext(ctx, &receiver, query, r.Email, r.PhoneNumber, r.ExternalID, r.SourceWalletID)
 	require.NoError(t, err)
 
 	return &receiver

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stellar/go-stellar-sdk/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
@@ -51,6 +52,26 @@ func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, m
 	return scope, nil
 }
 
+// ensureReceiverInScope gates a receiver-scoped action on the caller's wallet scope, using the same
+// derivation the receiver reads filter with (data.ReceiverInScopeCondition). Outside the scope it
+// answers 404, never 403 — existence is not disclosed, matching GetReceiver.
+func ensureReceiverInScope(ctx context.Context, authManager auth.AuthManager, models *data.Models, sqlExec db.SQLExecuter, receiverID string) *httperror.HTTPError {
+	scope, scopeErr := resolveWalletReadScope(ctx, authManager, models)
+	if scopeErr != nil {
+		return scopeErr
+	}
+
+	inScope, err := models.Receiver.IsInScope(ctx, sqlExec, receiverID, scope)
+	if err != nil {
+		return httperror.InternalError(ctx, "Cannot resolve receiver scope", err, nil)
+	}
+	if !inScope {
+		return httperror.NotFound("Receiver not found", nil, nil)
+	}
+
+	return nil
+}
+
 // walletInReadScope reports whether a wallet is visible within the resolved scope. Callers
 // must respond with 404 (not 403) on individual reads outside the scope — per the read-leakage
 // rules, existence is never disclosed.
@@ -76,17 +97,21 @@ func resolveWalletListScope(ctx context.Context, req *http.Request, authManager 
 		return nil, httpErr
 	}
 
+	return narrowScopeToSelectedWallet(visibility, req), nil
+}
+
+func narrowScopeToSelectedWallet(visibility []string, req *http.Request) []string {
 	headerWalletID := req.Header.Get(XWalletIDHeader)
 	if headerWalletID == "" {
-		return visibility, nil
+		return visibility
 	}
 
 	// visibility == nil means Owner (may see every account); otherwise the wallet must be in the
 	// member's set.
 	if visibility == nil || slices.Contains(visibility, headerWalletID) {
-		return []string{headerWalletID}, nil
+		return []string{headerWalletID}
 	}
-	return []string{}, nil
+	return []string{}
 }
 
 // ensureWalletActionAllowed gates a state transition on the caller's wallet membership

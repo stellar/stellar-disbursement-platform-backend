@@ -309,7 +309,8 @@ func Test_UpdateReceiverHandler_409(t *testing.T) {
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserByID", mock.Anything, "my-token").Return("my-user-id", nil)
+	authManager.On("GetUserByID", mock.Anything, "my-user-id").
+		Return(&auth.User{ID: "my-user-id", IsOwner: true}, nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -388,7 +389,8 @@ func Test_UpdateReceiverHandler_200ok_updateReceiverFields(t *testing.T) {
 
 	// setup
 	authManager := &auth.AuthManagerMock{}
-	authManager.On("GetUserByID", mock.Anything, "my-user-id").Return("my-user-id", nil)
+	authManager.On("GetUserByID", mock.Anything, "my-user-id").
+		Return(&auth.User{ID: "my-user-id", IsOwner: true}, nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -512,6 +514,8 @@ func Test_UpdateReceiverHandler_200ok_upsertVerificationFields(t *testing.T) {
 	// setup
 	authManager := &auth.AuthManagerMock{}
 	authManager.On("GetUserID", mock.Anything, "my-user-id").Return("my-user-id", nil)
+	authManager.On("GetUserByID", mock.Anything, "my-user-id").
+		Return(&auth.User{ID: "my-user-id", IsOwner: true}, nil)
 	handler := &UpdateReceiverHandler{
 		AuthManager:      authManager,
 		Models:           models,
@@ -653,4 +657,140 @@ func getConnectionPool(t *testing.T) db.DBConnectionPool {
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Close() })
 	return pool
+}
+
+// Test_UpdateReceiverHandler_ContactFreeze covers the rule that contact details are immutable while
+// the receiver is still owed money. The invitation is rendered from the receiver row at send time,
+// so an edit made before it goes out redirects the registration link. Verification stays editable.
+func Test_UpdateReceiverHandler_ContactFreeze(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	wallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	owner := &auth.User{ID: "freeze-owner", Email: "o@freeze.test", IsOwner: true}
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil).Maybe()
+
+	handler := UpdateReceiverHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
+	r := chi.NewRouter()
+	r.Patch("/receivers/{id}", handler.UpdateReceiver)
+
+	patch := func(receiverID, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/receivers/%s", receiverID), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, owner.ID))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr
+	}
+
+	// receiverWithPayment returns a receiver holding one payment in the given status.
+	receiverWithPayment := func(name string, status data.PaymentStatus) *data.Receiver {
+		d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: name, SourceWalletID: wallet.ID, Status: data.StartedDisbursementStatus,
+		})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{SourceWalletID: wallet.ID})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, d.Wallet.ID, data.ReadyReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: d, Asset: *d.Asset, Amount: "3", Status: status,
+		})
+		return receiver
+	}
+
+	// DRAFT is the window before the invitation is sent, which is exactly when a redirected contact
+	// costs the receiver their payment without leaving a trace.
+	for _, status := range data.PaymentNonTerminalStatuses() {
+		t.Run(fmt.Sprintf("contact is frozen while a payment is %s", status), func(t *testing.T) {
+			receiver := receiverWithPayment(fmt.Sprintf("freeze-%s", status), status)
+
+			rr := patch(receiver.ID, `{"email":"attacker@evil.test"}`)
+			require.Equal(t, http.StatusConflict, rr.Code, rr.Body.String())
+
+			reloaded, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+			require.NoError(t, getErr)
+			assert.Equal(t, receiver.Email, reloaded.Email)
+		})
+	}
+
+	// Correcting a verification value is how an operator rescues a receiver who has burned through
+	// MaxAttemptsAllowed, and such a receiver always has a payment waiting — that is why they were
+	// trying to register. Freezing this would remove the only recovery path.
+	t.Run("KYC stays editable while in flight and clears the attempt lockout", func(t *testing.T) {
+		receiver := receiverWithPayment("freeze-kyc", data.ReadyPaymentStatus)
+		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		_, execErr := dbConnectionPool.ExecContext(ctx,
+			`UPDATE receiver_verifications SET attempts = $1 WHERE receiver_id = $2`,
+			data.MaxAttemptsAllowed, receiver.ID)
+		require.NoError(t, execErr)
+
+		rr := patch(receiver.ID, `{"date_of_birth":"1999-01-01"}`)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		verifications, getErr := models.ReceiverVerification.GetByReceiverIDsAndVerificationField(
+			ctx, dbConnectionPool, []string{receiver.ID}, data.VerificationTypeDateOfBirth)
+		require.NoError(t, getErr)
+		require.Len(t, verifications, 1)
+		assert.True(t, data.CompareVerificationValue(verifications[0].HashedValue, "1999-01-01"), "the corrected value must be stored")
+		assert.Zero(t, verifications[0].Attempts, "the edit must clear the lockout, or the receiver stays stuck")
+	})
+
+	// The stored value is often already correct and the receiver simply mistyped it until they were
+	// locked out, so re-saving the same value has to be enough to unlock them.
+	t.Run("re-saving the same verification value still clears the lockout", func(t *testing.T) {
+		receiver := receiverWithPayment("freeze-kyc-same", data.ReadyPaymentStatus)
+		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		_, execErr := dbConnectionPool.ExecContext(ctx,
+			`UPDATE receiver_verifications SET attempts = $1 WHERE receiver_id = $2`,
+			data.MaxAttemptsAllowed, receiver.ID)
+		require.NoError(t, execErr)
+
+		rr := patch(receiver.ID, `{"date_of_birth":"1990-01-01"}`)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		verifications, getErr := models.ReceiverVerification.GetByReceiverIDsAndVerificationField(
+			ctx, dbConnectionPool, []string{receiver.ID}, data.VerificationTypeDateOfBirth)
+		require.NoError(t, getErr)
+		require.Len(t, verifications, 1)
+		assert.True(t, data.CompareVerificationValue(verifications[0].HashedValue, "1990-01-01"))
+		assert.Zero(t, verifications[0].Attempts, "an unchanged value must still unlock the receiver")
+	})
+
+	// A failed payment is often caused by a wrong contact, so that is precisely when the operator
+	// needs to correct it.
+	t.Run("a failed payment does not freeze the receiver", func(t *testing.T) {
+		receiver := receiverWithPayment("freeze-failed", data.FailedPaymentStatus)
+
+		rr := patch(receiver.ID, `{"email":"corrected@freeze.test"}`)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		reloaded, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, "corrected@freeze.test", reloaded.Email)
+	})
+
+	t.Run("external_id stays editable while in flight", func(t *testing.T) {
+		receiver := receiverWithPayment("freeze-external", data.PendingPaymentStatus)
+
+		rr := patch(receiver.ID, `{"external_id":"REBRANDED"}`)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		reloaded, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, "REBRANDED", reloaded.ExternalID)
+	})
 }

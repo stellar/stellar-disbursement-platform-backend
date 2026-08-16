@@ -89,7 +89,28 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 		return
 	}
 
+	if scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.DBConnectionPool, receiverID); scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+
 	receiverVerifications := createVerificationInsert(&reqBody, receiverID)
+
+	// The invitation is rendered from the receiver row when it is sent, so changing the contact while
+	// the receiver is still owed money redirects the registration link. Verification stays editable:
+	// correcting it is how an operator recovers a receiver who cannot get through registration.
+	if reqBody.Email != "" || reqBody.PhoneNumber != "" {
+		inFlight, checkErr := h.Models.Receiver.HasNonTerminalPayments(ctx, h.DBConnectionPool, receiverID)
+		if checkErr != nil {
+			httperror.InternalError(ctx, "Cannot check the receiver's payments", checkErr, nil).Render(rw)
+			return
+		}
+		if inFlight {
+			httperror.Conflict("Cannot edit contact details while the receiver has payments in flight.", nil, nil).Render(rw)
+			return
+		}
+	}
+
 	receiver, err := db.RunInTransactionWithResult(ctx, h.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *data.Receiver, innerErr error) {
 		for _, rv := range receiverVerifications {
 			innerErr = h.Models.ReceiverVerification.UpsertVerificationValue(

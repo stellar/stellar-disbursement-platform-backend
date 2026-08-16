@@ -627,9 +627,10 @@ func createTestReceiver(t *testing.T, dbPool db.DBConnectionPool) (*data.Receive
 	externalIDPtr := &externalID
 
 	insert := data.ReceiverInsert{
-		PhoneNumber: phonePtr,
-		Email:       emailPtr,
-		ExternalID:  externalIDPtr,
+		PhoneNumber:    phonePtr,
+		Email:          emailPtr,
+		ExternalID:     externalIDPtr,
+		SourceWalletID: data.EnsureDefaultDistributionWalletFixture(t, ctx, dbPool).ID,
 	}
 
 	return models.Receiver.Insert(ctx, dbPool, insert)

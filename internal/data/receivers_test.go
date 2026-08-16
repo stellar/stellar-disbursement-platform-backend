@@ -31,6 +31,7 @@ func Test_ReceiverColumnNames(t *testing.T) {
 			expected: strings.Join([]string{
 				`id`,
 				`external_id`,
+				`source_wallet_id`,
 				`created_at`,
 				`updated_at`,
 				`COALESCE(phone_number, '') AS "phone_number"`,
@@ -43,6 +44,7 @@ func Test_ReceiverColumnNames(t *testing.T) {
 			expected: strings.Join([]string{
 				`id AS "receiver.id"`,
 				`external_id AS "receiver.external_id"`,
+				`source_wallet_id AS "receiver.source_wallet_id"`,
 				`created_at AS "receiver.created_at"`,
 				`updated_at AS "receiver.updated_at"`,
 				`COALESCE(phone_number, '') AS "receiver.phone_number"`,
@@ -55,6 +57,7 @@ func Test_ReceiverColumnNames(t *testing.T) {
 			expected: strings.Join([]string{
 				`r.id AS "receiver.id"`,
 				`r.external_id AS "receiver.external_id"`,
+				`r.source_wallet_id AS "receiver.source_wallet_id"`,
 				`r.created_at AS "receiver.created_at"`,
 				`r.updated_at AS "receiver.updated_at"`,
 				`COALESCE(r.phone_number, '') AS "receiver.phone_number"`,
@@ -142,12 +145,13 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		require.NoError(t, err)
 
 		expected := Receiver{
-			ID:          receiver.ID,
-			ExternalID:  receiver.ExternalID,
-			Email:       receiver.Email,
-			PhoneNumber: receiver.PhoneNumber,
-			CreatedAt:   receiver.CreatedAt,
-			UpdatedAt:   receiver.UpdatedAt,
+			ID:             receiver.ID,
+			ExternalID:     receiver.ExternalID,
+			Email:          receiver.Email,
+			PhoneNumber:    receiver.PhoneNumber,
+			SourceWalletID: receiver.SourceWalletID,
+			CreatedAt:      receiver.CreatedAt,
+			UpdatedAt:      receiver.UpdatedAt,
 			ReceiverStats: ReceiverStats{
 				TotalPayments:      "0",
 				SuccessfulPayments: "0",
@@ -183,12 +187,13 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		actual, err := receiverModel.Get(ctx, dbTx, receiver.ID)
 		require.NoError(t, err)
 		expected := Receiver{
-			ID:          receiver.ID,
-			ExternalID:  receiver.ExternalID,
-			Email:       receiver.Email,
-			PhoneNumber: receiver.PhoneNumber,
-			CreatedAt:   receiver.CreatedAt,
-			UpdatedAt:   receiver.UpdatedAt,
+			ID:             receiver.ID,
+			ExternalID:     receiver.ExternalID,
+			Email:          receiver.Email,
+			PhoneNumber:    receiver.PhoneNumber,
+			SourceWalletID: receiver.SourceWalletID,
+			CreatedAt:      receiver.CreatedAt,
+			UpdatedAt:      receiver.UpdatedAt,
 			ReceiverStats: ReceiverStats{
 				TotalPayments:      "1",
 				SuccessfulPayments: "0",
@@ -240,12 +245,13 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		actual, err := receiverModel.Get(ctx, dbTx, receiver.ID)
 		require.NoError(t, err)
 		expected := Receiver{
-			ID:          receiver.ID,
-			ExternalID:  receiver.ExternalID,
-			Email:       receiver.Email,
-			PhoneNumber: receiver.PhoneNumber,
-			CreatedAt:   receiver.CreatedAt,
-			UpdatedAt:   receiver.UpdatedAt,
+			ID:             receiver.ID,
+			ExternalID:     receiver.ExternalID,
+			Email:          receiver.Email,
+			PhoneNumber:    receiver.PhoneNumber,
+			SourceWalletID: receiver.SourceWalletID,
+			CreatedAt:      receiver.CreatedAt,
+			UpdatedAt:      receiver.UpdatedAt,
 			ReceiverStats: ReceiverStats{
 				TotalPayments:      "2",
 				SuccessfulPayments: "1",
@@ -300,12 +306,13 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		actual, err := receiverModel.Get(ctx, dbTx, receiver.ID)
 		require.NoError(t, err)
 		expected := Receiver{
-			ID:          receiver.ID,
-			ExternalID:  receiver.ExternalID,
-			Email:       receiver.Email,
-			PhoneNumber: receiver.PhoneNumber,
-			CreatedAt:   receiver.CreatedAt,
-			UpdatedAt:   receiver.UpdatedAt,
+			ID:             receiver.ID,
+			ExternalID:     receiver.ExternalID,
+			Email:          receiver.Email,
+			PhoneNumber:    receiver.PhoneNumber,
+			SourceWalletID: receiver.SourceWalletID,
+			CreatedAt:      receiver.CreatedAt,
+			UpdatedAt:      receiver.UpdatedAt,
 			ReceiverStats: ReceiverStats{
 				TotalPayments:      "2",
 				SuccessfulPayments: "1",
@@ -359,12 +366,13 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		actual, err := receiverModel.Get(ctx, dbTx, receiver.ID)
 		require.NoError(t, err)
 		expected := Receiver{
-			ID:          receiver.ID,
-			ExternalID:  receiver.ExternalID,
-			Email:       receiver.Email,
-			PhoneNumber: receiver.PhoneNumber,
-			CreatedAt:   receiver.CreatedAt,
-			UpdatedAt:   receiver.UpdatedAt,
+			ID:             receiver.ID,
+			ExternalID:     receiver.ExternalID,
+			Email:          receiver.Email,
+			PhoneNumber:    receiver.PhoneNumber,
+			SourceWalletID: receiver.SourceWalletID,
+			CreatedAt:      receiver.CreatedAt,
+			UpdatedAt:      receiver.UpdatedAt,
 			ReceiverStats: ReceiverStats{
 				TotalPayments:      "1",
 				SuccessfulPayments: "0",
@@ -422,12 +430,13 @@ func Test_ReceiversModel_Get(t *testing.T) {
 		actual, err := receiverModel.Get(ctx, dbTx, receiver.ID)
 		require.NoError(t, err)
 		expected := Receiver{
-			ID:          receiver.ID,
-			ExternalID:  receiver.ExternalID,
-			Email:       receiver.Email,
-			PhoneNumber: receiver.PhoneNumber,
-			CreatedAt:   receiver.CreatedAt,
-			UpdatedAt:   receiver.UpdatedAt,
+			ID:             receiver.ID,
+			ExternalID:     receiver.ExternalID,
+			Email:          receiver.Email,
+			PhoneNumber:    receiver.PhoneNumber,
+			SourceWalletID: receiver.SourceWalletID,
+			CreatedAt:      receiver.CreatedAt,
+			UpdatedAt:      receiver.UpdatedAt,
 			ReceiverStats: ReceiverStats{
 				TotalPayments:      "2",
 				SuccessfulPayments: "2",
