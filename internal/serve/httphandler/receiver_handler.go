@@ -62,18 +62,15 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 		if scopeHTTPErr != nil {
 			return nil, fmt.Errorf("resolving wallet scope: %w", scopeHTTPErr)
 		}
-		statsScope := narrowScopeToSelectedWallet(scope, r)
-
-		receiver, innerErr := rh.Models.Receiver.GetWithStatsScope(ctx, dbTx, receiverID, statsScope)
-		if innerErr == nil {
-			visible, visErr := rh.Models.Receiver.IsInScope(ctx, dbTx, receiverID, scope)
-			if visErr != nil {
-				return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
-			}
-			if !visible {
-				return nil, data.ErrRecordNotFound
-			}
+		visible, visErr := rh.Models.Receiver.IsInScope(ctx, dbTx, receiverID, scope)
+		if visErr != nil {
+			return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
 		}
+		if !visible {
+			return nil, data.ErrRecordNotFound
+		}
+
+		receiver, innerErr := rh.Models.Receiver.GetWithStatsScope(ctx, dbTx, receiverID, narrowScopeToSelectedWallet(scope, r))
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting receiver by ID: %w", innerErr)
 		}

@@ -91,14 +91,19 @@ func Test_ReceiverScoping_Reads(t *testing.T) {
 	})
 
 	t.Run("individual receiver outside scope is 404 — no disclosure", func(t *testing.T) {
-		rr := doAs(memberA.ID, fmt.Sprintf("/receivers/%s", receiverFromB.ID))
-		assert.Equal(t, http.StatusNotFound, rr.Code)
+		outOfScope := doAs(memberA.ID, fmt.Sprintf("/receivers/%s", receiverFromB.ID))
+		assert.Equal(t, http.StatusNotFound, outOfScope.Code)
 
-		rr = doAs(memberA.ID, fmt.Sprintf("/receivers/%s", receiverFromA.ID))
+		rr := doAs(memberA.ID, fmt.Sprintf("/receivers/%s", receiverFromA.ID))
 		assert.Equal(t, http.StatusOK, rr.Code)
 
 		rr = doAs(owner.ID, fmt.Sprintf("/receivers/%s", receiverFromB.ID))
 		assert.Equal(t, http.StatusOK, rr.Code)
+
+		// Visibility is resolved before the receiver is loaded, so a receiver that is real but out of
+		// reach and one that never existed are both answered by the same check.
+		absent := doAs(memberA.ID, fmt.Sprintf("/receivers/%s", receiverFromB.ID+"-nope"))
+		assert.Equal(t, http.StatusNotFound, absent.Code)
 	})
 
 	// A receiver with no payments belongs to the account it was created under, so its creator can
