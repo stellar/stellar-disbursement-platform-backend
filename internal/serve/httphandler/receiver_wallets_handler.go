@@ -225,11 +225,16 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		// 1: Validate existing receiver wallet
 		currentReceiverWallet, txErr := h.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
 		if txErr != nil {
+			if errors.Is(txErr, data.ErrRecordNotFound) {
+				return nil, httperror.NotFound("receiver wallet not found", txErr, nil)
+			}
 			return nil, fmt.Errorf("getting receiver wallet by ID %s: %w", receiverWalletID, txErr)
 		}
 
+		// Belonging to another receiver answers the same as not existing: the caller is only entitled
+		// to the receiver in the URL, so anything else must not be confirmed.
 		if currentReceiverWallet.Receiver.ID != receiverID {
-			return nil, httperror.BadRequest("Receiver wallet does not belong to the specified receiver", nil, nil)
+			return nil, httperror.NotFound("receiver wallet not found", nil, nil)
 		}
 
 		if !currentReceiverWallet.Wallet.UserManaged {

@@ -783,6 +783,23 @@ func Test_UpdateReceiverHandler_ContactFreeze(t *testing.T) {
 		assert.Equal(t, "corrected@freeze.test", reloaded.Email)
 	})
 
+	// Clients that submit the whole receiver every time resend the current contact unchanged. That is
+	// not an edit, so it must not block them from updating the rest.
+	t.Run("resending the unchanged contact is not a contact edit", func(t *testing.T) {
+		receiver := receiverWithPayment("freeze-noop", data.ReadyPaymentStatus)
+
+		body := fmt.Sprintf(`{"email":%q,"phone_number":%q,"date_of_birth":"1995-06-07"}`,
+			receiver.Email, receiver.PhoneNumber)
+		rr := patch(receiver.ID, body)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		verifications, getErr := models.ReceiverVerification.GetByReceiverIDsAndVerificationField(
+			ctx, dbConnectionPool, []string{receiver.ID}, data.VerificationTypeDateOfBirth)
+		require.NoError(t, getErr)
+		require.Len(t, verifications, 1)
+		assert.True(t, data.CompareVerificationValue(verifications[0].HashedValue, "1995-06-07"))
+	})
+
 	t.Run("external_id stays editable while in flight", func(t *testing.T) {
 		receiver := receiverWithPayment("freeze-external", data.PendingPaymentStatus)
 

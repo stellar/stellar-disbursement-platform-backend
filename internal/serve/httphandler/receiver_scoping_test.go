@@ -343,3 +343,80 @@ func Test_ReceiverScoping_Stats(t *testing.T) {
 		VALUES ('stats-scope-c', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 	assert.Equal(t, "0", totalPaymentsFor(owner.ID, walletCID), "an account that never paid them counts zero")
 }
+
+// Test_ReceiverScoping_APIKey covers the API key branch of the scope resolution, which is separate
+// code from the JWT branch: it answers from the key's own stored scope and never loads a user, so a
+// key outlives its creator. The AuthManager mock below has no expectations on purpose — if the key
+// path ever falls back to resolving a user, these tests panic rather than quietly passing.
+func Test_ReceiverScoping_APIKey(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	walletA := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	var walletBID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type)
+		VALUES ('apikey-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
+
+	receiverA := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{SourceWalletID: walletA.ID})
+	receiverB := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{SourceWalletID: walletBID})
+
+	authManagerMock := &auth.AuthManagerMock{}
+	readHandler := ReceiverHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
+	writeHandler := UpdateReceiverHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
+	r := chi.NewRouter()
+	r.Get("/receivers/{id}", readHandler.GetReceiver)
+	r.Patch("/receivers/{id}", writeHandler.UpdateReceiver)
+
+	// Mirrors api_keys_middleware: the key carries the scope, and its creator's id rides along as the
+	// author of any write. The scope must come from the key, never from that user.
+	asKey := func(method, path, body string, walletIDs []string) *httptest.ResponseRecorder {
+		key := &data.APIKey{
+			ID: "apikey-1", Name: "scoped key",
+			DistributionWalletIDs: walletIDs,
+			CreatedBy:             "apikey-creator",
+		}
+		reqCtx := sdpcontext.SetAPIKeyInContext(ctx, key)
+		reqCtx = sdpcontext.SetUserIDInContext(reqCtx, key.CreatedBy)
+
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(reqCtx)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr
+	}
+
+	scopedToA := []string{walletA.ID}
+
+	t.Run("a key reads only the receivers its own scope reaches", func(t *testing.T) {
+		assert.Equal(t, http.StatusOK, asKey(http.MethodGet, fmt.Sprintf("/receivers/%s", receiverA.ID), "", scopedToA).Code)
+		assert.Equal(t, http.StatusNotFound, asKey(http.MethodGet, fmt.Sprintf("/receivers/%s", receiverB.ID), "", scopedToA).Code)
+	})
+
+	t.Run("a key writes only to the receivers its own scope reaches", func(t *testing.T) {
+		rr := asKey(http.MethodPatch, fmt.Sprintf("/receivers/%s", receiverB.ID), `{"email":"apikey@evil.test"}`, scopedToA)
+		require.Equal(t, http.StatusNotFound, rr.Code)
+
+		reloaded, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverB.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, receiverB.Email, reloaded.Email)
+
+		assert.Equal(t, http.StatusOK,
+			asKey(http.MethodPatch, fmt.Sprintf("/receivers/%s", receiverA.ID), `{"email":"apikey-ok@test.local"}`, scopedToA).Code)
+	})
+
+	// WalletScope() returns an empty slice rather than nil for a key with no accounts, so a key never
+	// inherits the Owner's tenant-wide view the way a nil scope would.
+	t.Run("a key naming no accounts reaches nothing", func(t *testing.T) {
+		assert.Equal(t, http.StatusNotFound, asKey(http.MethodGet, fmt.Sprintf("/receivers/%s", receiverA.ID), "", nil).Code)
+		assert.Equal(t, http.StatusNotFound, asKey(http.MethodGet, fmt.Sprintf("/receivers/%s", receiverB.ID), "", nil).Code)
+	})
+}

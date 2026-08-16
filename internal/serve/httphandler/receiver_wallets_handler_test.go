@@ -397,8 +397,20 @@ func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 
-	t.Run("receiver_wallet_id doesn't belong to receiver_id returns error", func(t *testing.T) {
+	// A receiver wallet belonging to someone else answers exactly as one that does not exist, so the
+	// pairing cannot be used to confirm which receiver wallet ids are real.
+	t.Run("receiver_wallet_id doesn't belong to receiver_id is indistinguishable from absent", func(t *testing.T) {
 		reqBody := fmt.Sprintf(`{"stellar_address": "%s"}`, rw2.StellarAddress)
+
+		absentReq, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+			fmt.Sprintf("/receivers/%s/wallets/%s", receiver1.ID, "3f1b0d5e-0000-4000-8000-000000000000"),
+			strings.NewReader(reqBody))
+		require.NoError(t, err)
+		absentReq.Header.Set("Content-Type", "application/json")
+		absentRR := httptest.NewRecorder()
+		router.ServeHTTP(absentRR, absentReq)
+		require.Equal(t, http.StatusNotFound, absentRR.Code)
+
 		route := fmt.Sprintf("/receivers/%s/wallets/%s", receiver1.ID, rw2.ID)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, strings.NewReader(reqBody))
@@ -409,12 +421,12 @@ func Test_ReceiverWalletsHandler_PatchReceiverWallet_DuplicateStellarAddress(t *
 		router.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Contains(t, string(respBody), "Receiver wallet does not belong to the specified receiver")
+		assert.JSONEq(t, absentRR.Body.String(), string(respBody))
 	})
 }
 

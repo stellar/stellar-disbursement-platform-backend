@@ -79,7 +79,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	}
 
 	receiverID := chi.URLParam(req, "id")
-	_, err = h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
+	currentReceiver, err := h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("Receiver not found", err, nil).Render(rw)
@@ -99,7 +99,11 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	// The invitation is rendered from the receiver row when it is sent, so changing the contact while
 	// the receiver is still owed money redirects the registration link. Verification stays editable:
 	// correcting it is how an operator recovers a receiver who cannot get through registration.
-	if reqBody.Email != "" || reqBody.PhoneNumber != "" {
+	// Resending an unchanged contact is not a change, so clients that submit the whole receiver every
+	// time are not blocked from editing the rest of it.
+	contactChanged := (reqBody.Email != "" && reqBody.Email != currentReceiver.Email) ||
+		(reqBody.PhoneNumber != "" && reqBody.PhoneNumber != currentReceiver.PhoneNumber)
+	if contactChanged {
 		inFlight, checkErr := h.Models.Receiver.HasNonTerminalPayments(ctx, h.DBConnectionPool, receiverID)
 		if checkErr != nil {
 			httperror.InternalError(ctx, "Cannot check the receiver's payments", checkErr, nil).Render(rw)
