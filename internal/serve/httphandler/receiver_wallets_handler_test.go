@@ -252,14 +252,15 @@ func Test_ReceiverWalletsHandler_PatchReceiverWalletStatus(t *testing.T) {
 				rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, recv.ID, wallet.ID,
 					data.RegisteredReceiversWalletStatus)
 
-				// close pool so UpdateStatusToReady fails with a generic error
+				// close pool so the first DB call fails — the scope gate's lookup, which now runs
+				// before UpdateStatusToReady
 				dbPool.Close()
 
 				return models, rw.ID
 			},
 			body:           `{"status":"READY"}`,
 			expectedStatus: http.StatusInternalServerError,
-			expectedJSON:   `{"error":"An internal error occurred while processing this request."}`,
+			expectedJSON:   `{"error":"Cannot get receiver wallet"}`,
 		},
 		{
 			name: "200 – happy path, status updated to READY",

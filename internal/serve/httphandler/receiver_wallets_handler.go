@@ -48,7 +48,7 @@ func (h ReceiverWalletsHandler) ensureReceiverWalletInScope(ctx context.Context,
 		if errors.Is(err, data.ErrRecordNotFound) {
 			return httperror.NotFound(notFoundMsg, err, nil)
 		}
-		return httperror.InternalError(ctx, "", fmt.Errorf("getting receiver wallet %s: %w", receiverWalletID, err), nil)
+		return httperror.InternalError(ctx, "Cannot get receiver wallet", fmt.Errorf("getting receiver wallet %s: %w", receiverWalletID, err), nil)
 	}
 
 	scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverWallet.Receiver.ID)

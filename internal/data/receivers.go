@@ -107,11 +107,16 @@ var (
 
 // ReceiverInScopeCondition is the single definition of "this caller may reach this receiver": the
 // account it was created under, or any account that has paid them. Reads filter with it and writes
-// gate on it, so the two can never drift. Takes the wallet id list twice.
+// gate on it, so the two can never drift. Pair it with ReceiverInScopeArgs.
 const ReceiverInScopeCondition = `(
 	r.source_wallet_id = ANY(?)
 	OR EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = r.id AND pw.source_wallet_id = ANY(?))
 )`
+
+// ReceiverInScopeArgs returns the arguments ReceiverInScopeCondition binds, in order.
+func ReceiverInScopeArgs(walletIDs []string) []any {
+	return []any{pq.Array(walletIDs), pq.Array(walletIDs)}
+}
 
 type ReceiverModel struct{}
 
@@ -180,7 +185,7 @@ func (r *ReceiverModel) IsInScope(ctx context.Context, sqlExec db.SQLExecuter, r
 	query := sqlExec.Rebind(`SELECT ` + ReceiverInScopeCondition + ` FROM receivers r WHERE r.id = ?`)
 
 	var inScope bool
-	if err := sqlExec.GetContext(ctx, &inScope, query, pq.Array(scope), pq.Array(scope), receiverID); err != nil {
+	if err := sqlExec.GetContext(ctx, &inScope, query, append(ReceiverInScopeArgs(scope), receiverID)...); err != nil {
 		// A receiver that does not exist is simply not reachable, so callers render it the same as one
 		// they may not reach — the two must not be distinguishable.
 		if errors.Is(err, sql.ErrNoRows) {
@@ -209,7 +214,8 @@ func (r *ReceiverModel) InScopeIDs(ctx context.Context, sqlExec db.SQLExecuter, 
 		WHERE r.id = ANY(?) AND ` + ReceiverInScopeCondition)
 
 	var ids []string
-	if err := sqlExec.SelectContext(ctx, &ids, query, pq.Array(receiverIDs), pq.Array(scope), pq.Array(scope)); err != nil {
+	args := append([]any{pq.Array(receiverIDs)}, ReceiverInScopeArgs(scope)...)
+	if err := sqlExec.SelectContext(ctx, &ids, query, args...); err != nil {
 		return nil, fmt.Errorf("filtering receivers to wallet scope: %w", err)
 	}
 	for _, id := range ids {
@@ -383,7 +389,7 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQL
 	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
 		// Additive: the account the receiver was created under, plus any account that has paid them.
 		// Alias both sides — an unqualified source_wallet_id inside the subquery binds to payments.
-		qb.AddCondition(ReceiverInScopeCondition, pq.Array(walletIDs), pq.Array(walletIDs))
+		qb.AddCondition(ReceiverInScopeCondition, ReceiverInScopeArgs(walletIDs)...)
 	}
 
 	switch queryType {
