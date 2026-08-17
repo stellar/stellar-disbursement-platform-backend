@@ -31,7 +31,7 @@ jobs:
       - name: Install stellar-cli
         uses: stellar/stellar-cli@v27.1.0
         with:
-          version: 27.0.0
+          version: 27.1.0
 
       - name: Build contracts
         shell: bash
