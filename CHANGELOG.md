@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Migrations only soft-delete Vibrant Assist when it has no receiver wallets [#1162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1162)
 - Harden MFA code validation and device trust. [#1177](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1177)
 - Fix and harden distribution-account scoping on receiver reads and writes. [#1186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1186)
+- Fix multi-wallet cutover doc and remove preflight script. [#1187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1187)
 
 ### Security and Dependencies
 
