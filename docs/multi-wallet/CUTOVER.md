@@ -1,4 +1,4 @@
-# Multi-Distribution-Wallet - Cutover Guide
+# Multi-Distribution-Account - Cutover Guide
 
 When you upgrade to 7.0.0, every existing tenant of type `DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT` is mapped to a single **default** distribution account that mirrors the one it already has. Single-account behaviour is preserved, all history is attributed to that account, and no signing key migration is needed; the legacy account keeps signing from the existing `vault`. Nothing changes for a tenant until an Owner adds a second account.
 
