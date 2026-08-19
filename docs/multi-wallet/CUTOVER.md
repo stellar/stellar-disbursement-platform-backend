@@ -107,6 +107,7 @@ Then smoke test that an existing tenant still lists and starts disbursements as 
 For API integrators:
 - When authenticating **with an API key**, tenant-wide endpoints (`/organization`, `/organization/circle-config`, `/distribution-wallets`) require the key to be **minted by an Owner**.
 - The `X-Wallet-Id` **request header** becomes required when creating disbursements, payments and receivers via direct API call, once a tenant has more than one active distribution account. Existing integrations keep working until a second account is added.
+- The payment response field `circle_transfer_request_id` is **renamed to `circle_transaction_id`**, and a new `circle_transaction_type` field (`PAYOUT` or `TRANSFER`) says which Circle API produced it. The old field only ever held Transfers API IDs and was always absent for tenants on the Payouts API; the new one carries whichever ID applies. Affects `GET /payments` and `GET /payments/{id}`.
 
 ## Rollback: destructive once the new code has run
 

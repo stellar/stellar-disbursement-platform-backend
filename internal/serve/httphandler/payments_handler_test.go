@@ -245,7 +245,7 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 		Amount:         "200",
 		Status:         data.DraftPaymentStatus,
 	})
-	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+	payment3 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet: rwReady,
 		Disbursement:   disbursement,
 		Asset:          *asset,
@@ -253,6 +253,7 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 		Status:         data.DraftPaymentStatus,
 	})
 
+	// payment1 is Transfers-backed and payment2 Payouts-backed, in the same account.
 	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
 		IdempotencyKey:   "idempotency-key-1",
 		PaymentID:        payment1.ID,
@@ -260,98 +261,64 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 	})
 
 	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
-		IdempotencyKey:   "idempotency-key-2",
-		PaymentID:        payment2.ID,
-		CircleTransferID: utils.StringPtr("circle-transfer-id-2"),
+		IdempotencyKey: "idempotency-key-2",
+		PaymentID:      payment2.ID,
+		CirclePayoutID: utils.StringPtr("circle-payout-id-2"),
 	})
 
-	testCases := []struct {
-		name          string
-		prepareMocks  func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver)
-		runAssertions func(t *testing.T, responseStatus int, response string)
-	}{
-		{
-			name: "returns error when distribution account resolver fails",
-			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
-				t.Helper()
-
-				mDistributionAccountResolver.
-					On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{}, errors.New("unexpected error")).
-					Once()
-			},
-			runAssertions: func(t *testing.T, responseStatus int, response string) {
-				t.Helper()
-
-				assert.Equal(t, http.StatusInternalServerError, responseStatus)
-				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, response)
-			},
-		},
-		{
-			name: "successfully returns payments with circle transaction IDs",
-			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
-				t.Helper()
-
-				mDistributionAccountResolver.
-					On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
-					Maybe()
-			},
-			runAssertions: func(t *testing.T, responseStatus int, response string) {
-				t.Helper()
-
-				assert.Equal(t, http.StatusOK, responseStatus)
-
-				var actualResponse httpresponse.PaginatedResponse
-				err := json.Unmarshal([]byte(response), &actualResponse)
-				require.NoError(t, err)
-
-				assert.Equal(t, 3, actualResponse.Pagination.Total)
-
-				var payments []data.Payment
-				err = json.Unmarshal(actualResponse.Data, &payments)
-				require.NoError(t, err)
-
-				assert.Len(t, payments, 3)
-				for _, payment := range payments {
-					if payment.ID == payment1.ID {
-						assert.Equal(t, "circle-transfer-id-1", *payment.CircleTransferRequestID)
-					}
-					if payment.ID == payment2.ID {
-						assert.Equal(t, "circle-transfer-id-2", *payment.CircleTransferRequestID)
-					}
-					if payment.ID != payment1.ID && payment.ID != payment2.ID {
-						assert.Nil(t, payment.CircleTransferRequestID)
-					}
-				}
-			},
-		},
+	// No DistributionAccountResolver: the Circle info is resolved per payment row, not per account.
+	h := &PaymentsHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	rr := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodGet, "/payments", nil)
+	require.NoError(t, err)
+	withTestUserCtx(h.GetPayments).ServeHTTP(rr, req)
+	resp := rr.Result()
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 
-			tc.prepareMocks(t, mDistributionAccountResolver)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			h := &PaymentsHandler{
-				Models:                      models,
-				DBConnectionPool:            dbConnectionPool,
-				DistributionAccountResolver: mDistributionAccountResolver,
-				AuthManager:                 newWalletScopeOwnerMock(),
-			}
+	var actualResponse httpresponse.PaginatedResponse
+	require.NoError(t, json.Unmarshal(respBody, &actualResponse))
+	assert.Equal(t, 3, actualResponse.Pagination.Total)
 
-			rr := httptest.NewRecorder()
-			req, err := http.NewRequest(http.MethodGet, "/payments", nil)
-			require.NoError(t, err)
-			withTestUserCtx(h.GetPayments).ServeHTTP(rr, req)
-			resp := rr.Result()
-			defer resp.Body.Close()
-			respBody, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
+	var payments []data.Payment
+	require.NoError(t, json.Unmarshal(actualResponse.Data, &payments))
+	require.Len(t, payments, 3)
 
-			tc.runAssertions(t, resp.StatusCode, string(respBody))
-		})
+	for _, payment := range payments {
+		switch payment.ID {
+		case payment1.ID:
+			assert.Equal(t, "circle-transfer-id-1", *payment.CircleTransactionID)
+			assert.Equal(t, data.CircleTransactionTypeTransfer, *payment.CircleTransactionType)
+		case payment2.ID:
+			assert.Equal(t, "circle-payout-id-2", *payment.CircleTransactionID)
+			assert.Equal(t, data.CircleTransactionTypePayout, *payment.CircleTransactionType)
+		case payment3.ID:
+			assert.Nil(t, payment.CircleTransactionID)
+			assert.Nil(t, payment.CircleTransactionType)
+		}
+	}
+
+	// Assert on the raw keys too: unmarshalling into data.Payment cannot catch a wrong json tag.
+	var rawPayments []map[string]any
+	require.NoError(t, json.Unmarshal(actualResponse.Data, &rawPayments))
+	for _, raw := range rawPayments {
+		switch raw["id"] {
+		case payment2.ID:
+			assert.Equal(t, "circle-payout-id-2", raw["circle_transaction_id"])
+			assert.Equal(t, "PAYOUT", raw["circle_transaction_type"])
+		case payment3.ID:
+			assert.NotContains(t, raw, "circle_transaction_id")
+			assert.NotContains(t, raw, "circle_transaction_type")
+		}
+		assert.NotContains(t, raw, "circle_transfer_request_id")
 	}
 }
 

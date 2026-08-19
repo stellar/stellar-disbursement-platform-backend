@@ -63,24 +63,25 @@ func (e ExportHandler) ExportDisbursements(rw http.ResponseWriter, r *http.Reque
 }
 
 type PaymentCSV struct {
-	ID                      string
-	Amount                  string
-	StellarTransactionID    string
-	Status                  data.PaymentStatus
-	Type                    data.PaymentType
-	DisbursementID          string `csv:"Disbursement.ID"`
-	Asset                   data.Asset
-	Wallet                  data.Wallet
-	ReceiverID              string                     `csv:"Receiver.ID"`
-	ReceiverPhoneNumber     string                     `csv:"Receiver.PhoneNumber"`
-	ReceiverEmail           string                     `csv:"Receiver.Email"`
-	ReceiverExternalID      string                     `csv:"Receiver.ExternalID"`
-	ReceiverWalletAddress   string                     `csv:"ReceiverWallet.Address"`
-	ReceiverWalletStatus    data.ReceiversWalletStatus `csv:"ReceiverWallet.Status"`
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
-	ExternalPaymentID       string
-	CircleTransferRequestID *string
+	ID                    string
+	Amount                string
+	StellarTransactionID  string
+	Status                data.PaymentStatus
+	Type                  data.PaymentType
+	DisbursementID        string `csv:"Disbursement.ID"`
+	Asset                 data.Asset
+	Wallet                data.Wallet
+	ReceiverID            string                     `csv:"Receiver.ID"`
+	ReceiverPhoneNumber   string                     `csv:"Receiver.PhoneNumber"`
+	ReceiverEmail         string                     `csv:"Receiver.Email"`
+	ReceiverExternalID    string                     `csv:"Receiver.ExternalID"`
+	ReceiverWalletAddress string                     `csv:"ReceiverWallet.Address"`
+	ReceiverWalletStatus  data.ReceiversWalletStatus `csv:"ReceiverWallet.Status"`
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	ExternalPaymentID     string
+	CircleTransactionID   string
+	CircleTransactionType data.CircleTransactionType
 }
 
 func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
@@ -113,6 +114,11 @@ func (e ExportHandler) ExportPayments(rw http.ResponseWriter, r *http.Request) {
 	payments, err := e.Models.Payment.GetAll(ctx, queryParams, e.Models.DBConnectionPool, data.QueryTypeSelectAll)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to get payments", err, nil).Render(rw)
+		return
+	}
+
+	if err = e.Models.CircleTransferRequests.PopulateCircleTransactionInfo(ctx, e.Models.DBConnectionPool, payments); err != nil {
+		httperror.InternalError(ctx, "Failed to get Circle transaction info", err, nil).Render(rw)
 		return
 	}
 
@@ -175,19 +181,24 @@ func (e ExportHandler) convertPaymentsToCSV(payments []data.Payment, receiversMa
 			return nil, fmt.Errorf("receiver %s does not exist in the map", payment.ReceiverWallet.Receiver.ID)
 		}
 		paymentCSV := &PaymentCSV{
-			ID:                      payment.ID,
-			Amount:                  payment.Amount,
-			StellarTransactionID:    payment.StellarTransactionID,
-			Status:                  payment.Status,
-			Type:                    payment.Type,
-			Asset:                   payment.Asset,
-			ReceiverPhoneNumber:     receiver.PhoneNumber,
-			ReceiverEmail:           receiver.Email,
-			ReceiverExternalID:      receiver.ExternalID,
-			CreatedAt:               payment.CreatedAt,
-			UpdatedAt:               payment.UpdatedAt,
-			ExternalPaymentID:       payment.ExternalPaymentID,
-			CircleTransferRequestID: payment.CircleTransferRequestID,
+			ID:                   payment.ID,
+			Amount:               payment.Amount,
+			StellarTransactionID: payment.StellarTransactionID,
+			Status:               payment.Status,
+			Type:                 payment.Type,
+			Asset:                payment.Asset,
+			ReceiverPhoneNumber:  receiver.PhoneNumber,
+			ReceiverEmail:        receiver.Email,
+			ReceiverExternalID:   receiver.ExternalID,
+			CreatedAt:            payment.CreatedAt,
+			UpdatedAt:            payment.UpdatedAt,
+			ExternalPaymentID:    payment.ExternalPaymentID,
+		}
+		if payment.CircleTransactionID != nil {
+			paymentCSV.CircleTransactionID = *payment.CircleTransactionID
+		}
+		if payment.CircleTransactionType != nil {
+			paymentCSV.CircleTransactionType = *payment.CircleTransactionType
 		}
 		if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil {
 			paymentCSV.DisbursementID = payment.Disbursement.ID

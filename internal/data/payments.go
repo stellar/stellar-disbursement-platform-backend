@@ -21,19 +21,20 @@ type Payment struct {
 	Amount               string `json:"amount" db:"amount"`
 	StellarTransactionID string `json:"stellar_transaction_id" db:"stellar_transaction_id"`
 	// TODO: evaluate if we will keep or remove StellarOperationID
-	StellarOperationID      string               `json:"stellar_operation_id" db:"stellar_operation_id"`
-	Status                  PaymentStatus        `json:"status" db:"status"`
-	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	Type                    PaymentType          `json:"type" db:"type"`
-	SourceWalletID          string               `json:"source_wallet_id" db:"source_wallet_id"`
-	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
-	Asset                   Asset                `json:"asset"`
-	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
-	CreatedAt               time.Time            `json:"created_at" db:"created_at"`
-	UpdatedAt               time.Time            `json:"updated_at" db:"updated_at"`
-	ExternalPaymentID       string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
-	CircleTransferRequestID *string              `json:"circle_transfer_request_id,omitempty"`
-	SenderAddress           string               `json:"sender_address,omitempty" db:"sender_address"`
+	StellarOperationID    string                 `json:"stellar_operation_id" db:"stellar_operation_id"`
+	Status                PaymentStatus          `json:"status" db:"status"`
+	StatusHistory         PaymentStatusHistory   `json:"status_history,omitempty" db:"status_history"`
+	Type                  PaymentType            `json:"type" db:"type"`
+	SourceWalletID        string                 `json:"source_wallet_id" db:"source_wallet_id"`
+	Disbursement          *Disbursement          `json:"disbursement,omitempty" db:"disbursement"`
+	Asset                 Asset                  `json:"asset"`
+	ReceiverWallet        *ReceiverWallet        `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
+	CreatedAt             time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt             time.Time              `json:"updated_at" db:"updated_at"`
+	ExternalPaymentID     string                 `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	CircleTransactionID   *string                `json:"circle_transaction_id,omitempty"`
+	CircleTransactionType *CircleTransactionType `json:"circle_transaction_type,omitempty"`
+	SenderAddress         string                 `json:"sender_address,omitempty" db:"sender_address"`
 }
 
 type PaymentType string
