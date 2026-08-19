@@ -54,8 +54,15 @@ the accounts they have been granted access to. An account outside that scope ret
 }
 ```
 
-`status` is `ACTIVE`, `PENDING` or `ARCHIVED`. A `PENDING` account has been reserved but not yet
-funded on-chain and cannot send. `archived_at` is present only once archived.
+The object carries two separate status fields:
+
+- `status` is the account's lifecycle inside the SDP: `ACTIVE`, `PENDING` or `ARCHIVED`. A `PENDING`
+  account has been reserved but not yet funded on-chain and cannot send. `archived_at` is present
+  only once archived.
+- `distribution_account_status` is the readiness of the underlying account itself, mirrored from the
+  tenant: `ACTIVE`, or `PENDING_USER_ACTIVATION` for a Circle tenant that has not yet supplied its
+  credentials. Stellar accounts are provisioned automatically and are always `ACTIVE`.
+
 `distribution_account_address` is absent until the account is provisioned.
 
 ### List accounts
@@ -165,8 +172,8 @@ Multi-account support also adds a request header to existing endpoints. It selec
 distribution account a request acts on, and it narrows what a request can reach — never widens it.
 Naming an account the caller has no access to reaches nothing.
 
-On reads it is optional: sent, results cover that account; omitted, they cover every account the
-caller can reach.
+On reads it is optional. If sent, results cover that account; if omitted, they cover every account
+the caller can reach.
 
 On writes that send funds or create records against an account, it names the source account and is
 **required** once a tenant has more than one active account — `POST /disbursements`, `POST /payments`,
