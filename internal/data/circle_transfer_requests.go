@@ -254,10 +254,14 @@ func (m CircleTransferRequestModel) PopulateCircleTransactionInfo(ctx context.Co
 		return fmt.Errorf("getting circle transfers for payment IDs: %w", err)
 	}
 
+	// Cleared when there is no row, so the result always reflects the DB rather than prior state.
 	for i := range payments {
-		if request, ok := requestsByPaymentID[payments[i].ID]; ok {
-			payments[i].CircleTransactionID, payments[i].CircleTransactionType = request.CircleTransactionInfo()
+		request, ok := requestsByPaymentID[payments[i].ID]
+		if !ok {
+			payments[i].CircleTransactionID, payments[i].CircleTransactionType = nil, nil
+			continue
 		}
+		payments[i].CircleTransactionID, payments[i].CircleTransactionType = request.CircleTransactionInfo()
 	}
 
 	return nil

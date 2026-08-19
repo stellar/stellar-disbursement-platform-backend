@@ -51,7 +51,7 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 
 // decorateWithCircleTransactionInfo is not gated on the account being Circle: resolution is per
 // payment row, and non-Circle tenants simply have no circle_transfer_requests rows to find.
-func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, sqlExec db.SQLExecuter, payments ...data.Payment) ([]data.Payment, error) {
+func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, sqlExec db.SQLExecuter, payments []data.Payment) ([]data.Payment, error) {
 	if err := p.Models.CircleTransferRequests.PopulateCircleTransactionInfo(ctx, sqlExec, payments); err != nil {
 		return nil, fmt.Errorf("populating circle transaction info: %w", err)
 	}
@@ -90,7 +90,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payments, err := p.decorateWithCircleTransactionInfo(ctx, p.DBConnectionPool, *payment)
+	payments, err := p.decorateWithCircleTransactionInfo(ctx, p.DBConnectionPool, []data.Payment{*payment})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve payment with circle info", err, nil).Render(w)
 		return
@@ -234,7 +234,7 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 			}
 		}
 
-		payments, err := p.decorateWithCircleTransactionInfo(ctx, dbTx, payments...)
+		payments, err := p.decorateWithCircleTransactionInfo(ctx, dbTx, payments)
 		if err != nil {
 			return nil, fmt.Errorf("adding circle info to payments: %w", err)
 		}
