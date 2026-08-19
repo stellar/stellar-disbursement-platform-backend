@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add optional Prometheus/Grafana wiring and wallet-tagged structured transaction logging for the SDP and TSS services. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 - Add distribution-account scoping when creating or editing API-key [#1183](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1183)
 - Add `CircleTransactionID` and `CircleTransactionType` columns to the payments CSV export. [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
+- Add multi-wallet API reference in docs/multi-wallet. [#1189](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1189)
 
 ### Changed
 
