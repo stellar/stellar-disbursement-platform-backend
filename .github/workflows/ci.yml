@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.25.0
           cache: true
@@ -67,10 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install NodeJs
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 14
 
@@ -95,10 +95,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install NodeJs
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -123,10 +123,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.25.0
           cache: true
@@ -162,10 +162,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.25.0
           cache: true
@@ -175,7 +175,11 @@ jobs:
         run: go install gotest.tools/gotestsum@v1.13.0
 
       - name: Run tests
-        run: gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -coverprofile=c.out ./... -timeout 3m -coverpkg ./...
+        # -timeout is go test's per-package hang detector, not a time budget. The suite has
+        # grown past what 3m leaves headroom for: internal/data and internal/serve/httphandler
+        # now hit the cap on CI (they run ~50s each locally, and package binaries run in
+        # parallel on a 2-core runner). 10m still catches a genuinely hung test.
+        run: gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -coverprofile=c.out ./... -timeout 10m -coverpkg ./...
 
       - name: Validate Test Coverage Threshold
         env:

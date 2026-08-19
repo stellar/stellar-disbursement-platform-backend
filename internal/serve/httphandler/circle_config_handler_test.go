@@ -18,13 +18,20 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+)
+
+const (
+	ownerUserID    = "8f3c1e26-9c40-4a12-9c58-2a6cbd2f7a10"
+	nonOwnerUserID = "1d1c3a1e-7a55-4f0e-9d0a-3d5f7b9c1e42"
 )
 
 func TestCircleConfigHandler_Patch(t *testing.T) {
@@ -37,6 +44,14 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 	// Creates a tenant and inserts it in the context
 	tnt := schema.Tenant{ID: "test-tenant-id"}
 	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+	ctx = sdpcontext.SetTokenInContext(ctx, "test-token")
+	ctx = sdpcontext.SetUserIDInContext(ctx, ownerUserID)
+
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, ownerUserID).
+		Return(&auth.User{ID: ownerUserID, IsOwner: true}, nil).Maybe()
+	authManagerMock.On("GetUserByID", mock.Anything, nonOwnerUserID).
+		Return(&auth.User{ID: nonOwnerUserID, Roles: []string{string(data.FinancialControllerUserRole)}}, nil).Maybe()
 
 	kp := keypair.MustRandom()
 	encryptionPassphrase := kp.Seed()
@@ -58,10 +73,41 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 	testCases := []struct {
 		name           string
 		prepareMocksFn func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock)
+		requestCtx     context.Context
 		requestBody    string
 		statusCode     int
 		assertions     func(t *testing.T, rr *httptest.ResponseRecorder)
 	}{
+		{
+			name:        "fails closed when no acting user can be resolved",
+			requestCtx:  sdpcontext.SetTenantInContext(context.Background(), &tnt),
+			requestBody: string(validRequestBody),
+			statusCode:  http.StatusInternalServerError,
+			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				t.Helper()
+
+				assert.JSONEq(t, `{"error": "Cannot get user from context"}`, rr.Body.String())
+			},
+		},
+		{
+			// RequirePermission short-circuits past the route's Owner check on the API key path,
+			// so a key minted by a non-owner has to be stopped here instead.
+			name: "returns Forbidden for an API key whose creator is not an Owner",
+			requestCtx: sdpcontext.SetUserIDInContext(
+				sdpcontext.SetAPIKeyInContext(
+					sdpcontext.SetTenantInContext(context.Background(), &tnt),
+					&data.APIKey{ID: "ak-1", Permissions: data.APIKeyPermissions{data.WriteAll}, CreatedBy: nonOwnerUserID},
+				),
+				nonOwnerUserID,
+			),
+			requestBody: string(validRequestBody),
+			statusCode:  http.StatusForbidden,
+			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				t.Helper()
+
+				assert.JSONEq(t, `{"error": "You don't have permission to perform this action."}`, rr.Body.String())
+			},
+		},
 		{
 			name: "returns bad request if distribution account type is not Circle",
 			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
@@ -186,6 +232,12 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 				Encrypter:               &encrypter,
 				EncryptionPassphrase:    encryptionPassphrase,
 				CircleClientConfigModel: &ccm,
+				AuthManager:             authManagerMock,
+			}
+
+			requestCtx := ctx
+			if tc.requestCtx != nil {
+				requestCtx = tc.requestCtx
 			}
 
 			if tc.prepareMocksFn != nil {
@@ -205,7 +257,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 			url := "/organization/circle-config"
 			r.Patch(url, handler.Patch)
 
-			rr := testutils.Request(t, ctx, r, url, http.MethodPatch, strings.NewReader(tc.requestBody))
+			rr := testutils.Request(t, requestCtx, r, url, http.MethodPatch, strings.NewReader(tc.requestBody))
 			assert.Equal(t, tc.statusCode, rr.Code)
 			tc.assertions(t, rr)
 		})

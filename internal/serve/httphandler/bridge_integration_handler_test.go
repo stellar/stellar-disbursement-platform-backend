@@ -227,8 +227,8 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Return(nil, errors.New("user not found")).
 					Once()
 			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedResponse: `{"error": "Cannot retrieve user from context"}`,
+			expectedStatus:   http.StatusUnauthorized,
+			expectedResponse: `{"error": "Not authorized."}`,
 		},
 		{
 			name:        "Bridge service already opted in error",
@@ -606,8 +606,8 @@ func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 					Return(nil, errors.New("user not found")).
 					Once()
 			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedResponse: `{"error": "Cannot retrieve user from context"}`,
+			expectedStatus:   http.StatusUnauthorized,
+			expectedResponse: `{"error": "Not authorized."}`,
 		},
 		{
 			name:        "organization not opted in",

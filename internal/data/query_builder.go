@@ -11,6 +11,7 @@ import (
 // QueryBuilder is a helper struct for building SQL queries
 type QueryBuilder struct {
 	baseQuery           string
+	baseParams          []interface{}
 	whereClause         string
 	whereParams         []interface{}
 	sortClause          string
@@ -24,6 +25,16 @@ type QueryBuilder struct {
 func NewQueryBuilder(query string) *QueryBuilder {
 	return &QueryBuilder{
 		baseQuery: query,
+	}
+}
+
+// NewQueryBuilderWithParams creates a QueryBuilder whose base query carries its own placeholders,
+// as a CTE does. They bind before every WHERE and pagination placeholder, matching the order
+// Rebind numbers them in.
+func NewQueryBuilderWithParams(query string, baseParams ...interface{}) *QueryBuilder {
+	return &QueryBuilder{
+		baseQuery:  query,
+		baseParams: baseParams,
 	}
 }
 
@@ -78,7 +89,7 @@ func (qb *QueryBuilder) AddPagination(page int, pageLimit int) *QueryBuilder {
 // Build assembles all statements in the correct order and returns the query and the parameters
 func (qb *QueryBuilder) Build() (string, []interface{}) {
 	query := qb.baseQuery
-	params := []interface{}{}
+	params := append([]interface{}{}, qb.baseParams...)
 	if qb.whereClause != "" {
 		query = fmt.Sprintf("%s WHERE 1=1%s", query, qb.whereClause)
 		params = append(params, qb.whereParams...)

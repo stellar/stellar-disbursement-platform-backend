@@ -169,8 +169,9 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 
 	t.Run("disbursements counter metric", func(t *testing.T) {
 		labels := DisbursementLabels{
-			Asset:  "USDC",
-			Wallet: "Mock Wallet",
+			Asset:    "USDC",
+			Wallet:   "Mock Wallet",
+			WalletID: "dw-test",
 			CommonLabels: CommonLabels{
 				TenantName: "test-tenant",
 			},
@@ -190,7 +191,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		assert.NotEmpty(t, data)
 		body := string(data)
 
-		metric := `sdp_business_disbursements_counter{asset="USDC",tenant_name="test-tenant",wallet="Mock Wallet"} 1`
+		metric := `sdp_business_disbursements_counter{asset="USDC",tenant_name="test-tenant",wallet="Mock Wallet",wallet_id="dw-test"} 1`
 
 		assert.Contains(t, body, metric)
 

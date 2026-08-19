@@ -66,6 +66,10 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
 		Return(distAccount, nil).
 		Maybe()
+	mDistAccResolver.
+		On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).
+		Return(distAccount, nil).
+		Maybe()
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -372,23 +376,22 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 			},
 		},
 		{
-			name:               "with preexisting tx_hash and XDRSent",
+			// xdr_sent / xdr_received are intentionally NOT attached to the per-job context logger
+			// (they would repeat the full envelope on every line); only tx_hash is carried.
+			name:               "with preexisting tx_hash and XDRSent (XDR not attached to ctx logger)",
 			preexistingTxHash:  "tx_hash_123",
 			preexistingXDRSent: "xdr_sent_123",
 			additionalLogrusFields: logrus.Fields{
-				"tx_hash":  "tx_hash_123",
-				"xdr_sent": "xdr_sent_123",
+				"tx_hash": "tx_hash_123",
 			},
 		},
 		{
-			name:                   "with preexisting tx_hash and XDR data (sent and received)",
+			name:                   "with preexisting tx_hash and XDR data (XDR not attached to ctx logger)",
 			preexistingTxHash:      "tx_hash_123",
 			preexistingXDRSent:     "xdr_sent_123",
 			preexistingXDRReceived: "xdr_received_123",
 			additionalLogrusFields: logrus.Fields{
-				"tx_hash":      "tx_hash_123",
-				"xdr_sent":     "xdr_sent_123",
-				"xdr_received": "xdr_received_123",
+				"tx_hash": "tx_hash_123",
 			},
 		},
 	}
@@ -447,6 +450,7 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 				"created_at":      txJob.Transaction.CreatedAt.String(),
 				"event_id":        transactionWorker.jobUUID,
 				"git_commit_hash": "gitCommitHash0x",
+				"payment_id":      txJob.Transaction.ExternalID,
 				"tenant_id":       txJob.Transaction.TenantID,
 				"tx_id":           txJob.Transaction.ID,
 				"updated_at":      txJob.Transaction.UpdatedAt.String(),
@@ -1066,7 +1070,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 
 		// Set up engine with mocked Horizon and real signing
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
+		mDistAccResolver.On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).Return(distAccount, nil)
 
 		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 		sigService, sigErr := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -1133,7 +1137,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 
 		// Set up engine — restore tx submission will fail, but tx should still be reprocessed
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-		mDistAccResolver.On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).Return(distAccount, nil)
+		mDistAccResolver.On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).Return(distAccount, nil)
 
 		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 		sigService, sigErr := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -1868,8 +1872,10 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	// The fixture transaction carries no wallet_id, so the worker has to resolve with an empty
+	// wallet ID and fall back to the tenant account — the legacy/non-payment-type path.
 	mDistAccResolver.
-		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		On("DistributionAccountForWallet", ctx, mock.AnythingOfType("string"), "").
 		Return(distAccount, nil)
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
@@ -1973,6 +1979,153 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
 }
 
+// Test_TransactionWorker_buildAndSignTransaction_routesToSecondaryWallet guards the multi-wallet
+// routing contract: a payment tagged with a secondary distribution wallet must be built, fee-bumped
+// AND signed with that wallet's account, never the tenant's default one. Test_..._buildAndSignTransaction
+// above resolves both to the same address, so it keeps passing even if the wallet ID is dropped on
+// the way to the resolver — which is exactly how the empty-wallet-ID regression shipped.
+func Test_TransactionWorker_buildAndSignTransaction_routesToSecondaryWallet(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	const currentLedger = 1
+	const lockedToLedger = 2
+	const accountSequence = 123
+	const tenantID = "tenant-id-1"
+
+	// The tenant's default account — the one every payment used to be submitted from.
+	tenantKP := keypair.MustRandom()
+
+	// The secondary wallet's account. Its seed lives only in distribution_wallet_keys, keyed by
+	// public key, so the signatures asserted below cannot be produced from the tenant default.
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	secondaryKP := keypair.MustRandom()
+	encryptedPrivateKey, encryptedDEK, err := sdpUtils.EnvelopeEncrypter{}.EncryptWithNewDEK(secondaryKP.Seed(), distAccEncryptionPassphrase)
+	require.NoError(t, err)
+	require.NoError(t, store.NewDistributionWalletKeyModel(dbConnectionPool).Insert(ctx, store.DistributionWalletKey{
+		PublicKey:           secondaryKP.Address(),
+		EncryptedPrivateKey: encryptedPrivateKey,
+		EncryptedDEK:        encryptedDEK,
+	}))
+	secondaryAccount := schema.TransactionAccount{
+		Address: secondaryKP.Address(),
+		Type:    schema.DistributionAccountStellarDBVault,
+		Status:  schema.AccountStatusActive,
+	}
+
+	walletID := uuid.NewString()
+
+	// Matching tenantID and walletID exactly, rather than with mock.Anything, is the assertion: an
+	// unexpected-call failure here means the transaction's wallet ID never reached the resolver.
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccountForWallet", ctx, tenantID, walletID).
+		Return(secondaryAccount, nil).
+		Once()
+
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DBConnectionPool:          dbConnectionPool,
+		DistributionPrivateKey:    tenantKP.Seed(),
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+		DistributionAccountResolver: mDistAccResolver,
+		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
+	})
+	require.NoError(t, err)
+
+	defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+	defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+	txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tenantID)
+	txJob.Transaction.WalletID = sql.NullString{String: walletID, Valid: true}
+
+	mockHorizon := &horizonclient.MockClient{}
+	mockHorizon.
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).
+		Return(horizon.Account{Sequence: accountSequence}, nil).
+		Once()
+
+	submitterEngine := &engine.SubmitterEngine{
+		HorizonClient:       mockHorizon,
+		LedgerNumberTracker: preconditionsMocks.NewMockLedgerNumberTracker(t),
+		SignatureService:    sigService,
+		MaxBaseFee:          100,
+	}
+
+	innerTx, err := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{
+				AccountID: txJob.ChannelAccount.PublicKey,
+				Sequence:  accountSequence,
+			},
+			Operations: []txnbuild.Operation{
+				&txnbuild.Payment{
+					SourceAccount: secondaryKP.Address(),
+					Amount:        txJob.Transaction.Amount.StringFixed(7),
+					Destination:   txJob.Transaction.Destination,
+					Asset:         &txnbuild.CreditAsset{Code: txJob.Transaction.AssetCode, Issuer: txJob.Transaction.AssetIssuer},
+				},
+			},
+			BaseFee: int64(submitterEngine.MaxBaseFee),
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds:   txnbuild.NewTimeout(300),
+				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)},
+			},
+			IncrementSequenceNum: true,
+		},
+	)
+	require.NoError(t, err)
+
+	// Operation source: the handler is handed the secondary wallet's address, not the tenant's.
+	handler := &MockTransactionHandler{}
+	handler.On("BuildInnerTransaction",
+		ctx, &txJob, int64(accountSequence), secondaryKP.Address()).
+		Return(innerTx, nil).
+		Once()
+
+	transactionWorker := &TransactionWorker{
+		engine:     submitterEngine,
+		txModel:    store.NewTransactionModel(dbConnectionPool),
+		chAccModel: store.NewChannelAccountModel(dbConnectionPool),
+		txHandler:  handler,
+	}
+
+	gotFeeBumpTx, err := transactionWorker.buildAndSignTransaction(ctx, &txJob)
+	require.NoError(t, err)
+	require.NotNil(t, gotFeeBumpTx)
+
+	// Fee account.
+	assert.Equal(t, secondaryKP.Address(), gotFeeBumpTx.FeeAccount())
+	assert.NotEqual(t, tenantKP.Address(), gotFeeBumpTx.FeeAccount())
+
+	// Signer: rebuilding the envelope with the secondary account reproduces it byte for byte, which
+	// it could not do if the tenant default had signed either the inner tx or the fee bump.
+	chAccount := schema.NewDefaultChannelAccount(txJob.ChannelAccount.PublicKey)
+	wantInnerTx, err := sigService.SignerRouter.SignStellarTransaction(ctx, innerTx, chAccount, secondaryAccount)
+	require.NoError(t, err)
+
+	wantFeeBumpTx, err := txnbuild.NewFeeBumpTransaction(
+		txnbuild.FeeBumpTransactionParams{
+			Inner:      wantInnerTx,
+			FeeAccount: secondaryKP.Address(),
+			BaseFee:    int64(submitterEngine.MaxBaseFee),
+		},
+	)
+	require.NoError(t, err)
+	wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, secondaryAccount)
+	require.NoError(t, err)
+	assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
+
+	mockHorizon.AssertExpectations(t)
+	handler.AssertExpectations(t)
+}
+
 func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -1990,7 +2143,7 @@ func Test_TransactionWorker_buildAndSignTransaction_ErrorHandling(t *testing.T) 
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
-		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		On("DistributionAccountForWallet", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(distAccount, nil)
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()

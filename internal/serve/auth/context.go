@@ -18,7 +18,7 @@ func GetUserFromContext(ctx context.Context, authManager auth.AuthManager) (*aut
 	user, err := authManager.GetUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, fmt.Errorf("user not found with id %s", userID)
+			return nil, fmt.Errorf("user not found with id %s: %w", userID, auth.ErrUserNotFound)
 		}
 		return nil, fmt.Errorf("cannot get user %w", err)
 	}

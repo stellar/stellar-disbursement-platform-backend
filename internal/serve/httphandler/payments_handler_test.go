@@ -37,6 +37,21 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
+// newWalletScopeOwnerMock returns an AuthManager mock resolving every user as an owner —
+// wallet read-visibility has its own dedicated suite (Test_WalletReadVisibility).
+func newWalletScopeOwnerMock() *auth.AuthManagerMock {
+	m := &auth.AuthManagerMock{}
+	m.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&auth.User{ID: "payments-test-owner", IsOwner: true}, nil).Maybe()
+	return m
+}
+
+func withTestUserCtx(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		next(w, r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "payments-test-owner")))
+	}
+}
+
 func Test_PaymentsHandlerGet(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
@@ -49,6 +64,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Models:                      models,
 		DBConnectionPool:            dbConnectionPool,
 		DistributionAccountResolver: mDistributionAccountResolver,
+		AuthManager:                 newWalletScopeOwnerMock(),
 	}
 
 	mDistributionAccountResolver.
@@ -57,7 +73,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Maybe()
 
 	r := chi.NewRouter()
-	r.Get("/payments/{id}", handler.GetPayment)
+	r.Get("/payments/{id}", withTestUserCtx(handler.GetPayment))
 
 	ctx := context.Background()
 
@@ -137,7 +153,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"updated_at": "` + disbursement.UpdatedAt.Format(time.RFC3339Nano) + `",
 				"registration_contact_type": "` + disbursement.RegistrationContactType.String() + `",
 				"verification_field": "` + string(disbursement.VerificationField) + `",
-				"receiver_registration_message_template":""
+				"receiver_registration_message_template":"",
+				"source_wallet_id": "` + disbursement.SourceWalletID + `"
 			},
 			"asset": {
 				"id": "` + asset.ID + `",
@@ -172,7 +189,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"created_at": "` + payment.CreatedAt.Format(time.RFC3339Nano) + `",
 			"updated_at": "` + payment.UpdatedAt.Format(time.RFC3339Nano) + `",
 			"external_payment_id": "` + payment.ExternalPaymentID + `",
-			"sender_address": "` + payment.SenderAddress + `"
+			"sender_address": "` + payment.SenderAddress + `",
+			"source_wallet_id": "` + payment.SourceWalletID + `"
 		}`
 
 		assert.JSONEq(t, wantJSON, rr.Body.String())
@@ -227,7 +245,7 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 		Amount:         "200",
 		Status:         data.DraftPaymentStatus,
 	})
-	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+	payment3 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet: rwReady,
 		Disbursement:   disbursement,
 		Asset:          *asset,
@@ -235,6 +253,7 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 		Status:         data.DraftPaymentStatus,
 	})
 
+	// payment1 is Transfers-backed and payment2 Payouts-backed, in the same account.
 	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
 		IdempotencyKey:   "idempotency-key-1",
 		PaymentID:        payment1.ID,
@@ -242,97 +261,64 @@ func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
 	})
 
 	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
-		IdempotencyKey:   "idempotency-key-2",
-		PaymentID:        payment2.ID,
-		CircleTransferID: utils.StringPtr("circle-transfer-id-2"),
+		IdempotencyKey: "idempotency-key-2",
+		PaymentID:      payment2.ID,
+		CirclePayoutID: utils.StringPtr("circle-payout-id-2"),
 	})
 
-	testCases := []struct {
-		name          string
-		prepareMocks  func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver)
-		runAssertions func(t *testing.T, responseStatus int, response string)
-	}{
-		{
-			name: "returns error when distribution account resolver fails",
-			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
-				t.Helper()
-
-				mDistributionAccountResolver.
-					On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{}, errors.New("unexpected error")).
-					Once()
-			},
-			runAssertions: func(t *testing.T, responseStatus int, response string) {
-				t.Helper()
-
-				assert.Equal(t, http.StatusInternalServerError, responseStatus)
-				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, response)
-			},
-		},
-		{
-			name: "successfully returns payments with circle transaction IDs",
-			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
-				t.Helper()
-
-				mDistributionAccountResolver.
-					On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
-					Maybe()
-			},
-			runAssertions: func(t *testing.T, responseStatus int, response string) {
-				t.Helper()
-
-				assert.Equal(t, http.StatusOK, responseStatus)
-
-				var actualResponse httpresponse.PaginatedResponse
-				err := json.Unmarshal([]byte(response), &actualResponse)
-				require.NoError(t, err)
-
-				assert.Equal(t, 3, actualResponse.Pagination.Total)
-
-				var payments []data.Payment
-				err = json.Unmarshal(actualResponse.Data, &payments)
-				require.NoError(t, err)
-
-				assert.Len(t, payments, 3)
-				for _, payment := range payments {
-					if payment.ID == payment1.ID {
-						assert.Equal(t, "circle-transfer-id-1", *payment.CircleTransferRequestID)
-					}
-					if payment.ID == payment2.ID {
-						assert.Equal(t, "circle-transfer-id-2", *payment.CircleTransferRequestID)
-					}
-					if payment.ID != payment1.ID && payment.ID != payment2.ID {
-						assert.Nil(t, payment.CircleTransferRequestID)
-					}
-				}
-			},
-		},
+	// No DistributionAccountResolver: the Circle info is resolved per payment row, not per account.
+	h := &PaymentsHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	rr := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodGet, "/payments", nil)
+	require.NoError(t, err)
+	withTestUserCtx(h.GetPayments).ServeHTTP(rr, req)
+	resp := rr.Result()
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 
-			tc.prepareMocks(t, mDistributionAccountResolver)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			h := &PaymentsHandler{
-				Models:                      models,
-				DBConnectionPool:            dbConnectionPool,
-				DistributionAccountResolver: mDistributionAccountResolver,
-			}
+	var actualResponse httpresponse.PaginatedResponse
+	require.NoError(t, json.Unmarshal(respBody, &actualResponse))
+	assert.Equal(t, 3, actualResponse.Pagination.Total)
 
-			rr := httptest.NewRecorder()
-			req, err := http.NewRequest(http.MethodGet, "/payments", nil)
-			require.NoError(t, err)
-			http.HandlerFunc(h.GetPayments).ServeHTTP(rr, req)
-			resp := rr.Result()
-			defer resp.Body.Close()
-			respBody, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
+	var payments []data.Payment
+	require.NoError(t, json.Unmarshal(actualResponse.Data, &payments))
+	require.Len(t, payments, 3)
 
-			tc.runAssertions(t, resp.StatusCode, string(respBody))
-		})
+	for _, payment := range payments {
+		switch payment.ID {
+		case payment1.ID:
+			assert.Equal(t, "circle-transfer-id-1", *payment.CircleTransactionID)
+			assert.Equal(t, data.CircleTransactionTypeTransfer, *payment.CircleTransactionType)
+		case payment2.ID:
+			assert.Equal(t, "circle-payout-id-2", *payment.CircleTransactionID)
+			assert.Equal(t, data.CircleTransactionTypePayout, *payment.CircleTransactionType)
+		case payment3.ID:
+			assert.Nil(t, payment.CircleTransactionID)
+			assert.Nil(t, payment.CircleTransactionType)
+		}
+	}
+
+	// Assert on the raw keys too: unmarshalling into data.Payment cannot catch a wrong json tag.
+	var rawPayments []map[string]any
+	require.NoError(t, json.Unmarshal(actualResponse.Data, &rawPayments))
+	for _, raw := range rawPayments {
+		switch raw["id"] {
+		case payment2.ID:
+			assert.Equal(t, "circle-payout-id-2", raw["circle_transaction_id"])
+			assert.Equal(t, "PAYOUT", raw["circle_transaction_type"])
+		case payment3.ID:
+			assert.NotContains(t, raw, "circle_transaction_id")
+			assert.NotContains(t, raw, "circle_transaction_type")
+		}
+		assert.NotContains(t, raw, "circle_transfer_request_id")
 	}
 }
 
@@ -345,9 +331,10 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 	handler := &PaymentsHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
+	ts := httptest.NewServer(withTestUserCtx(handler.GetPayments))
 	defer ts.Close()
 
 	tests := []struct {
@@ -469,9 +456,10 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 		Models:                      models,
 		DBConnectionPool:            dbConnectionPool,
 		DistributionAccountResolver: mDistributionAccountResolver,
+		AuthManager:                 newWalletScopeOwnerMock(),
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
+	ts := httptest.NewServer(withTestUserCtx(handler.GetPayments))
 	defer ts.Close()
 
 	ctx := context.Background()
@@ -907,6 +895,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	tnt := schema.Tenant{ID: "tenant-id"}
 
 	ctx := sdpcontext.SetTenantInContext(context.Background(), &tnt)
+	ctx = sdpcontext.SetUserIDInContext(ctx, "retry-owner")
 
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -952,6 +941,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(nil, errors.New("unexpected error")).
@@ -984,6 +975,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1016,6 +1009,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1094,6 +1089,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1184,6 +1181,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1193,7 +1192,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// distAccountResolverMock.
 		//	On("DistributionAccountFromContext", mock.Anything).
 		//	Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-		//	Once()
+		//	Once
 		handler := PaymentsHandler{
 			Models:                      models,
 			DBConnectionPool:            dbConnectionPool,
@@ -1259,7 +1258,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		})
 
 		circleTnt := schema.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
-		circleCtx := sdpcontext.SetTenantInContext(context.Background(), &circleTnt)
+		circleCtx := sdpcontext.SetUserIDInContext(sdpcontext.SetTenantInContext(context.Background(), &circleTnt), "retry-owner")
 		circleCtx = sdpcontext.SetTokenInContext(circleCtx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] } `, failedPayment.ID))
@@ -1268,6 +1267,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", circleCtx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1328,7 +1329,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctxWithoutTenant := sdpcontext.SetTokenInContext(context.Background(), "mytoken")
+		ctxWithoutTenant := sdpcontext.SetTokenInContext(sdpcontext.SetUserIDInContext(context.Background(), "retry-owner"), "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1340,6 +1341,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
 		authManagerMock.
 			On("GetUser", ctxWithoutTenant, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
@@ -1469,6 +1472,8 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, mock.Anything).
+		Return(&auth.User{ID: "patch-owner", IsOwner: true}, nil).Maybe()
 
 	handler := &PaymentsHandler{
 		Models:           models,
@@ -1476,7 +1481,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		AuthManager:      authManagerMock,
 	}
 
-	ctx := context.Background()
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "patch-owner")
 
 	r := chi.NewRouter()
 	r.Patch("/payments/{id}/status", handler.PatchPaymentStatus)
@@ -1556,7 +1561,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "CANCELED"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", draftPayment.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", draftPayment.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1570,7 +1575,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "READY"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1584,7 +1589,7 @@ func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1609,6 +1614,21 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	// Shared test DB: normalize to exactly one ACTIVE (default) distribution wallet so the
+	// X-Wallet-Id single-wallet fallback applies (routing covered by its own suite).
+	sharedDefaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+	// PostDirectPayment now builds the transaction account from the resolved source wallet
+	// (not DistributionAccountFromContext, which it no longer calls), so the shared default
+	// wallet needs a real address for subtests that reach the balance/trustline check.
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2",
+		"GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA", sharedDefaultWallet.ID)
+	require.NoError(t, err)
+
 	t.Run("successful direct payment creation", func(t *testing.T) {
 		t.Cleanup(func() {
 			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
@@ -1616,6 +1636,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CERAMITE", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 		_, err = dbConnectionPool.ExecContext(ctx,
 			"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
@@ -1643,15 +1664,15 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 		stellarDistAccount := schema.TransactionAccount{
 			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 			Address: distributionAccPubKey,
 		}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID:    "user-dante",
-			Email: "commander.dante@baal.imperium",
+			ID:      "user-dante",
+			Email:   "commander.dante@baal.imperium",
+			IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
 
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
 			AccountID: distributionAccPubKey,
@@ -1709,57 +1730,6 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		horizonClientMock.AssertExpectations(t)
 	})
 
-	t.Run("distribution account resolution fails", func(t *testing.T) {
-		t.Cleanup(func() {
-			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
-		})
-
-		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ADAMANT", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
-		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-			Email: "dante.invalid.asset@baal.imperium",
-		})
-
-		requestBody := fmt.Sprintf(`{
-			"amount": "100.00",
-			"asset": {"id": %q},
-			"receiver": {"id": %q},
-			"wallet": {"id": %q}
-		}`, asset.ID, receiver.ID, wallet.ID)
-
-		authMock := &auth.AuthManagerMock{}
-		distResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
-		distServiceMock := &mocks.MockDistributionAccountService{}
-
-		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
-		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{}, errors.New("resolution failed"))
-
-		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
-
-		handler := &PaymentsHandler{
-			Models:                      models,
-			DBConnectionPool:            dbConnectionPool,
-			AuthManager:                 authMock,
-			DistributionAccountResolver: distResolverMock,
-			DirectPaymentService:        directPaymentService,
-		}
-		var req *http.Request
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/payments",
-			strings.NewReader(requestBody))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
-		rr := httptest.NewRecorder()
-		handler.PostDirectPayment(rr, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-		assert.JSONEq(t, `{"error": "resolving distribution account"}`, rr.Body.String())
-	})
-
 	t.Run("asset not found", func(t *testing.T) {
 		t.Cleanup(func() {
 			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
@@ -1781,11 +1751,9 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
 
 		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 
@@ -1842,14 +1810,14 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 		stellarDistAccount := schema.TransactionAccount{
 			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 			Address: distributionAccPubKey,
 		}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
 
 		// Mock horizon client for trustline validation
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
@@ -1910,6 +1878,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "STEEL", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 			Email: "dante.wallet.disabled@baal.imperium",
 		})
@@ -1930,11 +1899,9 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
 
 		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 
@@ -1996,15 +1963,15 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 		stellarDistAccount := schema.TransactionAccount{
 			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 			Address: distributionAccPubKey,
 		}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID:    "user-test",
-			Email: "test@imperium.gov",
+			ID:      "user-test",
+			Email:   "test@imperium.gov",
+			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(stellarDistAccount, nil)
 
 		// Mock horizon client for trustline validation
 		horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{
@@ -2069,6 +2036,7 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "AURUM", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Fortress Monastery", "https://fortress.com", "fortress.com", "fortress://")
+		data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
 			Email: "dante.not.registered@baal.imperium",
 		})
@@ -2085,11 +2053,9 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 		distServiceMock := &mocks.MockDistributionAccountService{}
 
 		authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
-			ID: "user-test",
+			ID:      "user-test",
+			IsOwner: true,
 		}, nil)
-
-		distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-			schema.TransactionAccount{Type: schema.DistributionAccountStellarDBVault}, nil)
 
 		directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 
@@ -2115,12 +2081,218 @@ func Test_PaymentsHandler_PostPayment(t *testing.T) {
 	})
 }
 
+// Test_PaymentsHandler_PostDirectPayment_circleTenant covers the Circle path of the
+// direct-payment route, the sibling of Test_DisbursementHandler_PatchDisbursementStatus_circleTenant.
+//
+// A Circle tenant's source wallet row is blank and PENDING_USER_ACTIVATION by construction —
+// provisionDistributionAccount returns without an address, syncDefaultDistributionWallet only
+// copies one across for Stellar types, and completing Circle setup updates circle_client_config
+// and the tenant, never this row. Reading the account from the row therefore rejected every
+// Circle direct payment, and would have dropped CircleWalletID even past that check.
+func Test_PaymentsHandler_PostDirectPayment_circleTenant(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	// Shared test DB: normalize to exactly one ACTIVE (default) wallet so the X-Wallet-Id
+	// single-wallet fallback applies (routing covered by its own suite).
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+
+	// Shape the source wallet exactly as tenant provisioning leaves it for a Circle tenant:
+	// no Stellar address, and a distribution account status that never leaves PENDING.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets
+		SET distribution_account_address = NULL,
+		    distribution_account_type     = $1,
+		    distribution_account_status   = $2
+		WHERE id = $3`,
+		schema.DistributionAccountCircleDBVault, schema.AccountStatusPendingUserActivation, defaultWallet.ID)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "CIRCLECOIN", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Circle Fortress", "https://circle-fortress.com", "circle-fortress.com", "circlefortress://")
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+		wallet.ID, asset.ID)
+	require.NoError(t, err)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "sanguinius@baal.imperium",
+	})
+	data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	authMock := &auth.AuthManagerMock{}
+	authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
+		ID:      "user-sanguinius",
+		Email:   "sanguinius@baal.imperium",
+		IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
+	}, nil)
+
+	// What the tenant-level resolver returns for a configured Circle tenant: the wallet ID that
+	// Circle payments are actually addressed by, and the live ACTIVE status.
+	circleAccount := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id-1234",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+	distResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+	distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(circleAccount, nil).Once()
+
+	// The account reaching the balance check must be the Circle one, carrying its wallet ID —
+	// this is the assertion that fails if the handler resolves from distribution_wallets.
+	distServiceMock := &mocks.MockDistributionAccountService{}
+	distServiceMock.On("GetBalance", mock.Anything, &circleAccount, *asset).Return(decimal.NewFromInt(1000), nil).Once()
+
+	handler := &PaymentsHandler{
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		AuthManager:                 authMock,
+		DistributionAccountResolver: distResolverMock,
+		DirectPaymentService:        services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{}),
+	}
+
+	requestBody := fmt.Sprintf(`{
+		"amount": "150.50",
+		"asset": {"id": %q},
+		"receiver": {"id": %q},
+		"wallet": {"id": %q}
+	}`, asset.ID, receiver.ID, wallet.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments", strings.NewReader(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.PostDirectPayment(rr, req)
+
+	assert.NotContains(t, rr.Body.String(), "no funded distribution account yet",
+		"a Circle wallet has no Stellar address by design and must not be rejected for it")
+	require.Equal(t, http.StatusCreated, rr.Code, "body: %s", rr.Body.String())
+
+	authMock.AssertExpectations(t)
+	distServiceMock.AssertExpectations(t)
+}
+
+// Test_PaymentsHandler_PostDirectPayment_unfundedStellarSourceWallet pins the Stellar side of the
+// same branch Test_PaymentsHandler_PostDirectPayment_circleTenant pins the Circle side of.
+//
+// A Stellar source wallet lives with a NULL address and a PENDING distribution account between
+// CreateWallet and funding. Spending in that window has to be refused, not quietly resolved from
+// the tenant's distribution account — that account belongs to a different wallet, so falling back
+// would spend somebody else's money and report success. The resolver mock is therefore left with
+// no expectations at all: DistributionAccountFromContext must never be reached on this path.
+func Test_PaymentsHandler_PostDirectPayment_unfundedStellarSourceWallet(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-id")
+	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	})
+
+	// Shared test DB: normalize to exactly one ACTIVE (default) wallet so the X-Wallet-Id
+	// single-wallet fallback applies (routing covered by its own suite).
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+
+	// Sibling tests in this file UPDATE a real address onto this shared row, so the unfunded
+	// state under test is written here rather than assumed from the fixture's defaults.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets
+		SET distribution_account_address = NULL,
+		    distribution_account_type     = $1,
+		    distribution_account_status   = $2
+		WHERE id = $3`,
+		schema.DistributionAccountStellarDBVault, schema.AccountStatusPendingUserActivation, defaultWallet.ID)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "PROMETHIUM", "GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Unfunded Bastion", "https://unfunded-bastion.com", "unfunded-bastion.com", "unfundedbastion://")
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"INSERT INTO wallets_assets (wallet_id, asset_id) VALUES ($1, $2)",
+		wallet.ID, asset.ID)
+	require.NoError(t, err)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
+		Email: "guilliman@macragge.imperium",
+	})
+	data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	authMock := &auth.AuthManagerMock{}
+	authMock.On("GetUserByID", mock.Anything, "user-id").Return(&auth.User{
+		ID:      "user-guilliman",
+		Email:   "guilliman@macragge.imperium",
+		IsOwner: true, // wallet authz covered by Test_W3_SourceWalletRouting
+	}, nil)
+
+	// No expectations on either mock: a rejected request must not resolve the tenant account and
+	// must not reach the balance check.
+	distResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+	distServiceMock := &mocks.MockDistributionAccountService{}
+
+	handler := &PaymentsHandler{
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		AuthManager:                 authMock,
+		DistributionAccountResolver: distResolverMock,
+		DirectPaymentService:        services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{}),
+	}
+
+	requestBody := fmt.Sprintf(`{
+		"amount": "150.50",
+		"asset": {"id": %q},
+		"receiver": {"id": %q},
+		"wallet": {"id": %q}
+	}`, asset.ID, receiver.ID, wallet.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/payments", strings.NewReader(requestBody))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	handler.PostDirectPayment(rr, req)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code, "body: %s", rr.Body.String())
+	assert.Contains(t, rr.Body.String(), "the source wallet has no funded distribution account yet")
+
+	distServiceMock.AssertNotCalled(t, "GetBalance", mock.Anything, mock.Anything, mock.Anything)
+	authMock.AssertExpectations(t)
+}
+
 func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 	ctx := sdpcontext.SetUserIDInContext(context.Background(), "user-horus")
 	ctx = sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "battle-barge-001"})
 
 	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// Shared test DB: normalize to one ACTIVE (default) wallet for the single-wallet fallback.
+	sharedDefaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW()
+		WHERE NOT is_default AND status = 'ACTIVE'`)
+	require.NoError(t, err)
+	// PostDirectPayment now builds the transaction account from the resolved source wallet, so
+	// it needs a real address before any of these validation-error cases can even be reached.
+	_, err = dbConnectionPool.ExecContext(ctx,
+		"UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2",
+		"GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA", sharedDefaultWallet.ID)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -2139,10 +2311,8 @@ func TestPaymentsHandler_PostPayment_InputValidation(t *testing.T) {
 
 	authMock.On("GetUserByID", mock.Anything, "user-horus").Return(&auth.User{
 		ID: "user-horus", Email: "horus@warmaster.imperium",
+		IsOwner: true,
 	}, nil)
-
-	distResolverMock.On("DistributionAccountFromContext", mock.Anything).Return(
-		schema.TransactionAccount{}, nil)
 
 	directPaymentService := services.NewDirectPaymentService(models, distServiceMock, engine.SubmitterEngine{})
 

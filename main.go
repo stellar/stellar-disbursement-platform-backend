@@ -13,7 +13,7 @@ import (
 
 // Version is the official version of this application. Whenever it's changed
 // here, it also needs to be updated at the `helmchart/Chart.yaml#appVersion“.
-const Version = "6.6.1"
+const Version = "7.0.0"
 
 // GitCommit is populated at build time by
 // go build -ldflags "-X main.GitCommit=$GIT_COMMIT"
@@ -36,9 +36,9 @@ func main() {
 	}
 }
 
-// preConfigureLogger will set the log level to Trace, so logs works from the
-// start. This will eventually be overwritten in cmd/root.go
+// preConfigureLogger will set the log level to Info, so logs work from the
+// start. This will eventually be overwritten in cmd/root.go by the --log-level option.
 func preConfigureLogger() {
 	log.DefaultLogger = log.New()
-	log.DefaultLogger.SetLevel(logrus.TraceLevel)
+	log.DefaultLogger.SetLevel(logrus.InfoLevel)
 }

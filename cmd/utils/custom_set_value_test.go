@@ -349,17 +349,17 @@ func Test_SetConfigOptionStellarPublicKey(t *testing.T) {
 	testCases := []customSetterTestCase[string]{
 		{
 			name:            "returns an error if the public key is empty",
-			wantErrContains: "error validating public key in sep10-signing-public-key: strkey is 0 bytes long; minimum valid length is 5",
+			wantErrContains: "error validating public key in sep10-signing-public-key: invalid key: strkey is 0 bytes long; minimum valid length is 5",
 		},
 		{
 			name:            "returns an error if the public key is invalid",
 			args:            []string{"--sep10-signing-public-key", "invalid_public_key"},
-			wantErrContains: "error validating public key in sep10-signing-public-key: base32 decode failed: illegal base32 data at input byte 18",
+			wantErrContains: "error validating public key in sep10-signing-public-key: invalid key: base32 decode failed: illegal base32 data at input byte 18",
 		},
 		{
 			name:            "returns an error if the public key is invalid (private key instead)",
 			args:            []string{"--sep10-signing-public-key", "SDISQRUPIHAO5WIIGY4QRDCINZSA44TX3OIIUK3C63NUKN5DABKEQ276"},
-			wantErrContains: "error validating public key in sep10-signing-public-key: invalid version byte",
+			wantErrContains: "error validating public key in sep10-signing-public-key: invalid key: invalid version byte",
 		},
 		{
 			name:       "🎉 handles Stellar public key through the CLI flag",

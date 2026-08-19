@@ -49,34 +49,11 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 	return nil
 }
 
-func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, payments ...data.Payment) ([]data.Payment, error) {
-	if len(payments) == 0 {
-		return payments, nil
-	}
-
-	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("resolving distribution account: %w", err)
-	}
-
-	if !distAccount.IsCircle() {
-		return payments, nil
-	}
-
-	paymentIDs := make([]string, len(payments))
-	for i, payment := range payments {
-		paymentIDs[i] = payment.ID
-	}
-
-	transfersByPaymentID, err := p.Models.CircleTransferRequests.GetCurrentTransfersForPaymentIDs(ctx, p.DBConnectionPool, paymentIDs)
-	if err != nil {
-		return nil, fmt.Errorf("getting circle transfers for payment IDs: %w", err)
-	}
-
-	for i, payment := range payments {
-		if transfer, ok := transfersByPaymentID[payment.ID]; ok {
-			payments[i].CircleTransferRequestID = transfer.CircleTransferID
-		}
+// decorateWithCircleTransactionInfo is not gated on the account being Circle: resolution is per
+// payment row, and non-Circle tenants simply have no circle_transfer_requests rows to find.
+func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, sqlExec db.SQLExecuter, payments []data.Payment) ([]data.Payment, error) {
+	if err := p.Models.CircleTransferRequests.PopulateCircleTransactionInfo(ctx, sqlExec, payments); err != nil {
+		return nil, fmt.Errorf("populating circle transaction info: %w", err)
 	}
 
 	return payments, nil
@@ -87,6 +64,20 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err == nil {
+		// Membership-filtered visibility: 404 outside the caller's scope — existence
+		// is never disclosed. payment.SourceWalletID is the payment's own persisted source
+		// wallet (guaranteed non-empty for both disbursement and direct payments).
+		scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
+		if scopeErr != nil {
+			scopeErr.Render(w)
+			return
+		}
+		if scope != nil && !walletInReadScope(scope, payment.SourceWalletID) {
+			httperror.NotFound("payment not found", nil, nil).Render(w)
+			return
+		}
+	}
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
@@ -99,7 +90,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payments, err := p.decorateWithCircleTransactionInfo(ctx, *payment)
+	payments, err := p.decorateWithCircleTransactionInfo(ctx, p.DBConnectionPool, []data.Payment{*payment})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve payment with circle info", err, nil).Render(w)
 		return
@@ -125,6 +116,17 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// Per-account list scope: narrow to the selected account (X-Wallet-Id) when set, else full
+	// visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, p.AuthManager, p.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+	}
 
 	response, err := p.getPaymentsWithCount(ctx, queryParams)
 	if err != nil {
@@ -167,6 +169,24 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	if err := reqBody.validate(); err != nil {
 		err.Render(rw)
 		return
+	}
+
+	// retrying is a state transition — gate each payment on its source wallet.
+	for _, retryPaymentID := range reqBody.PaymentIDs {
+		retryPayment, getErr := p.Models.Payment.Get(ctx, retryPaymentID, p.DBConnectionPool)
+		if getErr != nil {
+			if errors.Is(getErr, data.ErrRecordNotFound) {
+				httperror.NotFound("payment not found", getErr, nil).Render(rw)
+			} else {
+				httperror.InternalError(ctx, "Cannot load payment", getErr, nil).Render(rw)
+			}
+			return
+		}
+		if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, retryPayment.SourceWalletID,
+			data.FinancialControllerUserRole, data.BusinessUserRole); httpErr != nil {
+			httpErr.Render(rw)
+			return
+		}
 	}
 
 	err = db.RunInTransaction(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
@@ -214,7 +234,7 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 			}
 		}
 
-		payments, err := p.decorateWithCircleTransactionInfo(ctx, payments...)
+		payments, err := p.decorateWithCircleTransactionInfo(ctx, dbTx, payments)
 		if err != nil {
 			return nil, fmt.Errorf("adding circle info to payments: %w", err)
 		}
@@ -251,6 +271,22 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 
 	ctx := r.Context()
 	paymentID := chi.URLParam(r, "id")
+
+	// every state transition is gated on the payment's source wallet.
+	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound(services.ErrPaymentNotFound.Error(), err, nil).Render(w)
+		} else {
+			httperror.InternalError(ctx, "Cannot load payment", err, nil).Render(w)
+		}
+		return
+	}
+	if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, payment.SourceWalletID,
+		data.FinancialControllerUserRole); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
 
 	switch toStatus {
 	case data.CanceledPaymentStatus:
@@ -301,6 +337,10 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 	}
 	user, err := p.AuthManager.GetUserByID(ctx, userID)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(w)
 		return
 	}
@@ -313,9 +353,19 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		ExternalPaymentID: validatedReq.ExternalPaymentID,
 	}
 
-	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "resolving distribution account", err, nil).Render(w)
+	// Routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, p.AuthManager, p.Models,
+		data.FinancialControllerUserRole, data.BusinessUserRole)
+	if walletErr != nil {
+		walletErr.Render(w)
+		return
+	}
+	serviceReq.SourceWalletID = sourceWallet.ID
+
+	distAccount, accountErr := resolveSourceDistributionAccount(ctx, p.DistributionAccountResolver, sourceWallet,
+		"the source wallet has no funded distribution account yet")
+	if accountErr != nil {
+		accountErr.Render(w)
 		return
 	}
 

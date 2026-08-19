@@ -100,7 +100,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.D
 
 	// Step 1: Fetch all receivers by contact information (phone, email, etc.) and create missing ones
 	registrationContactType := opts.Disbursement.RegistrationContactType
-	receiversByIDMap, err := di.reconcileExistingReceiversWithInstructions(ctx, dbTx, opts.Instructions, registrationContactType.ReceiverContactType)
+	receiversByIDMap, err := di.reconcileExistingReceiversWithInstructions(ctx, dbTx, opts.Instructions, registrationContactType.ReceiverContactType, opts.Disbursement.SourceWalletID)
 	if err != nil {
 		return fmt.Errorf("processing receivers: %w", err)
 	}
@@ -213,7 +213,7 @@ func (di DisbursementInstructionModel) getReceiverWalletsByIDMap(ctx context.Con
 }
 
 // reconcileExistingReceiversWithInstructions fetches all existing receivers by their contact information and creates missing ones.
-func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstructions(ctx context.Context, dbTx db.DBTransaction, instructions []*DisbursementInstruction, contactType ReceiverContactType) (map[string]*Receiver, error) {
+func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstructions(ctx context.Context, dbTx db.DBTransaction, instructions []*DisbursementInstruction, contactType ReceiverContactType, sourceWalletID string) (map[string]*Receiver, error) {
 	// Step 1: Fetch existing receivers
 	contacts := make([]string, 0, len(instructions))
 	for _, instruction := range instructions {
@@ -241,7 +241,7 @@ func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstruction
 
 	// Step 3: Create missing receivers from instructions
 	for _, instruction := range instructions {
-		if createErr := di.createReceiverFromInstructionIfNeeded(ctx, dbTx, instruction, existingReceiversByContactMap); createErr != nil {
+		if createErr := di.createReceiverFromInstructionIfNeeded(ctx, dbTx, instruction, existingReceiversByContactMap, sourceWalletID); createErr != nil {
 			return nil, fmt.Errorf("creating receiver from instruction: %w", createErr)
 		}
 	}
@@ -265,7 +265,7 @@ func (di DisbursementInstructionModel) reconcileExistingReceiversWithInstruction
 }
 
 // createReceiverFromInstructionIfNeeded create a new receiver if it doesn't exist for the given instruction.
-func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx context.Context, dbTx db.DBTransaction, instruction *DisbursementInstruction, existingReceiversByContactMap map[string]*Receiver) error {
+func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx context.Context, dbTx db.DBTransaction, instruction *DisbursementInstruction, existingReceiversByContactMap map[string]*Receiver, sourceWalletID string) error {
 	contact, err := instruction.Contact()
 	if err != nil {
 		return fmt.Errorf("resolving contact information for instruction with ID %s: %w", instruction.ID, err)
@@ -273,7 +273,7 @@ func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx
 
 	_, exists := existingReceiversByContactMap[contact]
 	if !exists {
-		var receiverInsert ReceiverInsert
+		receiverInsert := ReceiverInsert{SourceWalletID: sourceWalletID}
 		if instruction.Phone != "" {
 			receiverInsert.PhoneNumber = &instruction.Phone
 		}
@@ -303,6 +303,12 @@ func (di DisbursementInstructionModel) processReceiverVerifications(ctx context.
 	verificationByReceiverIDMap := make(map[string]*ReceiverVerification)
 	for _, verification := range verifications {
 		verificationByReceiverIDMap[verification.ReceiverID] = verification
+	}
+
+	// An upload may only rewrite the verification of receivers its own account can already reach.
+	inScope, err := di.receiverModel.InScopeIDs(ctx, dbTx, receiverIDs, []string{disbursement.SourceWalletID})
+	if err != nil {
+		return fmt.Errorf("filtering receivers to the disbursement's distribution account: %w", err)
 	}
 
 	instructionsByContactMap := make(map[string]*DisbursementInstruction)
@@ -336,7 +342,8 @@ func (di DisbursementInstructionModel) processReceiverVerifications(ctx context.
 				return fmt.Errorf("error inserting receiver verification: %w", insertErr)
 			}
 		} else if !CompareVerificationValue(verification.HashedValue, instruction.VerificationValue) {
-			if verification.ConfirmedAt != nil {
+			_, reachable := inScope[receiver.ID]
+			if verification.ConfirmedAt != nil || !reachable {
 				return fmt.Errorf("%w: receiver verification for %s doesn't match. Check instruction with ID %s", ErrReceiverVerificationMismatch, contact, instruction.ID)
 			}
 			updateErr := di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.VerificationValue)

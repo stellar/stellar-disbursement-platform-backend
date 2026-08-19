@@ -16,11 +16,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type ReceiverHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
+	AuthManager      auth.AuthManager
 }
 
 type GetReceiverResponse struct {
@@ -53,7 +55,22 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	response, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *GetReceiverResponse, innerErr error) {
-		receiver, innerErr := rh.Models.Receiver.Get(ctx, dbTx, receiverID)
+		// Two different questions. Visibility is about membership and never narrows with the account
+		// picker, or an Owner would 404 on a receiver outside the selected account. The counters
+		// follow the picker, so the totals match the payment list rendered beneath them.
+		scope, scopeHTTPErr := resolveWalletReadScope(ctx, rh.AuthManager, rh.Models)
+		if scopeHTTPErr != nil {
+			return nil, fmt.Errorf("resolving wallet scope: %w", scopeHTTPErr)
+		}
+		visible, visErr := rh.Models.Receiver.IsInScope(ctx, dbTx, receiverID, scope)
+		if visErr != nil {
+			return nil, fmt.Errorf("checking receiver visibility: %w", visErr)
+		}
+		if !visible {
+			return nil, data.ErrRecordNotFound
+		}
+
+		receiver, innerErr := rh.Models.Receiver.GetWithStatsScope(ctx, dbTx, receiverID, narrowScopeToSelectedWallet(scope, r))
 		if innerErr != nil {
 			return nil, fmt.Errorf("getting receiver by ID: %w", innerErr)
 		}
@@ -99,6 +116,18 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// Per-account list scope: receivers reachable via the selected account's payments when
+	// X-Wallet-Id is set, else full visibility (owner tenant-wide, member = their wallets).
+	scope, scopeErr := resolveWalletListScope(ctx, r, rh.AuthManager, rh.Models)
+	if scopeErr != nil {
+		scopeErr.Render(w)
+		return
+	}
+	if scope != nil {
+		queryParams.Filters[data.FilterKeySourceWalletIDs] = scope
+		queryParams.Filters[data.FilterKeyStatsSourceWalletIDs] = scope
+	}
 
 	httpResponse, err := db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*httpresponse.PaginatedResponse, error) {
 		totalReceivers, err := rh.Models.Receiver.Count(ctx, dbTx, queryParams)
@@ -160,15 +189,24 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 		return
 	}
 
+	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, rh.AuthManager, rh.Models,
+		data.FinancialControllerUserRole, data.BusinessUserRole, data.InitiatorUserRole,
+		data.ApproverUserRole, data.DeveloperUserRole)
+	if walletErr != nil {
+		walletErr.Render(rw)
+		return
+	}
+
 	var response *GetReceiverResponse
 	response, err = db.RunInTransactionWithResult(ctx, rh.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*GetReceiverResponse, error) {
 		var txErr error
 
 		// Step 1: Prepare the receiver data for insertion into the database
 		receiverInsert := data.ReceiverInsert{
-			Email:       &req.Email,
-			PhoneNumber: &req.PhoneNumber,
-			ExternalID:  &req.ExternalID,
+			Email:          &req.Email,
+			PhoneNumber:    &req.PhoneNumber,
+			ExternalID:     &req.ExternalID,
+			SourceWalletID: sourceWallet.ID,
 		}
 
 		if req.Email == "" {

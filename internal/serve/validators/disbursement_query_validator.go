@@ -59,10 +59,10 @@ func (qv *DisbursementQueryValidator) validateAndGetDisbursementStatuses(statuse
 	for _, status := range statusList {
 		s := data.DisbursementStatus(strings.ToUpper(strings.TrimSpace(status)))
 		switch s {
-		case data.DraftDisbursementStatus, data.ReadyDisbursementStatus, data.StartedDisbursementStatus, data.PausedDisbursementStatus, data.CompletedDisbursementStatus:
+		case data.DraftDisbursementStatus, data.ReadyDisbursementStatus, data.StartedDisbursementStatus, data.PausedDisbursementStatus, data.CompletedDisbursementStatus, data.CanceledDisbursementStatus:
 			validStatuses = append(validStatuses, s)
 		default:
-			qv.Check(false, string(data.FilterKeyStatus), "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed")
+			qv.Check(false, string(data.FilterKeyStatus), "invalid parameter. valid value is a comma separate list of statuses: draft, ready, started, paused, completed, canceled")
 		}
 	}
 	return validStatuses

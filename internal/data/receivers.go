@@ -21,12 +21,13 @@ var (
 )
 
 type Receiver struct {
-	ID          string     `json:"id" db:"id"`
-	Email       string     `json:"email,omitempty" db:"email"`
-	PhoneNumber string     `json:"phone_number,omitempty" db:"phone_number"`
-	ExternalID  string     `json:"external_id,omitempty" db:"external_id"`
-	CreatedAt   *time.Time `json:"created_at,omitempty" db:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at,omitempty" db:"updated_at"`
+	ID             string     `json:"id" db:"id"`
+	Email          string     `json:"email,omitempty" db:"email"`
+	PhoneNumber    string     `json:"phone_number,omitempty" db:"phone_number"`
+	ExternalID     string     `json:"external_id,omitempty" db:"external_id"`
+	SourceWalletID string     `json:"-" csv:"-" db:"source_wallet_id"`
+	CreatedAt      *time.Time `json:"created_at,omitempty" db:"created_at"`
+	UpdatedAt      *time.Time `json:"updated_at,omitempty" db:"updated_at"`
 	ReceiverStats
 }
 
@@ -68,6 +69,7 @@ func ReceiverColumnNames(tableReference, resultAlias string) string {
 		RawColumns: []string{
 			"id",
 			"external_id",
+			"source_wallet_id",
 			"created_at",
 			"updated_at",
 		},
@@ -103,12 +105,26 @@ var (
 	AllowedReceiverSorts     = []SortField{SortFieldCreatedAt, SortFieldUpdatedAt}
 )
 
+// ReceiverInScopeCondition is the single definition of "this caller may reach this receiver": the
+// account it was created under, or any account that has paid them. Reads filter with it and writes
+// gate on it, so the two can never drift. Pair it with ReceiverInScopeArgs.
+const ReceiverInScopeCondition = `(
+	r.source_wallet_id = ANY(?)
+	OR EXISTS (SELECT 1 FROM payments pw WHERE pw.receiver_id = r.id AND pw.source_wallet_id = ANY(?))
+)`
+
+// ReceiverInScopeArgs returns the arguments ReceiverInScopeCondition binds, in order.
+func ReceiverInScopeArgs(walletIDs []string) []any {
+	return []any{pq.Array(walletIDs), pq.Array(walletIDs)}
+}
+
 type ReceiverModel struct{}
 
 type ReceiverInsert struct {
-	PhoneNumber *string `db:"phone_number"`
-	Email       *string `db:"email"`
-	ExternalID  *string `db:"external_id"`
+	PhoneNumber    *string `db:"phone_number"`
+	Email          *string `db:"email"`
+	ExternalID     *string `db:"external_id"`
+	SourceWalletID string  `db:"source_wallet_id"`
 }
 
 type ReceiverUpdate ReceiverInsert
@@ -159,13 +175,89 @@ func (ra *ReceivedAmounts) Scan(src interface{}) error {
 	return nil
 }
 
-// Get returns a RECEIVER matching the given ID.
+// IsInScope reports whether the receiver is reachable from any of the given wallets. A nil scope is
+// the Owner's tenant-wide view and always passes.
+func (r *ReceiverModel) IsInScope(ctx context.Context, sqlExec db.SQLExecuter, receiverID string, scope []string) (bool, error) {
+	if scope == nil {
+		return true, nil
+	}
+
+	query := sqlExec.Rebind(`SELECT ` + ReceiverInScopeCondition + ` FROM receivers r WHERE r.id = ?`)
+
+	var inScope bool
+	if err := sqlExec.GetContext(ctx, &inScope, query, append(ReceiverInScopeArgs(scope), receiverID)...); err != nil {
+		// A receiver that does not exist is simply not reachable, so callers render it the same as one
+		// they may not reach — the two must not be distinguishable.
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking receiver %q scope: %w", receiverID, err)
+	}
+
+	return inScope, nil
+}
+
+// InScopeIDs returns which of the given receivers are reachable from the given wallets, using the
+// same definition as IsInScope. A nil scope is the Owner's tenant-wide view, so every id is returned.
+func (r *ReceiverModel) InScopeIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverIDs []string, scope []string) (map[string]struct{}, error) {
+	inScope := make(map[string]struct{}, len(receiverIDs))
+	if scope == nil {
+		for _, id := range receiverIDs {
+			inScope[id] = struct{}{}
+		}
+		return inScope, nil
+	}
+
+	query := sqlExec.Rebind(`
+		SELECT r.id
+		FROM receivers r
+		WHERE r.id = ANY(?) AND ` + ReceiverInScopeCondition)
+
+	var ids []string
+	args := append([]any{pq.Array(receiverIDs)}, ReceiverInScopeArgs(scope)...)
+	if err := sqlExec.SelectContext(ctx, &ids, query, args...); err != nil {
+		return nil, fmt.Errorf("filtering receivers to wallet scope: %w", err)
+	}
+	for _, id := range ids {
+		inScope[id] = struct{}{}
+	}
+
+	return inScope, nil
+}
+
+// HasNonTerminalPayments reports whether the receiver is still owed money on any payment.
+func (r *ReceiverModel) HasNonTerminalPayments(ctx context.Context, sqlExec db.SQLExecuter, receiverID string) (bool, error) {
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			  FROM payments
+			 WHERE receiver_id = $1
+			   AND status = ANY($2)
+		)
+	`
+
+	var exists bool
+	if err := sqlExec.GetContext(ctx, &exists, q, receiverID, pq.Array(PaymentNonTerminalStatuses())); err != nil {
+		return false, fmt.Errorf("checking non-terminal payments for receiver %q: %w", receiverID, err)
+	}
+
+	return exists, nil
+}
+
+// Get returns a RECEIVER matching the given ID, with tenant-wide payment counters.
 func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Receiver, error) {
-	receivers, err := r.GetAll(ctx, sqlExec, &QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyID: id,
-		},
-	}, QueryTypeSingle)
+	return r.GetWithStatsScope(ctx, sqlExec, id, nil)
+}
+
+// GetWithStatsScope returns a RECEIVER matching the given ID, counting only payments made from the
+// given distribution wallets. A nil scope leaves the counters tenant-wide.
+func (r *ReceiverModel) GetWithStatsScope(ctx context.Context, sqlExec db.SQLExecuter, id string, statsScope []string) (*Receiver, error) {
+	filters := map[FilterKey]interface{}{FilterKeyID: id}
+	if statsScope != nil {
+		filters[FilterKeyStatsSourceWalletIDs] = statsScope
+	}
+
+	receivers, err := r.GetAll(ctx, sqlExec, &QueryParams{Filters: filters}, QueryTypeSingle)
 	if err != nil {
 		return nil, fmt.Errorf("getting receiver by id: %w", err)
 	}
@@ -200,6 +292,10 @@ func (r *ReceiverModel) Count(ctx context.Context, sqlExec db.SQLExecuter, query
 func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams *QueryParams, queryType QueryType) ([]Receiver, error) {
 	receivers := []Receiver{}
 
+	// The counters below must cover the same payments the caller can see, or a receiver's totals
+	// contradict their payment list.
+	statsScope, statsParams := receiverStatsScope(queryParams)
+
 	query := `
 		WITH receiver_stats AS (
 			SELECT
@@ -213,7 +309,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				a.issuer as asset_issuer,
 				COALESCE(SUM(p.amount) FILTER(WHERE p.asset_id = a.id AND p.status = 'SUCCESS'), '0') as received_amount
 			FROM receivers r
-			JOIN payments p ON r.id = p.receiver_id
+			JOIN payments p ON r.id = p.receiver_id` + statsScope + `
 			JOIN assets a ON a.id = p.asset_id
 			GROUP BY (r.id, a.code, a.issuer)
 		), receiver_stats_aggregate AS (
@@ -247,7 +343,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 		LEFT JOIN receiver_stats_aggregate rs ON rs.receiver_id = r.id
 		`
 
-	query, params := newReceiverQuery(query, queryParams, sqlExec, queryType)
+	query, params := newReceiverQuery(query, queryParams, sqlExec, queryType, statsParams...)
 
 	err := sqlExec.SelectContext(ctx, &receivers, query, params...)
 	if err != nil {
@@ -257,9 +353,22 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 	return receivers, nil
 }
 
-// newReceiverQuery generates the full query and parameters for a receiver search query
-func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType) (string, []interface{}) {
-	qb := NewQueryBuilder(baseQuery)
+// receiverStatsScope narrows the payment counters to the given distribution wallets, returning the
+// join predicate and its parameter. An absent filter leaves the counters tenant-wide, which is what
+// an Owner (and the "all accounts" view) should see.
+func receiverStatsScope(queryParams *QueryParams) (string, []interface{}) {
+	walletIDs, ok := queryParams.Filters[FilterKeyStatsSourceWalletIDs].([]string)
+	if !ok {
+		return "", nil
+	}
+
+	return " AND p.source_wallet_id = ANY(?)", []interface{}{pq.Array(walletIDs)}
+}
+
+// newReceiverQuery generates the full query and parameters for a receiver search query. baseParams
+// belong to placeholders already present in baseQuery, and bind ahead of every condition added here.
+func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQLExecuter, queryType QueryType, baseParams ...interface{}) (string, []interface{}) {
+	qb := NewQueryBuilderWithParams(baseQuery, baseParams...)
 	if queryParams.Filters[FilterKeyID] != nil {
 		addArrayOrSingleCondition[string](qb, "r.id", queryParams.Filters[FilterKeyID])
 	}
@@ -276,6 +385,11 @@ func newReceiverQuery(baseQuery string, queryParams *QueryParams, sqlExec db.SQL
 	}
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("r.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
+	}
+	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
+		// Additive: the account the receiver was created under, plus any account that has paid them.
+		// Alias both sides — an unqualified source_wallet_id inside the subquery binds to payments.
+		qb.AddCondition(ReceiverInScopeCondition, ReceiverInScopeArgs(walletIDs)...)
 	}
 
 	switch queryType {
@@ -311,16 +425,18 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 		INSERT INTO receivers (
 			phone_number,
 			email,
-			external_id
+			external_id,
+			source_wallet_id
 		) VALUES (
 			$1,
 			$2,
-		    $3
+		    $3,
+		    $4
 		) RETURNING
 			` + ReceiverColumnNames("", "")
 
 	var receiver Receiver
-	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalID)
+	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalID, insert.SourceWalletID)
 	if err != nil {
 		var pqError *pq.Error
 		if errors.As(err, &pqError) && pqError.Code == "23505" {

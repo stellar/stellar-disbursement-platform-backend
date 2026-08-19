@@ -21,7 +21,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Rust
         run: |
@@ -35,10 +35,7 @@ jobs:
         uses: stellar/actions/rust-cache@main
 
       - name: Install cargo-audit
-        run: |
-          if ! command -v cargo-audit &> /dev/null; then
-            cargo install cargo-audit
-          fi
+        run: cargo install cargo-audit --locked
 
       - name: Format check
         run: cargo fmt -- --check

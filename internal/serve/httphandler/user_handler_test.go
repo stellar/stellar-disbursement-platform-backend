@@ -392,6 +392,20 @@ func Test_CreateUserRequest_validate(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴error - wallet_id on an owner",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.OwnerUserRole},
+				WalletID:  "some-wallet-id",
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"wallet_id": "the owner role is tenant-wide and cannot be scoped to a wallet",
+			},
+		},
+		{
 			name: "🔴error - invalid email format",
 			request: CreateUserRequest{
 				FirstName: "First",
@@ -507,6 +521,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
+
+	// CreateUser now grants non-owner users a default-wallet membership, so every subtest here
+	// (all use a non-owner role) needs a real default wallet to insert against.
+	data.EnsureDefaultDistributionWalletFixture(t, context.Background(), dbConnectionPool)
 
 	r := chi.NewRouter()
 
@@ -879,7 +897,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		expectedUser := &auth.User{
-			ID:        "user-id",
+			ID:        "user-id-2",
 			FirstName: u.FirstName,
 			LastName:  u.LastName,
 			Email:     u.Email,
@@ -925,7 +943,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"id": "user-id",
+				"id": "user-id-2",
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "email@email.com",
@@ -954,7 +972,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		expectedUser := &auth.User{
-			ID:        "user-id",
+			ID:        "user-id-3",
 			FirstName: u.FirstName,
 			LastName:  u.LastName,
 			Email:     u.Email,
@@ -1020,7 +1038,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"id": "user-id",
+				"id": "user-id-3",
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "email@email.com",
@@ -1033,7 +1051,13 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "[CreateUserAccount] - User ID authenticated-user-id created user with account ID user-id")
+		require.Contains(t, buf.String(), "[CreateUserAccount] - User ID authenticated-user-id created user with account ID user-id-3")
+
+		// validate the new user actually got a default-wallet membership, proving they won't
+		// see empty lists/403s on first login (the bug this fix closes)
+		walletIDs, membershipErr := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, "user-id-3")
+		require.NoError(t, membershipErr)
+		require.Len(t, walletIDs, 1)
 	})
 
 	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {
@@ -1061,6 +1085,222 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+	})
+
+	t.Run("scopes the new user to the wallet named in the request", func(t *testing.T) {
+		token := "mytoken"
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
+
+		walletB, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+			Name:        "wallet-b",
+			AccountType: schema.DistributionAccountStellarDBVault,
+		})
+		require.NoError(t, err)
+		_, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, walletB.ID)
+		require.NoError(t, err)
+
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
+			On("CreateUser", mock.Anything, mock.Anything, "").
+			Return(&auth.User{
+				ID:        "user-id-wallet-b",
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "wallet-b@email.com",
+				Roles:     []string{data.DeveloperUserRole.String()},
+				IsActive:  true,
+			}, nil).
+			Once()
+		messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil).Once()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "wallet-b@email.com",
+				"roles": ["developer"],
+				"wallet_id": "` + walletB.ID + `"
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusCreated, w.Result().StatusCode)
+
+		// the membership must land on the requested wallet, not the tenant default
+		walletIDs, err := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, "user-id-wallet-b")
+		require.NoError(t, err)
+		assert.Equal(t, []string{walletB.ID}, walletIDs)
+	})
+
+	t.Run("returns BadRequest when the requested wallet does not exist", func(t *testing.T) {
+		token := "mytoken"
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
+
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "unknown-wallet@email.com",
+				"roles": ["developer"],
+				"wallet_id": "non-existent-wallet-id"
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"wallet_id": "wallet_id is invalid"}}`, string(respBody))
+	})
+
+	t.Run("returns Conflict when the requested wallet is archived", func(t *testing.T) {
+		token := "mytoken"
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
+
+		archived, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+			Name:        "wallet-archived",
+			AccountType: schema.DistributionAccountStellarDBVault,
+		})
+		require.NoError(t, err)
+		_, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, archived.ID)
+		require.NoError(t, err)
+		_, err = models.DistributionWallets.Archive(ctx, dbConnectionPool, archived.ID)
+		require.NoError(t, err)
+
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "archived-wallet@email.com",
+				"roles": ["developer"],
+				"wallet_id": "` + archived.ID + `"
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusConflict, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "cannot grant membership on an archived wallet"}`, string(respBody))
+	})
+
+	t.Run("does not grant a membership to an owner", func(t *testing.T) {
+		token := "mytoken"
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
+
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
+			On("CreateUser", mock.Anything, mock.Anything, "").
+			Return(&auth.User{
+				ID:        "user-id-owner",
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "owner@email.com",
+				Roles:     []string{data.OwnerUserRole.String()},
+				IsActive:  true,
+			}, nil).
+			Once()
+		messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil).Once()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "owner@email.com",
+				"roles": ["owner"]
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusCreated, w.Result().StatusCode)
+
+		// owners are tenant-wide, so they must never hold membership rows
+		walletIDs, err := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, "user-id-owner")
+		require.NoError(t, err)
+		assert.Empty(t, walletIDs)
+	})
+
+	t.Run("deactivates the user when the membership grant fails", func(t *testing.T) {
+		token := "mytoken"
+		ctx = sdpcontext.SetTokenInContext(ctx, token)
+
+		defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+
+		// pre-existing identical grant makes the handler's insert fail on the unique constraint,
+		// which is the only way the user row and the membership row can diverge
+		const orphanUserID = "user-id-orphan"
+		_, err := models.WalletMemberships.Insert(ctx, dbConnectionPool, orphanUserID, defaultWallet.ID, data.DeveloperUserRole, nil)
+		require.NoError(t, err)
+
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
+			On("CreateUser", mock.Anything, mock.Anything, "").
+			Return(&auth.User{
+				ID:        orphanUserID,
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "orphan@email.com",
+				Roles:     []string{data.DeveloperUserRole.String()},
+				IsActive:  true,
+			}, nil).
+			Once().
+			On("DeactivateUser", mock.Anything, token, orphanUserID).
+			Return(nil).
+			Once()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "orphan@email.com",
+				"roles": ["developer"]
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		// the user must not be left live-but-invisible, and no invitation may go out
+		assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+		authManagerMock.AssertCalled(t, "DeactivateUser", mock.Anything, token, orphanUserID)
 	})
 
 	authManagerMock.AssertExpectations(t)

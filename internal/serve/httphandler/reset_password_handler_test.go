@@ -71,8 +71,10 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	const method = "POST"
 
 	authenticatorMock := &auth.AuthenticatorMock{}
+	mfaManagerMock := &auth.MFAManagerMock{}
 	authManager := auth.NewAuthManager(
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
+		auth.WithCustomMFAManagerOption(mfaManagerMock),
 	)
 	pwValidator, err := utils.GetPasswordValidatorInstance()
 	require.NoError(t, err)
@@ -94,6 +96,10 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 
 		authenticatorMock.
 			On("ResetPassword", req.Context(), "goodtoken", "!1Az?2By.3Cx").
+			Return("user-id", nil).
+			Once()
+		mfaManagerMock.
+			On("ForgetAllDevices", req.Context(), "user-id").
 			Return(nil).
 			Once()
 
@@ -115,7 +121,7 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 
 		authenticatorMock.
 			On("ResetPassword", req.Context(), "badtoken", "!1Az?2By.3Cx").
-			Return(auth.ErrInvalidResetPasswordToken).
+			Return("", auth.ErrInvalidResetPasswordToken).
 			Once()
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
@@ -138,7 +144,7 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 
 		authenticatorMock.
 			On("ResetPassword", req.Context(), "expiredtoken", "!1Az?2By.3Cx").
-			Return(auth.ErrExpiredResetPasswordToken).
+			Return("", auth.ErrExpiredResetPasswordToken).
 			Once()
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
@@ -184,4 +190,5 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	})
 
 	authenticatorMock.AssertExpectations(t)
+	mfaManagerMock.AssertExpectations(t)
 }

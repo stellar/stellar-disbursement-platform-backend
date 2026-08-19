@@ -80,12 +80,12 @@ func Test_VerifySignedURL(t *testing.T) {
 	// expectedPublicKey cannot be empty
 	isValid, err := VerifySignedURL(signedURL, "")
 	require.False(t, isValid)
-	require.EqualError(t, err, "error parsing expected public key: strkey is 0 bytes long; minimum valid length is 5")
+	require.EqualError(t, err, "error parsing expected public key: invalid key: strkey is 0 bytes long; minimum valid length is 5")
 
 	// invalid expectedPublicKey
 	isValid, err = VerifySignedURL(signedURL, "INVALID_PUBLIC_KEY")
 	require.False(t, isValid)
-	require.EqualError(t, err, "error parsing expected public key: base32 decode failed: illegal base32 data at input byte 7")
+	require.EqualError(t, err, "error parsing expected public key: invalid key: base32 decode failed: illegal base32 data at input byte 7")
 
 	// signedURL cannot be empty
 	isValid, err = VerifySignedURL("", expectedPublicKey)

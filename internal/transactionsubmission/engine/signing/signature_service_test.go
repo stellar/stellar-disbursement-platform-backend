@@ -126,6 +126,7 @@ func Test_NewSignatureService(t *testing.T) {
 		networkPassphrase:    network.TestNetworkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
+		walletKeys:           store.NewDistributionWalletKeyModel(dbConnectionPool),
 		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 	wantSigRouterStrategies := map[schema.AccountType]SignatureClient{

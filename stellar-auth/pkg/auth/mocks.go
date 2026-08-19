@@ -102,9 +102,9 @@ func (am *AuthenticatorMock) ForgotPassword(ctx context.Context, sqlExec db.SQLE
 	return args.String(0), args.Error(1)
 }
 
-func (am *AuthenticatorMock) ResetPassword(ctx context.Context, resetToken, password string) error {
+func (am *AuthenticatorMock) ResetPassword(ctx context.Context, resetToken, password string) (string, error) {
 	args := am.Called(ctx, resetToken, password)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (am *AuthenticatorMock) UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error {
@@ -171,6 +171,38 @@ func (rm *RoleManagerMock) UpdateRoles(ctx context.Context, user *User, roleName
 }
 
 var _ RoleManager = (*RoleManagerMock)(nil)
+
+// MFAManager
+type MFAManagerMock struct {
+	mock.Mock
+}
+
+func (m *MFAManagerMock) MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error) {
+	args := m.Called(ctx, deviceID, userID)
+	return args.Get(0).(bool), args.Error(1)
+}
+
+func (m *MFAManagerMock) GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error) {
+	args := m.Called(ctx, deviceID, userID)
+	return args.Get(0).(string), args.Error(1)
+}
+
+func (m *MFAManagerMock) ValidateMFACode(ctx context.Context, deviceID, code string) (string, error) {
+	args := m.Called(ctx, deviceID, code)
+	return args.Get(0).(string), args.Error(1)
+}
+
+func (m *MFAManagerMock) RememberDevice(ctx context.Context, deviceID, userID string) error {
+	args := m.Called(ctx, deviceID, userID)
+	return args.Error(0)
+}
+
+func (m *MFAManagerMock) ForgetAllDevices(ctx context.Context, userID string) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
+var _ MFAManager = (*MFAManagerMock)(nil)
 
 // AuthManager
 type AuthManagerMock struct {

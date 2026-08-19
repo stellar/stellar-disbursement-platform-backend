@@ -110,6 +110,44 @@ func Test_TSSPrometheusClient_MonitorDBQueryDuration(t *testing.T) {
 	})
 }
 
+func Test_TSSPrometheusClient_MonitorHTTPRequestDuration(t *testing.T) {
+	// Regression: HTTPRequestDurationTag used to be referenced by MonitorHTTPRequestDuration but was
+	// never registered in SummaryTSSVecMetrics, so a nil-map .With() would panic the TSS submitter.
+	mTSSPrometheusClient := &tssPrometheusClient{}
+
+	require.Contains(t, SummaryTSSVecMetrics, HTTPRequestDurationTag,
+		"TSS HTTP request-duration summary must be registered")
+
+	metricsRegistry := prometheus.NewRegistry()
+	metricsRegistry.MustRegister(SummaryTSSVecMetrics[HTTPRequestDurationTag])
+	mTSSPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
+
+	r := chi.NewRouter()
+	r.Get("/metrics", mTSSPrometheusClient.httpHandler.ServeHTTP)
+
+	assert.NotPanics(t, func() {
+		mTSSPrometheusClient.MonitorHTTPRequestDuration(time.Second, HTTPRequestLabels{
+			Status: "200",
+			Route:  "/health",
+			Method: "GET",
+		})
+	}, "MonitorHTTPRequestDuration must not panic (HTTPRequestDurationTag registered)")
+
+	req, err := http.NewRequest("GET", "/metrics", nil)
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	data, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := string(data)
+	assert.Contains(t, body, `tss_http_requests_duration_seconds_sum{method="GET",route="/health",status="200"} 1`)
+	assert.Contains(t, body, `tss_http_requests_duration_seconds_count{method="GET",route="/health",status="200"} 1`)
+
+	SummaryTSSVecMetrics[HTTPRequestDurationTag].Reset()
+}
+
 func Test_TSSPrometheusClient_MonitorCounters(t *testing.T) {
 	mTSSPrometheusClient := &tssPrometheusClient{}
 

@@ -44,6 +44,30 @@ func (s CircleTransferStatus) IsCompleted() bool {
 	return slices.Contains(CompletedCircleStatuses(), s)
 }
 
+// CircleTransactionType identifies which Circle API produced a payment's identifier. Not reusing
+// circle.APIType* — internal/circle imports internal/data, so importing back would be a cycle.
+type CircleTransactionType string
+
+const (
+	CircleTransactionTypePayout   CircleTransactionType = "PAYOUT"
+	CircleTransactionTypeTransfer CircleTransactionType = "TRANSFER"
+)
+
+// CircleTransactionInfo returns the Circle-side ID and the API that produced it. The
+// circle_transfer_or_payout CHECK guarantees at most one is set; both are nil before submission.
+func (r *CircleTransferRequest) CircleTransactionInfo() (*string, *CircleTransactionType) {
+	switch {
+	case r.CirclePayoutID != nil && *r.CirclePayoutID != "":
+		t := CircleTransactionTypePayout
+		return r.CirclePayoutID, &t
+	case r.CircleTransferID != nil && *r.CircleTransferID != "":
+		t := CircleTransactionTypeTransfer
+		return r.CircleTransferID, &t
+	default:
+		return nil, nil
+	}
+}
+
 type CircleTransferRequestUpdate struct {
 	CircleTransferID  string               `db:"circle_transfer_id"`
 	CirclePayoutID    string               `db:"circle_payout_id"`
@@ -181,7 +205,7 @@ func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecu
 
 func (m CircleTransferRequestModel) GetCurrentTransfersForPaymentIDs(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs []string) (map[string]*CircleTransferRequest, error) {
 	if len(paymentIDs) == 0 {
-		return nil, fmt.Errorf("paymentIDs is required")
+		return map[string]*CircleTransferRequest{}, nil
 	}
 
 	query := `
@@ -211,6 +235,36 @@ func (m CircleTransferRequestModel) GetCurrentTransfersForPaymentIDs(ctx context
 	}
 
 	return circleTransferRequestsByPaymentID, nil
+}
+
+// PopulateCircleTransactionInfo fills in each payment's Circle identifier in place, resolved per
+// row so accounts holding both payout- and transfer-backed payments work.
+func (m CircleTransferRequestModel) PopulateCircleTransactionInfo(ctx context.Context, sqlExec db.SQLExecuter, payments []Payment) error {
+	if len(payments) == 0 {
+		return nil
+	}
+
+	paymentIDs := make([]string, len(payments))
+	for i, payment := range payments {
+		paymentIDs[i] = payment.ID
+	}
+
+	requestsByPaymentID, err := m.GetCurrentTransfersForPaymentIDs(ctx, sqlExec, paymentIDs)
+	if err != nil {
+		return fmt.Errorf("getting circle transfers for payment IDs: %w", err)
+	}
+
+	// Cleared when there is no row, so the result always reflects the DB rather than prior state.
+	for i := range payments {
+		request, ok := requestsByPaymentID[payments[i].ID]
+		if !ok {
+			payments[i].CircleTransactionID, payments[i].CircleTransactionType = nil, nil
+			continue
+		}
+		payments[i].CircleTransactionID, payments[i].CircleTransactionType = request.CircleTransactionInfo()
+	}
+
+	return nil
 }
 
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) (*CircleTransferRequest, error) {

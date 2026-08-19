@@ -35,6 +35,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	tssservices "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -54,6 +55,14 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 	supporthttp.Run(conf)
 }
 
+// LogFlusher is implemented by an optional log-shipping side-channel (e.g.
+// the Loki hook in internal/observability) so this package can flush any
+// buffered-but-not-yet-sent log entries during a graceful shutdown without
+// needing to import that concrete type.
+type LogFlusher interface {
+	Close() error
+}
+
 type ServeOptions struct {
 	Environment                    string
 	GitCommit                      string
@@ -71,6 +80,7 @@ type ServeOptions struct {
 	EmailMessengerClient           message.MessengerClient
 	MessageDispatcher              message.MessageDispatcherInterface
 	SEP24JWTSecret                 string
+	SEP24JWTExpirationSeconds      int
 	sep24JWTManager                *sepauth.JWTManager
 	BaseURL                        string
 	ResetTokenExpirationHours      int
@@ -95,10 +105,17 @@ type ServeOptions struct {
 	DisableMFA                     bool
 	DisableReCAPTCHA               bool
 	PasswordValidator              *authUtils.PasswordValidator
+	// LogShippingHook, if set, is flushed during graceful shutdown so
+	// in-flight buffered logs destined for the Loki shipping side-channel
+	// aren't lost. Nil when log shipping (LOG_SHIPPING_URL) isn't configured.
+	LogShippingHook LogFlusher
 
 	tenantManager               tenant.ManagerInterface
 	DistributionAccountService  services.DistributionAccountServiceInterface
 	DistAccEncryptionPassphrase string
+	NativeAssetBootstrapAmount  int
+
+	distributionWalletService services.DistributionWalletManagementServiceInterface
 
 	MaxInvitationResendAttempts int
 	SingleTenantMode            bool
@@ -149,9 +166,9 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Setup SEP24 JWT manager
-	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, 300000)
+	sep24JWTManager, err := sepauth.NewJWTManager(opts.SEP24JWTSecret, int64(opts.SEP24JWTExpirationSeconds)*1000)
 	if err != nil {
-		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
+		return fmt.Errorf("error creating SEP-24 JWT manager with SEP24_JWT_EXPIRATION_SECONDS=%d: %w", opts.SEP24JWTExpirationSeconds, err)
 	}
 	opts.sep24JWTManager = sep24JWTManager
 
@@ -184,9 +201,9 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.Sep10Service = sep10Service
 
 	if opts.EnableSep45 {
-		sep45NonceStore, err := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
-		if err != nil {
-			return fmt.Errorf("initializing SEP 45 nonce store: %w", err)
+		sep45NonceStore, nonceErr := services.NewNonceStore(opts.MtnDBConnectionPool, services.DefaultSEP45NonceExpiration)
+		if nonceErr != nil {
+			return fmt.Errorf("initializing SEP 45 nonce store: %w", nonceErr)
 		}
 		rpcClient, rpcErr := dependencyinjection.NewRPCClient(context.Background(), opts.RPCConfig)
 		if rpcErr != nil {
@@ -216,6 +233,24 @@ func (opts *ServeOptions) SetupDependencies() error {
 		opts.Sep45Service = sep45Service
 	}
 
+	// Setup the distribution wallet management service (multi-wallet support) when the
+	// secret-management dependencies are configured (always true in production; some test
+	// harnesses omit them, in which case the /distribution-wallets routes are not mounted).
+	if opts.DistAccEncryptionPassphrase != "" && opts.TSSDBConnectionPool != nil {
+		walletKeyService, wkErr := tssservices.NewDistributionWalletKeyService(opts.TSSDBConnectionPool, opts.DistAccEncryptionPassphrase)
+		if wkErr != nil {
+			return fmt.Errorf("creating distribution wallet key service: %w", wkErr)
+		}
+		bootstrapAmount := opts.NativeAssetBootstrapAmount
+		if bootstrapAmount <= 0 {
+			bootstrapAmount = tenant.MinTenantDistributionAccountAmount
+		}
+		opts.distributionWalletService, err = services.NewDistributionWalletManagementService(opts.Models, opts.SubmitterEngine, walletKeyService, bootstrapAmount)
+		if err != nil {
+			return fmt.Errorf("creating distribution wallet management service: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -234,6 +269,13 @@ func (opts *ServeOptions) ValidateSecurity() error {
 	}
 	if opts.DisableReCAPTCHA {
 		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
+	if opts.SEP24JWTExpirationSeconds > sepauth.MaxRecommendedSEP24JWTExpirationSeconds {
+		log.Warnf(
+			"SEP-24 JWT expiration is set to %d seconds, above the recommended maximum of %d. This token is a bearer credential carried in the registration URL, so a longer lifetime widens the window in which a leaked link stays usable.",
+			opts.SEP24JWTExpirationSeconds, sepauth.MaxRecommendedSEP24JWTExpirationSeconds,
+		)
 	}
 
 	return nil
@@ -307,6 +349,14 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 			}
 
 			log.Info("Stopping SDP (Stellar Disbursement Platform) Server")
+
+			// Flush the log-shipping side-channel last, so this "Stopping..."
+			// line itself has a chance to reach Loki before the process exits.
+			if opts.LogShippingHook != nil {
+				if flushErr := opts.LogShippingHook.Close(); flushErr != nil {
+					log.Errorf("error flushing log shipping hook: %v", flushErr)
+				}
+			}
 		},
 	}
 	httpServer.Run(serverConfig)
@@ -323,11 +373,17 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Middleware
 	mux.Use(middleware.CorsMiddleware(o.CorsAllowedOrigins))
+	mux.Use(chimiddleware.ClientIPFromRemoteAddr)
 	// Rate limits requests made with the pair <IP, endpoint>.
-	mux.Use(httprate.Limit(
+	mux.Use(httprate.LimitBy(
 		rateLimitPer20Seconds,
 		rateLimitWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
+		httprate.JoinKeys(
+			func(r *http.Request) (string, error) {
+				return httprate.CanonicalizeIP(chimiddleware.GetClientIP(r.Context())), nil
+			},
+			httprate.KeyByEndpoint,
+		),
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager, o.SingleTenantMode))
@@ -344,8 +400,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Authenticated Routes
 	authManager := o.authManager
+	// Constructed once and shared between the API-key auth middleware and the API
+	// key management handler below, so that PATCH/DELETE on /api-keys/{id} can
+	// evict the exact cache entry it just changed (see APIKeyAuthenticator.Invalidate).
+	apiKeyAuthenticator := middleware.NewAPIKeyAuthenticator(o.Models.APIKeys)
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.APIKeyOrJWTAuthenticate(o.Models.APIKeys, middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
+		r.Use(apiKeyAuthenticator.Middleware(middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
 		r.Use(middleware.EnsureTenantMiddleware)
 
 		// API Key management endpoints
@@ -354,7 +414,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
 		)).Route("/api-keys", func(r chi.Router) {
 			apiKeyHandler := httphandler.APIKeyHandler{
-				Models: o.Models,
+				Models:           o.Models,
+				AuthManager:      authManager,
+				CacheInvalidator: apiKeyAuthenticator,
 			}
 			r.Get("/{id}", apiKeyHandler.GetAPIKeyByID)
 			r.Get("/", apiKeyHandler.GetAllAPIKeys)
@@ -368,7 +430,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			data.ReadStatistics,
 			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Route("/statistics", func(r chi.Router) {
-			h := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
+			h := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool, Models: o.Models, AuthManager: authManager}
 			r.Get("/", h.GetStatistics)
 			r.Get("/{id}", h.GetStatisticsByDisbursement)
 		})
@@ -490,7 +552,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		// Receiver endpoints
 		r.Route("/receivers", func(r chi.Router) {
-			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
+			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool, AuthManager: authManager}
 
 			// Read operations
 			r.With(middleware.RequirePermission(
@@ -515,6 +577,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
 				Models:             o.Models,
 				CrashTrackerClient: o.CrashTrackerClient,
+				AuthManager:        authManager,
 			}
 
 			r.With(middleware.RequirePermission(
@@ -539,6 +602,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:                     o.Models,
 				SubmitterEngine:            o.SubmitterEngine,
 				DistributionAccountService: o.DistributionAccountService,
+				AuthManager:                authManager,
 			}
 
 			// Read operations
@@ -586,6 +650,61 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
+		// Distribution wallets (the tenant's sending accounts) — Owner-only per the spec.
+		if o.distributionWalletService != nil {
+			r.Route("/distribution-wallets", func(r chi.Router) {
+				distributionWalletsHandler := httphandler.DistributionWalletsHandler{
+					Service:                     o.distributionWalletService,
+					AuthManager:                 authManager,
+					Models:                      o.Models,
+					DistributionAccountService:  o.DistributionAccountService,
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				}
+
+				// Owner-only reads (admin views). As with the write group below, the Owner
+				// requirement here only binds the JWT path, so each handler re-checks it via
+				// ensureCallerIsOwner and then applies its read scope.
+				r.With(middleware.RequirePermission(
+					data.ReadDistributionWallets,
+					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				)).Group(func(r chi.Router) {
+					r.Get("/{id}", distributionWalletsHandler.GetDistributionWallet)
+					r.Get("/{id}/memberships", distributionWalletsHandler.GetDistributionWalletMemberships)
+					r.Get("/{id}/audit", distributionWalletsHandler.GetDistributionWalletAudit)
+				})
+
+				// Membership-scoped reads (the dashboard picker + Total Balance tile): any
+				// business role at the route; the handlers filter to the caller's read scope
+				// (Owners: everything; members: their wallets; 404 outside per-wallet scope).
+				// /{id}/capabilities also serves the grant picker via ?user_id=/?role=, which
+				// reports a THIRD party's capabilities and is Owner-gated inside the handler.
+				r.With(middleware.RequirePermission(
+					data.ReadDistributionWallets,
+					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
+				)).Group(func(r chi.Router) {
+					r.Get("/", distributionWalletsHandler.GetDistributionWallets)
+					r.Get("/balance", distributionWalletsHandler.GetDistributionWalletsTotalBalance)
+					r.Get("/{id}/balance", distributionWalletsHandler.GetDistributionWalletBalance)
+					r.Get("/{id}/capabilities", distributionWalletsHandler.GetDistributionWalletCapabilities)
+				})
+
+				// Write operations. The Owner requirement below only binds the JWT path —
+				// RequirePermission short-circuits to the handler on the API-key path and never
+				// invokes AnyRoleMiddleware — so every handler in this group re-checks it via
+				// ensureCallerIsOwner, which is what actually holds for API keys.
+				r.With(middleware.RequirePermission(
+					data.WriteDistributionWallets,
+					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
+				)).Group(func(r chi.Router) {
+					r.Post("/", distributionWalletsHandler.PostDistributionWallet)
+					r.Post("/{id}/archive", distributionWalletsHandler.PostArchiveDistributionWallet)
+					r.Post("/{id}/promote-to-default", distributionWalletsHandler.PostPromoteDistributionWalletToDefault)
+					r.Post("/{id}/memberships", distributionWalletsHandler.PostDistributionWalletMembership)
+					r.Delete("/{id}/memberships/{membershipID}", distributionWalletsHandler.DeleteDistributionWalletMembership)
+				})
+			})
+		}
+
 		profileHandler := httphandler.ProfileHandler{
 			Models:                      o.Models,
 			AuthManager:                 authManager,
@@ -621,7 +740,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Write operations with different role permissions
 			r.With(middleware.RequirePermission(
 				data.WriteOrganization,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 			)).Patch("/", profileHandler.PatchOrganizationProfile)
 
 			r.With(middleware.RequirePermission(
@@ -629,6 +748,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
 			)).Patch("/circle-config", httphandler.CircleConfigHandler{
 				NetworkType:                 o.NetworkType,
+				AuthManager:                 authManager,
 				CircleFactory:               circle.NewClient,
 				TenantManager:               o.tenantManager,
 				Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
@@ -671,7 +791,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.Get)
 
 		exportHandler := httphandler.ExportHandler{
-			Models: o.Models,
+			Models:      o.Models,
+			AuthManager: authManager,
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,

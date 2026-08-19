@@ -181,7 +181,7 @@ func Test_APIKeyModel_Insert(t *testing.T) {
 		name := "Stygies VIII Archive Key"
 		createdBy := "00000000-0000-0000-0000-000000000000"
 
-		key, err := models.APIKeys.Insert(ctx, name, perms, ips, &expiry, createdBy)
+		key, err := models.APIKeys.Insert(ctx, name, perms, ips, nil, &expiry, createdBy)
 		require.NoError(t, err)
 
 		assert.Equal(t, name, key.Name)
@@ -399,7 +399,7 @@ func Test_APIKeyModel_Update(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			updated, err := models.APIKeys.Update(ctx, tc.id, tc.creatorID, tc.perms, tc.ips)
+			updated, err := models.APIKeys.Update(ctx, tc.id, tc.creatorID, tc.perms, tc.ips, nil)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -633,6 +633,7 @@ func createAPIKeyFixture(t *testing.T, ctx context.Context, pool db.DBConnection
 		name,
 		perms,
 		ips,
+		nil,
 		expiry,
 		createdBy,
 	)

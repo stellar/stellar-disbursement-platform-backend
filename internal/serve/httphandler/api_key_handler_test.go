@@ -11,13 +11,16 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 const adminUserID = "b9c29a1a-4d30-4b99-8c5f-0546054be91b"
@@ -41,10 +44,273 @@ func setupHandler(t *testing.T) (APIKeyHandler, context.Context) {
 	models, err := data.NewModels(pool)
 	require.NoError(t, err)
 
-	handler := APIKeyHandler{Models: models}
+	// The creator is an Owner, so a key that names no wallets inherits every active wallet.
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, adminUserID).
+		Return(&auth.User{ID: adminUserID, IsOwner: true}, nil).Maybe()
+
+	handler := APIKeyHandler{Models: models, AuthManager: authManagerMock}
 	ctx := sdpcontext.SetUserIDInContext(context.Background(), adminUserID)
 
 	return handler, ctx
+}
+
+// Test_CreateAPIKey_WalletScope covers the creation-time ceiling: what a creator may put on a key
+// is their own access, and nothing about the key changes afterwards when that access does.
+func Test_CreateAPIKey_WalletScope(t *testing.T) {
+	const developerUserID = "d24d2a52-9a4d-4b2f-b1b1-4d9f2a7f0c31"
+
+	setup := func(t *testing.T, user *auth.User) (APIKeyHandler, context.Context, *data.DistributionWallet, string) {
+		t.Helper()
+		pool := getDBConnectionPool(t)
+		models, err := data.NewModels(pool)
+		require.NoError(t, err)
+
+		ctx := sdpcontext.SetUserIDInContext(context.Background(), user.ID)
+		walletA := data.EnsureDefaultDistributionWalletFixture(t, ctx, pool)
+		var walletBID string
+		require.NoError(t, pool.GetContext(ctx, &walletBID, `
+			INSERT INTO distribution_wallets (name, distribution_account_type)
+			VALUES ('scope-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
+
+		if !user.IsOwner {
+			_, err = models.WalletMemberships.Insert(ctx, pool, user.ID, walletA.ID, data.DeveloperUserRole, nil)
+			require.NoError(t, err)
+		}
+
+		authManagerMock := &auth.AuthManagerMock{}
+		authManagerMock.On("GetUserByID", mock.Anything, user.ID).Return(user, nil).Maybe()
+
+		return APIKeyHandler{Models: models, AuthManager: authManagerMock}, ctx, walletA, walletBID
+	}
+
+	create := func(t *testing.T, handler APIKeyHandler, ctx context.Context, body map[string]any) *httptest.ResponseRecorder {
+		t.Helper()
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api-keys", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+		handler.CreateAPIKey(rr, req)
+		return rr
+	}
+
+	developer := &auth.User{ID: developerUserID, Roles: []string{string(data.DeveloperUserRole)}}
+	owner := &auth.User{ID: adminUserID, IsOwner: true}
+
+	t.Run("a non-owner may scope a key to a wallet they hold", func(t *testing.T) {
+		handler, ctx, walletA, _ := setup(t, developer)
+		rr := create(t, handler, ctx, map[string]any{
+			"name":                    "developer key",
+			"permissions":             []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+
+		var got data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+		assert.Equal(t, []string{walletA.ID}, []string(got.DistributionWalletIDs))
+	})
+
+	t.Run("a non-owner may not scope a key beyond their own memberships", func(t *testing.T) {
+		handler, ctx, _, walletBID := setup(t, developer)
+		rr := create(t, handler, ctx, map[string]any{
+			"name":                    "overreaching key",
+			"permissions":             []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletBID},
+		})
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.NotContains(t, rr.Body.String(), "scope-wallet-b", "the refusal discloses no wallet detail")
+	})
+
+	t.Run("omitting the field inherits a non-owner's memberships, not the tenant", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, developer)
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "inheriting key", "permissions": []string{"read:payments"},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+
+		var got data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+		assert.Equal(t, []string{walletA.ID}, []string(got.DistributionWalletIDs))
+		assert.NotContains(t, got.DistributionWalletIDs, walletBID)
+	})
+
+	t.Run("omitting the field inherits every active wallet for an owner", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, owner)
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "owner key", "permissions": []string{"read:payments"},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+
+		var got data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+		assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(got.DistributionWalletIDs))
+	})
+
+	t.Run("an explicit empty list is honored as no wallet access", func(t *testing.T) {
+		handler, ctx, _, _ := setup(t, owner)
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "org-only key", "permissions": []string{"read:organization"},
+			"distribution_wallet_ids": []string{},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+
+		var got data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+		assert.Empty(t, got.DistributionWalletIDs)
+	})
+
+	t.Run("an archived account cannot be named on a new key", func(t *testing.T) {
+		handler, ctx, _, walletBID := setup(t, owner)
+		_, err := handler.Models.DBConnectionPool.ExecContext(ctx,
+			`UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW() WHERE id = $1`, walletBID)
+		require.NoError(t, err)
+
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "archived key", "permissions": []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletBID},
+		})
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("inheriting on creation skips archived accounts", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, owner)
+		_, err := handler.Models.DBConnectionPool.ExecContext(ctx,
+			`UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW() WHERE id = $1`, walletBID)
+		require.NoError(t, err)
+
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "inheriting key", "permissions": []string{"read:payments"},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+
+		var got data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+		assert.Equal(t, []string{walletA.ID}, []string(got.DistributionWalletIDs))
+	})
+
+	// An account archived after the key was scoped to it stays put: keeping it grants nothing new,
+	// and refusing it would make an unrelated permissions edit impossible to save.
+	t.Run("an edit keeps an account archived since the key was created", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, owner)
+
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "long-lived key", "permissions": []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID, walletBID},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+		var created data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &created))
+
+		_, err := handler.Models.DBConnectionPool.ExecContext(ctx,
+			`UPDATE distribution_wallets SET status = 'ARCHIVED', archived_at = NOW() WHERE id = $1`, walletBID)
+		require.NoError(t, err)
+
+		patch := func(body map[string]any) *httptest.ResponseRecorder {
+			b, marshalErr := json.Marshal(body)
+			require.NoError(t, marshalErr)
+			req := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api-keys/"+created.ID, bytes.NewReader(b))
+			chiCtx := chi.NewRouteContext()
+			chiCtx.URLParams.Add("id", created.ID)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+			rr := httptest.NewRecorder()
+			handler.UpdateKey(rr, req)
+			return rr
+		}
+
+		resent := patch(map[string]any{
+			"permissions":             []string{"read:payments", "read:exports"},
+			"distribution_wallet_ids": []string{walletA.ID, walletBID},
+		})
+		require.Equal(t, http.StatusOK, resent.Code)
+		var updated data.APIKey
+		require.NoError(t, json.Unmarshal(resent.Body.Bytes(), &updated))
+		assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(updated.DistributionWalletIDs))
+
+		omitted := patch(map[string]any{"permissions": []string{"read:payments"}})
+		require.Equal(t, http.StatusOK, omitted.Code)
+		require.NoError(t, json.Unmarshal(omitted.Body.Bytes(), &updated))
+		assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(updated.DistributionWalletIDs),
+			"an edit that does not mention wallets leaves the scope alone")
+
+		dropped := patch(map[string]any{
+			"permissions":             []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID},
+		})
+		require.Equal(t, http.StatusOK, dropped.Code)
+		require.NoError(t, json.Unmarshal(dropped.Body.Bytes(), &updated))
+		assert.Equal(t, []string{walletA.ID}, []string(updated.DistributionWalletIDs),
+			"removing an archived account is always allowed")
+
+		readded := patch(map[string]any{
+			"permissions":             []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID, walletBID},
+		})
+		assert.Equal(t, http.StatusForbidden, readded.Code,
+			"once dropped, an archived account cannot be put back")
+	})
+
+	// An explicit [] on edit has to clear the scope. Omitting the field is what means "leave it
+	// alone", and the two must not collapse into each other on the way to the DB.
+	t.Run("an explicit empty list on edit clears the scope, omitting it does not", func(t *testing.T) {
+		handler, ctx, walletA, _ := setup(t, owner)
+
+		rr := create(t, handler, ctx, map[string]any{
+			"name": "scope-clearing key", "permissions": []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID},
+		})
+		require.Equal(t, http.StatusCreated, rr.Code)
+		var created data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &created))
+
+		patch := func(body map[string]any) data.APIKey {
+			b, marshalErr := json.Marshal(body)
+			require.NoError(t, marshalErr)
+			req := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api-keys/"+created.ID, bytes.NewReader(b))
+			chiCtx := chi.NewRouteContext()
+			chiCtx.URLParams.Add("id", created.ID)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, chiCtx))
+			rr := httptest.NewRecorder()
+			handler.UpdateKey(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code)
+
+			var updated data.APIKey
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &updated))
+			return updated
+		}
+
+		kept := patch(map[string]any{"permissions": []string{"read:payments", "read:exports"}})
+		assert.Equal(t, []string{walletA.ID}, []string(kept.DistributionWalletIDs))
+
+		cleared := patch(map[string]any{
+			"permissions": []string{"read:payments"}, "distribution_wallet_ids": []string{},
+		})
+		assert.Empty(t, cleared.DistributionWalletIDs, "an explicit [] must reach the DB as empty, not nil")
+	})
+
+	t.Run("a key minting a key cannot widen the scope it holds", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, developer)
+		// The acting key names only walletA, so walletB is out of reach even though the request
+		// arrives with write:all and the creator is resolvable.
+		keyCtx := sdpcontext.SetAPIKeyInContext(ctx, &data.APIKey{
+			ID:                    "acting-key",
+			Permissions:           data.APIKeyPermissions{data.WriteAll},
+			CreatedBy:             developerUserID,
+			DistributionWalletIDs: pq.StringArray{walletA.ID},
+		})
+
+		rr := create(t, handler, keyCtx, map[string]any{
+			"name": "child key", "permissions": []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletBID},
+		})
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+
+		rr = create(t, handler, keyCtx, map[string]any{
+			"name": "sibling key", "permissions": []string{"read:payments"},
+			"distribution_wallet_ids": []string{walletA.ID},
+		})
+		assert.Equal(t, http.StatusCreated, rr.Code)
+	})
 }
 
 func Test_CreateAPIKey_WithAllFields(t *testing.T) {
@@ -123,6 +389,7 @@ func TestUpdateKey_AllowedIPsHandling(t *testing.T) {
 		"Techpriest Archive Key",
 		[]data.APIKeyPermission{data.ReadAll},
 		[]string{"10.0.0.0/8"},
+		nil,
 		nil,
 		adminUserID,
 	)
@@ -339,6 +606,7 @@ func Test_GetAllAPIKeys(t *testing.T) {
 			[]data.APIKeyPermission{data.ReadAll},
 			nil,
 			nil,
+			nil,
 			userID,
 		)
 		require.NoError(t, err)
@@ -347,6 +615,7 @@ func Test_GetAllAPIKeys(t *testing.T) {
 			"Cicatrix Maledictum Cipher",
 			[]data.APIKeyPermission{data.ReadStatistics},
 			[]string{"203.0.113.0/24"},
+			nil,
 			nil,
 			userID,
 		)
@@ -399,7 +668,7 @@ func Test_DeleteAPIKeyEndpoints(t *testing.T) {
 			ctx,
 			"Tempestus Scion Key",
 			[]data.APIKeyPermission{data.ReadAll},
-			nil, nil,
+			nil, nil, nil,
 			adminUserID,
 		)
 		require.NoError(t, err)
@@ -423,7 +692,7 @@ func Test_DeleteAPIKeyEndpoints(t *testing.T) {
 			ctx,
 			"Stormcaller Relic Key",
 			[]data.APIKeyPermission{data.ReadAll},
-			nil, nil,
+			nil, nil, nil,
 			adminUserID,
 		)
 		require.NoError(t, err)
@@ -457,6 +726,7 @@ func Test_GetAPIKeyByIDEndpoints(t *testing.T) {
 			"Vox Imperator Index Key",
 			[]data.APIKeyPermission{data.ReadStatistics, data.ReadExports},
 			[]string{"198.51.100.0/24"},
+			nil,
 			&expiry,
 			adminUserID,
 		)
@@ -495,7 +765,7 @@ func Test_GetAPIKeyByIDEndpoints(t *testing.T) {
 			ctx,
 			"Iridium Tomb Key",
 			[]data.APIKeyPermission{data.ReadAll},
-			nil, nil,
+			nil, nil, nil,
 			adminUserID,
 		)
 		require.NoError(t, err)
@@ -528,6 +798,7 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 		"Adeptus Mechanicus Secret Key",
 		[]data.APIKeyPermission{data.ReadAll, data.ReadStatistics},
 		[]string{"10.0.0.0/8"},
+		nil,
 		nil,
 		adminUserID,
 	)

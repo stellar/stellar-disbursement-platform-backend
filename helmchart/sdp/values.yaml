@@ -143,7 +143,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "6.6.1"
+    tag: "7.0.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -180,12 +180,14 @@ sdp:
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
+  ## @extra sdp.configMap.data.LOG_SHIPPING_URL A Loki-compatible push endpoint (e.g. a Grafana Alloy loki.source.api receiver) that structured logs are shipped to directly over HTTP, for platforms with no log-drain feature. Optional; logs still go to stdout when unset.
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
   ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL", "TWILIO_EMAIL".
   ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS", "TWILIO_WHATSAPP", "AWS_SMS".
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
   ## @param sdp.configMap.data.DISABLE_RECAPTCHA Determines if ReCaptcha should be disabled for login ("true" or "false").
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
+  ## @param sdp.configMap.data.SEP24_JWT_EXPIRATION_SECONDS How long the SEP-24 JWT token embedded in the receiver registration URL stays valid, in seconds. Minimum 5. Values above 3600 log a warning at startup.
   ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
@@ -219,6 +221,7 @@ sdp:
       CRASH_TRACKER_TYPE: "DRY_RUN"
       ENVIRONMENT: "dev"
       LOG_LEVEL: "INFO"
+      # LOG_SHIPPING_URL: #optional, ships structured logs directly to a Loki-compatible endpoint
       METRICS_TYPE: "PROMETHEUS"
 
       ## Messaging service configuration
@@ -229,6 +232,7 @@ sdp:
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_RECAPTCHA: "false"
       DISABLE_MFA: "false"
+      SEP24_JWT_EXPIRATION_SECONDS: "600"
 
       ## Background tasks configuration
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
@@ -557,7 +561,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:6.6.0
+    fullName: stellar/stellar-disbursement-platform-frontend:7.0.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.
@@ -655,3 +659,41 @@ dashboard:
         #       - name: dashboard-tls-cert-name
       annotations: {}
       labels: {}
+
+# =========================== START observability ===========================
+## @section Observability
+## @descriptionStart
+## Optional Prometheus/Grafana wiring for scraping the SDP + TSS metrics endpoints.
+## The metrics Services (SDP port `metrics`/8002, TSS port `metrics`/9002) are always
+## published, but nothing is scraped or provisioned until one of the flags below is
+## enabled. Every flag defaults to OFF so existing installs are unaffected, and the
+## hosting choice (Prometheus Operator vs. annotation-based scrape vs. external stack)
+## is intentionally left open.
+## @descriptionEnd
+
+## @extra serviceMonitor Prometheus-Operator ServiceMonitor for the SDP + TSS metrics ports. Requires the monitoring.coreos.com/v1 CRDs to be installed in the cluster.
+## @param serviceMonitor.enabled If true, render a ServiceMonitor selecting the SDP and TSS metrics Services.
+## @param serviceMonitor.interval Scrape interval for the metrics endpoints.
+## @param serviceMonitor.scrapeTimeout Per-scrape timeout. Must be less than or equal to the interval.
+## @param serviceMonitor.path HTTP path that exposes Prometheus metrics on the metrics port.
+## @param serviceMonitor.additionalLabels Extra labels for the ServiceMonitor metadata. Many Operator installs only discover ServiceMonitors carrying a specific release label (e.g. `release: kube-prometheus-stack`).
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  additionalLabels: {}
+
+## @extra metricsScrapeAnnotations Annotation-based scraping for plain (non-Operator) Prometheus setups that rely on kubernetes_sd pod discovery.
+## @param metricsScrapeAnnotations.enabled If true, inject `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` annotations onto the SDP + TSS pods.
+## @param metricsScrapeAnnotations.path HTTP path advertised via the `prometheus.io/path` annotation.
+metricsScrapeAnnotations:
+  enabled: false
+  path: /metrics
+
+## @extra grafanaDashboards Provision the committed Grafana dashboards (resources/grafana/*.json, vendored under the chart's dashboards/ directory) as a ConfigMap for the kube-prometheus-stack Grafana sidecar.
+## @param grafanaDashboards.enabled If true, create a ConfigMap labeled `grafana_dashboard: "1"` embedding the vendored dashboard JSON files.
+## @param grafanaDashboards.additionalLabels Extra labels for the dashboards ConfigMap (e.g. a sidecar folder label).
+grafanaDashboards:
+  enabled: false
+  additionalLabels: {}
