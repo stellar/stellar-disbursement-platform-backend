@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Add `distribution-account rotate --wallet-id` to rotate any distribution wallet's account, and `distribution-account rotate-wallet-dek` to rotate a wallet's signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 - Add optional Prometheus/Grafana wiring and wallet-tagged structured transaction logging for the SDP and TSS services. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 - Add distribution-account scoping when creating or editing API-key [#1183](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1183)
+- Add `CircleTransactionID` and `CircleTransactionType` columns to the payments CSV export. [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
+
+### Changed
+
+- Payment response field `circle_transfer_request_id` is renamed to `circle_transaction_id` (affects `GET /payments` and GET `/payments/{id}`). [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
 
 ### Fixed
 
@@ -22,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Harden MFA code validation and device trust. [#1177](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1177)
 - Fix and harden distribution-account scoping on receiver reads and writes. [#1186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1186)
 - Fix multi-wallet cutover doc and remove preflight script. [#1187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1187)
+- Expose Circle transaction ID for payments made through both Payouts (previously returned `null`) and Transfers API. [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
 
 ### Security and Dependencies
 
