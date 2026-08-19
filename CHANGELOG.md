@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [7.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.1...7.0.0))
+
 ### Added
 
 - Add support for multiple distribution accounts ("distribution wallets") per tenant, each with its own membership roles and envelope-encrypted signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
@@ -35,6 +37,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Pin cargo-audit install in contract build job with --locked flag. [#1171](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1171)
 - Evict the API-key auth cache synchronously on permission and allowed-IP changes, keyed by API key ID per tenant instead of the raw secret, so revocations take effect on the next request rather than after the cache TTL. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
 - Make SEP-24 interactive JWT expiration configurable and raise default to 10 minutes. [#1182](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1182)
+- Bump the minor-and-patch group with 3 updates. [#1152](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1152)
+- Bump the all-actions group across 1 directory with 2 updates. [#1153](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1153)
+- Bump the all-actions group with 2 updates. [#1163](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1163)
+- Bump the minor-and-patch group with 7 updates. [#1164](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1164)
+- Bump serde_with from 3.12.0 to 3.21.0 in the cargo group. [#1167](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1167)
+- Bump the all-actions group with 2 updates. [#1169](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1169)
+- Bump the minor-and-patch group across 1 directory with 9 updates. [#1170](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1170)
+- Bump js-yaml from 4.2.0 to 4.3.0 in the npm_and_yarn group. [#1172](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1172)
+- Bump immutable from 5.1.5 to 5.1.9 in the npm_and_yarn group. [#1173](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1173)
+- Bump docker/login-action from 4.4.0 to 4.5.1 in the all-actions group. [#1174](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1174)
+- Bump the minor-and-patch group with 6 updates. [#1175](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1175)
+- Bump postcss from 8.5.14 to 8.5.25 in the npm_and_yarn group. [#1176](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1176)
+- Bump the all-actions group across 1 directory with 2 updates. [#1179](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1179)
+- Bump js-yaml from 4.3.0 to 4.3.1 in the npm_and_yarn group. [#1181](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1181)
+- Bump the minor-and-patch group across 1 directory with 8 updates. [#1185](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1185)
 
 ## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
 
