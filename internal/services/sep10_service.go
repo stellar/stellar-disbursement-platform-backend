@@ -404,7 +404,7 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		return nil, fmt.Errorf("client_domain manage_data operation is required")
 	}
 
-	if err := s.verifySignature(tx, network, serverAccountID, "server"); err != nil {
+	if err := s.verifyServerSignature(tx, network, serverAccountID); err != nil {
 		return nil, fmt.Errorf("verifying server signature: %w", err)
 	}
 
@@ -418,7 +418,8 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 	}, nil
 }
 
-func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accountID, accountType string) error {
+// verifyServerSignature does not consume signatures, so it is only safe for the server key, whose signature is consumed again during attribution.
+func (s *sep10Service) verifyServerSignature(tx *txnbuild.Transaction, network, serverAccountID string) error {
 	hash, err := tx.Hash(network)
 	if err != nil {
 		return fmt.Errorf("computing transaction hash: %w", err)
@@ -429,9 +430,9 @@ func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accoun
 		return fmt.Errorf("transaction has no signatures")
 	}
 
-	kp, err := keypair.ParseAddress(accountID)
+	kp, err := keypair.ParseAddress(serverAccountID)
 	if err != nil {
-		return fmt.Errorf("parsing %s account: %w", accountType, err)
+		return fmt.Errorf("parsing server account: %w", err)
 	}
 
 	for _, sig := range signatures {
@@ -440,7 +441,7 @@ func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accoun
 		}
 	}
 
-	return fmt.Errorf("transaction is not signed by %s account %s", accountType, accountID)
+	return fmt.Errorf("transaction is not signed by server account %s", serverAccountID)
 }
 
 // verifySignaturesForNonExistentAccount verifies signatures for accounts that don't exist on the network
