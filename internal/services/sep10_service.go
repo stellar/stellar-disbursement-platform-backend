@@ -258,6 +258,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	// Account exists - verify with threshold
 	if err = s.verifySignaturesWithThreshold(
 		result.Transaction,
+		result.ClientAccountID,
 		result.ClientDomain,
 		account,
 	); err != nil {
@@ -481,73 +482,149 @@ func (s *sep10Service) verifySignaturesForNonExistentAccount(
 	return nil
 }
 
+// ed25519SignerType is the horizon signer type for the only signer keys that can sign a challenge.
+const ed25519SignerType = "ed25519_public_key"
+
+// challengeSigners holds the keys that may legitimately have signed a challenge transaction.
+type challengeSigners struct {
+	accountID    string
+	server       string
+	clientDomain string
+	account      map[string]int // signers able to authenticate the client account, by weight
+}
+
+// addresses returns every candidate key, deduplicated across roles.
+func (cs challengeSigners) addresses() []string {
+	addresses := make([]string, 0, len(cs.account)+2)
+	addresses = append(addresses, cs.server)
+	if cs.clientDomain != "" && cs.clientDomain != cs.server {
+		addresses = append(addresses, cs.clientDomain)
+	}
+
+	for address := range cs.account {
+		if address == cs.server || address == cs.clientDomain {
+			continue
+		}
+		addresses = append(addresses, address)
+	}
+
+	return addresses
+}
+
 func (s *sep10Service) verifySignaturesWithThreshold(
 	tx *txnbuild.Transaction,
+	clientAccountID string,
 	clientDomain string,
 	account *horizon.Account,
 ) error {
-	// Verify client_domain signature if present
+	signers := challengeSigners{
+		accountID: clientAccountID,
+		server:    s.SEP10SigningKeypair.Address(),
+		account:   make(map[string]int, len(account.Signers)),
+	}
+
 	if clientDomain != "" {
 		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
 			return fmt.Errorf("fetching client domain signing key: %w", err)
 		}
-		if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
-			return fmt.Errorf("verifying client domain signature: %w", err)
+		signers.clientDomain = clientDomainAccountID
+	}
+
+	// SEP-10 requires the server's own signature to be excluded when weighing the account's signers.
+	for _, signer := range account.Signers {
+		if signer.Type != ed25519SignerType || signer.Key == signers.server {
+			continue
+		}
+		signers.account[signer.Key] = int(signer.Weight)
+	}
+
+	return s.verifyChallengeSignatures(tx, signers, int(account.Thresholds.MedThreshold))
+}
+
+// verifyChallengeSignatures applies SEP-10's signer rules: every signature must belong to an expected
+// signer, and the client account must be represented by at least one signer of its own.
+func (s *sep10Service) verifyChallengeSignatures(
+	tx *txnbuild.Transaction,
+	signers challengeSigners,
+	threshold int,
+) error {
+	matched, unrecognized, err := attributeSignatures(tx, s.NetworkPassphrase, signers.addresses())
+	if err != nil {
+		return err
+	}
+
+	if !matched[signers.server] {
+		return fmt.Errorf("challenge is not signed by server account %s", signers.server)
+	}
+
+	if signers.clientDomain != "" && !matched[signers.clientDomain] {
+		return fmt.Errorf("verifying client domain signature: challenge is not signed by client domain account %s", signers.clientDomain)
+	}
+
+	totalWeight, signersFound := 0, 0
+	for address, weight := range signers.account {
+		if matched[address] {
+			signersFound++
+			totalWeight += weight
 		}
 	}
 
-	// Verify that the cumulative weight of signatures meets the medium threshold
-	// This allows any combination of account signers (master or non-master) to authenticate
-	threshold := int(account.Thresholds.MedThreshold)
-	if err := s.verifyThreshold(tx, account, threshold); err != nil {
-		return fmt.Errorf("verifying signature threshold: %w", err)
+	if signersFound == 0 {
+		return fmt.Errorf("verifying client signature: challenge is not signed by any signer of account %s", signers.accountID)
+	}
+
+	if totalWeight < threshold {
+		return fmt.Errorf("verifying signature threshold: signatures with weight %d do not meet threshold %d", totalWeight, threshold)
+	}
+
+	if unrecognized > 0 {
+		return fmt.Errorf("challenge has %d unrecognized signature(s)", unrecognized)
 	}
 
 	return nil
 }
 
-// verifyThreshold checks if the sum of the weights of the signers present on the transaction
-// meets or exceeds the required threshold.
-func (s *sep10Service) verifyThreshold(
-	tx *txnbuild.Transaction,
-	account *horizon.Account,
-	threshold int,
-) error {
-	signerWeights := make(map[string]int)
-	for _, signer := range account.Signers {
-		signerWeights[signer.Key] = int(signer.Weight)
-	}
-
-	hash, err := tx.Hash(s.NetworkPassphrase)
+// attributeSignatures matches every signature to at most one candidate key, consuming both, and reports
+// how many signatures could not be attributed.
+func attributeSignatures(tx *txnbuild.Transaction, networkPassphrase string, addresses []string) (map[string]bool, int, error) {
+	hash, err := tx.Hash(networkPassphrase)
 	if err != nil {
-		return fmt.Errorf("computing transaction hash: %w", err)
+		return nil, 0, fmt.Errorf("computing transaction hash: %w", err)
 	}
 
-	usedSigners := make(map[string]bool)
-	totalWeight := 0
+	candidates := make(map[string]*keypair.FromAddress, len(addresses))
+	for _, address := range addresses {
+		kp, parseErr := keypair.ParseAddress(address)
+		if parseErr != nil {
+			continue
+		}
+		candidates[address] = kp
+	}
+
+	matched := make(map[string]bool, len(candidates))
+	unrecognized := 0
 
 	for _, sig := range tx.Signatures() {
-		for signer, weight := range signerWeights {
-			if usedSigners[signer] {
-				continue
-			}
-			kp, err := keypair.ParseAddress(signer)
-			if err != nil {
+		signer := ""
+		for address, kp := range candidates {
+			if matched[address] || kp.Hint() != sig.Hint {
 				continue
 			}
 			if kp.Verify(hash[:], sig.Signature) == nil {
-				totalWeight += weight
-				usedSigners[signer] = true
+				signer = address
 				break
 			}
 		}
+
+		if signer == "" {
+			unrecognized++
+			continue
+		}
+		matched[signer] = true
 	}
 
-	if totalWeight < threshold {
-		return fmt.Errorf("signatures do not meet threshold: got %d, need %d", totalWeight, threshold)
-	}
-	return nil
+	return matched, unrecognized, nil
 }
 
 func (s *sep10Service) generateToken(

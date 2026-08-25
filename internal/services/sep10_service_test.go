@@ -148,7 +148,7 @@ func createSignedChallenge(t *testing.T, service *sep10Service, kps *testKeypair
 	tx, isSimple := parsed.Transaction()
 	require.True(t, isSimple)
 
-	signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, kps.clientDomain)
+	signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, kps.clientDomain)
 	require.NoError(t, err)
 
 	signedTxBase64, err := signedTx.Base64()
@@ -657,7 +657,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, highThresholdKP, kps.clientDomain)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", highThresholdKP, kps.clientDomain)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -927,7 +927,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 	service, outerErr := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
 	require.NoError(t, outerErr)
 
-	t.Run("wrong server signature (extra wrong signature is ignored)", func(t *testing.T) {
+	t.Run("rejects an extra signature from an unknown key", func(t *testing.T) {
 		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
 
 		challengeReq := ChallengeRequest{
@@ -953,8 +953,8 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		resp, err := service.ValidateChallenge(context.Background(), validationReq)
-		require.NoError(t, err)
-		assert.NotNil(t, resp)
+		assert.ErrorContains(t, err, "unrecognized signature")
+		assert.Nil(t, resp)
 	})
 
 	t.Run("wrong client domain signature", func(t *testing.T) {
@@ -975,7 +975,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, wrongKP)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, wrongKP)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -1054,7 +1054,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -1119,7 +1119,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, kps.clientDomain)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, kps.clientDomain)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
