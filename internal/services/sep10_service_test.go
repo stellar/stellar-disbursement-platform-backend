@@ -912,7 +912,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		_, err = sep10Svc.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "there is more than one client signer")
+		assert.Contains(t, err.Error(), "unrecognized signature")
 	})
 }
 
@@ -1184,6 +1184,43 @@ func createChallengeTxFor(t *testing.T, service *sep10Service, account, clientDo
 	return tx
 }
 
+// buildRawChallenge assembles a server-signed challenge directly, so tests can submit shapes the service
+// would never issue.
+func buildRawChallenge(t *testing.T, kps *testKeypairs, clientAccountID string) *txnbuild.Transaction {
+	t.Helper()
+
+	nonce := make([]byte, 48)
+	_, err := rand.Read(nonce)
+	require.NoError(t, err)
+
+	currentTime := time.Now().UTC()
+	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount:        &txnbuild.SimpleAccount{AccountID: kps.server.Address(), Sequence: -1},
+		IncrementSequenceNum: true,
+		BaseFee:              txnbuild.MinBaseFee,
+		Preconditions: txnbuild.Preconditions{
+			TimeBounds: txnbuild.NewTimebounds(currentTime.Unix(), currentTime.Add(15*time.Minute).Unix()),
+		},
+		Operations: []txnbuild.Operation{
+			&txnbuild.ManageData{
+				SourceAccount: clientAccountID,
+				Name:          "stellar.local:8000 auth",
+				Value:         []byte(base64.StdEncoding.EncodeToString(nonce)),
+			},
+			&txnbuild.ManageData{
+				SourceAccount: kps.server.Address(),
+				Name:          "web_auth_domain",
+				Value:         []byte("stellar.local:8000"),
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	signedTx, err := tx.Sign(testNetworkPassphrase, kps.server)
+	require.NoError(t, err)
+	return signedTx
+}
+
 // validateSignedBy signs the challenge with the given keypairs, if any, and submits it for validation.
 func validateSignedBy(t *testing.T, service *sep10Service, tx *txnbuild.Transaction, signers ...*keypair.Full) (*ValidationResponse, error) {
 	t.Helper()
@@ -1264,14 +1301,23 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
+	t.Run("refuses to issue a challenge for the server signing key account", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+
+		_, err := service.CreateChallenge(context.Background(), ChallengeRequest{
+			Account:    kps.server.Address(),
+			HomeDomain: "stellar.local:8000",
+		})
+		assert.ErrorContains(t, err, "account must not be the server signing key")
+	})
+
 	t.Run("rejects challenge issued for the server signing key account", func(t *testing.T) {
 		horizonClient := createMockHorizonClient(kps.server.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
 			{Key: kps.server.Address(), Weight: 1, Type: "ed25519_public_key"},
 		})
 		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
 
-		tx := createChallengeTxFor(t, service, kps.server.Address(), "")
-		resp, err := validateSignedBy(t, service, tx)
+		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address()))
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})
@@ -1292,8 +1338,7 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 	t.Run("rejects non-existent server account padded with an extra signature", func(t *testing.T) {
 		service := createSEP10ServiceWithHorizon(t, kps, createMockHorizon404(t), false)
 
-		tx := createChallengeTxFor(t, service, kps.server.Address(), "")
-		resp, err := validateSignedBy(t, service, tx, keypair.MustRandom())
+		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address()), keypair.MustRandom())
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})

@@ -172,6 +172,10 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		return nil, ChallengeValidationError(fmt.Sprintf("%s is not a valid account id", req.Account))
 	}
 
+	if req.Account == s.SEP10SigningKeypair.Address() {
+		return nil, ChallengeValidationError("account must not be the server signing key")
+	}
+
 	var clientSigningKey string
 	if req.ClientDomain != "" {
 		var err error
@@ -338,6 +342,9 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 	}
 
 	clientAccountID := op.SourceAccount
+	if clientAccountID == serverAccountID {
+		return nil, fmt.Errorf("client account must not be the server account")
+	}
 
 	var memo *txnbuild.MemoID
 	if tx.Memo() != nil {
@@ -436,50 +443,28 @@ func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accoun
 	return fmt.Errorf("transaction is not signed by %s account %s", accountType, accountID)
 }
 
-func (s *sep10Service) verifyClientSignature(tx *txnbuild.Transaction, network, clientAccountID string) error {
-	return s.verifySignature(tx, network, clientAccountID, "client")
-}
-
-// verifySignaturesForNonExistentAccount verifies signatures for accounts that don't exist on the network yet.
-// For non-existent accounts, we only verify the client's master key signature (and client_domain if present).
+// verifySignaturesForNonExistentAccount verifies signatures for accounts that don't exist on the network
+// yet, where only the client account's master key can authenticate it.
 func (s *sep10Service) verifySignaturesForNonExistentAccount(
 	tx *txnbuild.Transaction,
 	clientAccountID string,
 	clientDomain string,
 ) error {
-	// Check signature count
-	// Expected: server signature + client signature + optional client_domain signature
-	expectedSigCount := 2 // server + client
-	if clientDomain != "" {
-		expectedSigCount = 3 // server + client + client_domain
+	signers := challengeSigners{
+		accountID: clientAccountID,
+		server:    s.SEP10SigningKeypair.Address(),
+		account:   map[string]int{clientAccountID: 0},
 	}
 
-	actualSigCount := len(tx.Signatures())
-	if actualSigCount != expectedSigCount {
-		return fmt.Errorf(
-			"there is more than one client signer on challenge transaction for an account that doesn't exist: expected %d signatures, got %d",
-			expectedSigCount,
-			actualSigCount,
-		)
-	}
-
-	// Verify client signature
-	if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientAccountID); err != nil {
-		return fmt.Errorf("verifying client signature for non-existent account: %w", err)
-	}
-
-	// Verify client_domain signature if present
 	if clientDomain != "" {
 		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
 			return fmt.Errorf("fetching client domain signing key: %w", err)
 		}
-		if err = s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
-			return fmt.Errorf("verifying client domain signature for non-existent account: %w", err)
-		}
+		signers.clientDomain = clientDomainAccountID
 	}
 
-	return nil
+	return s.verifyChallengeSignatures(tx, signers, 0)
 }
 
 // ed25519SignerType is the horizon signer type for the only signer keys that can sign a challenge.
@@ -531,9 +516,8 @@ func (s *sep10Service) verifySignaturesWithThreshold(
 		signers.clientDomain = clientDomainAccountID
 	}
 
-	// SEP-10 requires the server's own signature to be excluded when weighing the account's signers.
 	for _, signer := range account.Signers {
-		if signer.Type != ed25519SignerType || signer.Key == signers.server {
+		if signer.Type != ed25519SignerType {
 			continue
 		}
 		signers.account[signer.Key] = int(signer.Weight)
@@ -562,12 +546,14 @@ func (s *sep10Service) verifyChallengeSignatures(
 		return fmt.Errorf("verifying client domain signature: challenge is not signed by client domain account %s", signers.clientDomain)
 	}
 
+	// SEP-10 requires the server's own signature to be excluded when weighing the account's signers.
 	totalWeight, signersFound := 0, 0
 	for address, weight := range signers.account {
-		if matched[address] {
-			signersFound++
-			totalWeight += weight
+		if address == signers.server || !matched[address] {
+			continue
 		}
+		signersFound++
+		totalWeight += weight
 	}
 
 	if signersFound == 0 {
