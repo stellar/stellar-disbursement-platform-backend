@@ -84,7 +84,8 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 		kps.server.Seed(),
 		baseURL,
 		true,
-		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
+		// a default Stellar account has a medium threshold of 0
+		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
 		true,
