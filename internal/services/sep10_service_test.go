@@ -1187,12 +1187,33 @@ func createChallengeTxFor(t *testing.T, service *sep10Service, account, clientDo
 
 // buildRawChallenge assembles a server-signed challenge directly, so tests can submit shapes the service
 // would never issue.
-func buildRawChallenge(t *testing.T, kps *testKeypairs, clientAccountID string) *txnbuild.Transaction {
+func buildRawChallenge(t *testing.T, kps *testKeypairs, clientAccountID, clientDomainAccountID string) *txnbuild.Transaction {
 	t.Helper()
 
 	nonce := make([]byte, 48)
 	_, err := rand.Read(nonce)
 	require.NoError(t, err)
+
+	operations := []txnbuild.Operation{
+		&txnbuild.ManageData{
+			SourceAccount: clientAccountID,
+			Name:          "stellar.local:8000 auth",
+			Value:         []byte(base64.StdEncoding.EncodeToString(nonce)),
+		},
+		&txnbuild.ManageData{
+			SourceAccount: kps.server.Address(),
+			Name:          "web_auth_domain",
+			Value:         []byte("stellar.local:8000"),
+		},
+	}
+
+	if clientDomainAccountID != "" {
+		operations = append(operations, &txnbuild.ManageData{
+			SourceAccount: clientDomainAccountID,
+			Name:          "client_domain",
+			Value:         []byte("chaos.cadia.com"),
+		})
+	}
 
 	currentTime := time.Now().UTC()
 	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
@@ -1202,18 +1223,7 @@ func buildRawChallenge(t *testing.T, kps *testKeypairs, clientAccountID string) 
 		Preconditions: txnbuild.Preconditions{
 			TimeBounds: txnbuild.NewTimebounds(currentTime.Unix(), currentTime.Add(15*time.Minute).Unix()),
 		},
-		Operations: []txnbuild.Operation{
-			&txnbuild.ManageData{
-				SourceAccount: clientAccountID,
-				Name:          "stellar.local:8000 auth",
-				Value:         []byte(base64.StdEncoding.EncodeToString(nonce)),
-			},
-			&txnbuild.ManageData{
-				SourceAccount: kps.server.Address(),
-				Name:          "web_auth_domain",
-				Value:         []byte("stellar.local:8000"),
-			},
-		},
+		Operations: operations,
 	})
 	require.NoError(t, err)
 
@@ -1318,7 +1328,7 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 		})
 		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
 
-		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address()))
+		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address(), ""))
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	})
@@ -1339,8 +1349,30 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 	t.Run("rejects non-existent server account padded with an extra signature", func(t *testing.T) {
 		service := createSEP10ServiceWithHorizon(t, kps, createMockHorizon404(t), false)
 
-		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address()), keypair.MustRandom())
+		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address(), ""), keypair.MustRandom())
 		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("refuses to issue a challenge when the client domain publishes the server signing key", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+		service.HTTPClient = createMockHTTPClient(t, kps.server)
+
+		_, err := service.CreateChallenge(context.Background(), ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		})
+		assert.ErrorContains(t, err, "must not be the server signing key")
+	})
+
+	t.Run("rejects challenge whose client_domain operation is sourced to the server signing key", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+		service.HTTPClient = createMockHTTPClient(t, kps.server)
+
+		tx := buildRawChallenge(t, kps, kps.client.Address(), kps.server.Address())
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		assert.ErrorContains(t, err, "must not be the server signing key")
 		assert.Nil(t, resp)
 	})
 

@@ -791,6 +791,11 @@ func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (str
 		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", stellarToml.SigningKey)
 	}
 
+	// otherwise the server's own challenge signature would satisfy the client_domain signature.
+	if stellarToml.SigningKey == s.SEP10SigningKeypair.Address() {
+		return "", fmt.Errorf("SIGNING_KEY of client_domain %s must not be the server signing key", clientDomain)
+	}
+
 	return stellarToml.SigningKey, nil
 }
 
