@@ -1413,9 +1413,9 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
-	// A signer the account holder added with weight 0 still authenticates a zero-threshold account: SEP-10 leaves
-	// authenticating below a threshold to the application.
-	t.Run("accepts a weight-zero signer on a zero-threshold account", func(t *testing.T) {
+	// A zero-weight master key is the only weight-0 signer that persists: SetOptions deletes an added signer at weight 0.
+	// SEP-10 leaves authenticating below a threshold to the application, and the account itself set that threshold to 0.
+	t.Run("accepts a zero-weight master key on a zero-threshold account", func(t *testing.T) {
 		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
 			{Key: kps.client.Address(), Weight: 0, Type: "ed25519_public_key"},
 		})
