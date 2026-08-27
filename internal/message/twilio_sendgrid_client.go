@@ -39,7 +39,9 @@ func (t *twilioSendGridClient) SendMessage(_ context.Context, message Message) e
 	to := mail.NewEmail("", message.ToEmail)
 
 	emailBody := message.Body
-	if !strings.Contains(emailBody, "<html") {
+	// Only trusted staff emails are pre-rendered HTML; everything else (receiver messages, unknown types)
+	// is untrusted text and must be escaped, so it can't smuggle live markup past this wrapper.
+	if !message.Type.IsTrustedHTMLBody() {
 		var htmlErr error
 		emailBody, htmlErr = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: emailBody})
 		if htmlErr != nil {

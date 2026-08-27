@@ -257,6 +257,8 @@ func containsHTMLTag(s string) bool {
 			return false
 		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
 			return true
+		default:
+			// text, comments, doctype — keep scanning
 		}
 	}
 }

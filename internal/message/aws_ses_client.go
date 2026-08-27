@@ -55,8 +55,9 @@ func (c *awsSESClient) SendMessage(ctx context.Context, message Message) error {
 func generateAWSEmail(message Message, sender string) (*ses.SendEmailInput, error) {
 	emailBody := message.Body
 	var err error
-	// If the email body does not contain an HTML tag, then it is considered as a plain text email:
-	if !strings.Contains(emailBody, "<html") {
+	// Only trusted staff emails are pre-rendered HTML; everything else (receiver messages, unknown types)
+	// is untrusted text and must be escaped, so it can't smuggle live markup past this wrapper.
+	if !message.Type.IsTrustedHTMLBody() {
 		emailBody, err = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: emailBody})
 		if err != nil {
 			return nil, fmt.Errorf("generating html template: %w", err)
