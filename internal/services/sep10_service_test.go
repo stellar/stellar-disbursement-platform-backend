@@ -84,7 +84,8 @@ func createSEP10Service(t *testing.T, kps *testKeypairs, baseURL string, jwtMana
 		kps.server.Seed(),
 		baseURL,
 		true,
-		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
+		// a default Stellar account has a medium threshold of 0
+		createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
 			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
 		}),
 		true,
@@ -148,7 +149,7 @@ func createSignedChallenge(t *testing.T, service *sep10Service, kps *testKeypair
 	tx, isSimple := parsed.Transaction()
 	require.True(t, isSimple)
 
-	signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, kps.clientDomain)
+	signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, kps.clientDomain)
 	require.NoError(t, err)
 
 	signedTxBase64, err := signedTx.Base64()
@@ -657,7 +658,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, highThresholdKP, kps.clientDomain)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", highThresholdKP, kps.clientDomain)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -912,7 +913,7 @@ func TestSEP10Service_ValidateChallenge(t *testing.T) {
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		_, err = sep10Svc.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "there is more than one client signer")
+		assert.Contains(t, err.Error(), "unrecognized signature")
 	})
 }
 
@@ -927,7 +928,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 	service, outerErr := createSEP10Service(t, kps, "https://stellar.local:8000", jwtManager, false)
 	require.NoError(t, outerErr)
 
-	t.Run("wrong server signature (extra wrong signature is ignored)", func(t *testing.T) {
+	t.Run("rejects an extra signature from an unknown key", func(t *testing.T) {
 		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
 
 		challengeReq := ChallengeRequest{
@@ -953,8 +954,8 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		resp, err := service.ValidateChallenge(context.Background(), validationReq)
-		require.NoError(t, err)
-		assert.NotNil(t, resp)
+		assert.ErrorContains(t, err, "unrecognized signature")
+		assert.Nil(t, resp)
 	})
 
 	t.Run("wrong client domain signature", func(t *testing.T) {
@@ -975,7 +976,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, wrongKP)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, wrongKP)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -1054,7 +1055,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -1119,7 +1120,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		tx, isSimple := parsed.Transaction()
 		require.True(t, isSimple)
 
-		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.server, kps.client, kps.clientDomain)
+		signedTx, err := tx.Sign("Test SDF Network ; September 2015", kps.client, kps.clientDomain)
 		require.NoError(t, err)
 
 		signedTxBase64, err := signedTx.Base64()
@@ -1129,5 +1130,313 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		_, err = service.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "fetching client domain signing key")
+	})
+}
+
+func createMockHorizon404(t *testing.T) *horizonclient.MockClient {
+	t.Helper()
+
+	mockClient := &horizonclient.MockClient{}
+	mockClient.On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+		Return(horizon.Account{}, &horizonclient.Error{
+			Problem: problem.P{Status: 404, Title: "Resource Missing"},
+		})
+	return mockClient
+}
+
+// createSEP10ServiceWithHorizon builds a service around a caller-supplied Horizon client.
+func createSEP10ServiceWithHorizon(t *testing.T, kps *testKeypairs, horizonClient horizonclient.ClientInterface, clientAttributionRequired bool) *sep10Service {
+	t.Helper()
+
+	jwtManager, err := sepauth.NewJWTManager("emperors-light-123", 3600000)
+	require.NoError(t, err)
+
+	service, err := NewSEP10Service(
+		jwtManager,
+		testNetworkPassphrase,
+		kps.server.Seed(),
+		"https://stellar.local:8000",
+		true,
+		horizonClient,
+		clientAttributionRequired,
+		createMockSEP10NonceStore(t),
+	)
+	require.NoError(t, err)
+
+	return service.(*sep10Service)
+}
+
+// createChallengeTxFor issues a challenge for account and returns it parsed, carrying only the server signature.
+func createChallengeTxFor(t *testing.T, service *sep10Service, account, clientDomain string) *txnbuild.Transaction {
+	t.Helper()
+
+	challengeResp, err := service.CreateChallenge(context.Background(), ChallengeRequest{
+		Account:      account,
+		HomeDomain:   "stellar.local:8000",
+		ClientDomain: clientDomain,
+	})
+	require.NoError(t, err)
+
+	parsed, err := txnbuild.TransactionFromXDR(challengeResp.Transaction)
+	require.NoError(t, err)
+
+	tx, isSimple := parsed.Transaction()
+	require.True(t, isSimple)
+	return tx
+}
+
+// buildRawChallenge assembles a server-signed challenge directly, so tests can submit shapes the service
+// would never issue.
+func buildRawChallenge(t *testing.T, kps *testKeypairs, clientAccountID, clientDomainAccountID string) *txnbuild.Transaction {
+	t.Helper()
+
+	nonce := make([]byte, 48)
+	_, err := rand.Read(nonce)
+	require.NoError(t, err)
+
+	operations := []txnbuild.Operation{
+		&txnbuild.ManageData{
+			SourceAccount: clientAccountID,
+			Name:          "stellar.local:8000 auth",
+			Value:         []byte(base64.StdEncoding.EncodeToString(nonce)),
+		},
+		&txnbuild.ManageData{
+			SourceAccount: kps.server.Address(),
+			Name:          "web_auth_domain",
+			Value:         []byte("stellar.local:8000"),
+		},
+	}
+
+	if clientDomainAccountID != "" {
+		operations = append(operations, &txnbuild.ManageData{
+			SourceAccount: clientDomainAccountID,
+			Name:          "client_domain",
+			Value:         []byte("chaos.cadia.com"),
+		})
+	}
+
+	currentTime := time.Now().UTC()
+	tx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount:        &txnbuild.SimpleAccount{AccountID: kps.server.Address(), Sequence: -1},
+		IncrementSequenceNum: true,
+		BaseFee:              txnbuild.MinBaseFee,
+		Preconditions: txnbuild.Preconditions{
+			TimeBounds: txnbuild.NewTimebounds(currentTime.Unix(), currentTime.Add(15*time.Minute).Unix()),
+		},
+		Operations: operations,
+	})
+	require.NoError(t, err)
+
+	signedTx, err := tx.Sign(testNetworkPassphrase, kps.server)
+	require.NoError(t, err)
+	return signedTx
+}
+
+// validateSignedBy signs the challenge with the given keypairs, if any, and submits it for validation.
+func validateSignedBy(t *testing.T, service *sep10Service, tx *txnbuild.Transaction, signers ...*keypair.Full) (*ValidationResponse, error) {
+	t.Helper()
+
+	if len(signers) > 0 {
+		signedTx, err := tx.Sign(testNetworkPassphrase, signers...)
+		require.NoError(t, err)
+		tx = signedTx
+	}
+
+	txBase64, err := tx.Base64()
+	require.NoError(t, err)
+
+	return service.ValidateChallenge(context.Background(), ValidationRequest{Transaction: txBase64})
+}
+
+// TestSEP10Service_ValidateChallenge_SignerRequirements covers the SEP-10 signer rules on the existing-account path:
+// at least one signature from a signer of the client account, no unrecognized signatures, and the server key excluded.
+func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
+	t.Parallel()
+	kps := newTestKeypairs()
+
+	defaultAccount := func() *horizonclient.MockClient {
+		return createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+	}
+
+	t.Run("rejects challenge submitted without any client signature", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("rejects challenge signed only by a key that is not a signer", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, keypair.MustRandom())
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("rejects challenge signed only by the client_domain key", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+		service.HTTPClient = createMockHTTPClient(t, kps.clientDomain)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "chaos.cadia.com")
+		resp, err := validateSignedBy(t, service, tx, kps.clientDomain)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("rejects challenge carrying an unrecognized signature", func(t *testing.T) {
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client, keypair.MustRandom())
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("rejects challenge carrying a duplicate signature", func(t *testing.T) {
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client, kps.client)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("refuses to issue a challenge for the server signing key account", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+
+		_, err := service.CreateChallenge(context.Background(), ChallengeRequest{
+			Account:    kps.server.Address(),
+			HomeDomain: "stellar.local:8000",
+		})
+		assert.ErrorContains(t, err, "account must not be the server signing key")
+	})
+
+	t.Run("rejects challenge issued for the server signing key account", func(t *testing.T) {
+		horizonClient := createMockHorizonClient(kps.server.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
+			{Key: kps.server.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address(), ""))
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("does not count the server signing key towards the account threshold", func(t *testing.T) {
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 5}, []horizon.Signer{
+			{Key: kps.server.Address(), Weight: 10, Type: "ed25519_public_key"},
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("rejects non-existent server account padded with an extra signature", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, createMockHorizon404(t), false)
+
+		resp, err := validateSignedBy(t, service, buildRawChallenge(t, kps, kps.server.Address(), ""), keypair.MustRandom())
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	t.Run("refuses to issue a challenge when the client domain publishes the server signing key", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+		service.HTTPClient = createMockHTTPClient(t, kps.server)
+
+		_, err := service.CreateChallenge(context.Background(), ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		})
+		assert.ErrorContains(t, err, "must not be the server signing key")
+	})
+
+	t.Run("rejects challenge whose client_domain operation is sourced to the server signing key", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+		service.HTTPClient = createMockHTTPClient(t, kps.server)
+
+		tx := buildRawChallenge(t, kps, kps.client.Address(), kps.server.Address())
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		assert.ErrorContains(t, err, "must not be the server signing key")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("accepts master key signature on a zero-threshold account", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Token)
+	})
+
+	t.Run("accepts multisig meeting the medium threshold", func(t *testing.T) {
+		secondSignerKP := keypair.MustRandom()
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 2}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+			{Key: secondSignerKP.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client, secondSignerKP)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Token)
+	})
+
+	t.Run("rejects multisig below the medium threshold", func(t *testing.T) {
+		secondSignerKP := keypair.MustRandom()
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 2}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+			{Key: secondSignerKP.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+	})
+
+	// A zero-weight master key is the only weight-0 signer that persists: SetOptions deletes an added signer at weight 0.
+	// SEP-10 leaves authenticating below a threshold to the application, and the account itself set that threshold to 0.
+	t.Run("accepts a zero-weight master key on a zero-threshold account", func(t *testing.T) {
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 0, Type: "ed25519_public_key"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Token)
+	})
+
+	t.Run("ignores non-ed25519 account signers", func(t *testing.T) {
+		horizonClient := createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 1}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+			{Key: "XAAACAQDAQCQMBYIBEFAWDANBYHRAEISCMKBKFQXDAMRUGY4DUPB7QO7", Weight: 10, Type: "sha256_hash"},
+		})
+		service := createSEP10ServiceWithHorizon(t, kps, horizonClient, false)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "")
+		resp, err := validateSignedBy(t, service, tx, kps.client)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Token)
 	})
 }
