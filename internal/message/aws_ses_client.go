@@ -3,7 +3,6 @@ package message
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -58,7 +57,7 @@ func generateAWSEmail(message Message, sender string) (*ses.SendEmailInput, erro
 	var err error
 	// If the email body does not contain an HTML tag, then it is considered as a plain text email:
 	if !strings.Contains(emailBody, "<html") {
-		emailBody, err = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: template.HTML(emailBody)})
+		emailBody, err = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: emailBody})
 		if err != nil {
 			return nil, fmt.Errorf("generating html template: %w", err)
 		}

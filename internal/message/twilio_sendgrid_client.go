@@ -3,7 +3,6 @@ package message
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"strings"
 
 	"github.com/sendgrid/rest"
@@ -42,7 +41,7 @@ func (t *twilioSendGridClient) SendMessage(_ context.Context, message Message) e
 	emailBody := message.Body
 	if !strings.Contains(emailBody, "<html") {
 		var htmlErr error
-		emailBody, htmlErr = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: template.HTML(emailBody)})
+		emailBody, htmlErr = htmltemplate.ExecuteHTMLTemplateForEmailEmptyBody(htmltemplate.EmptyBodyEmailTemplate{Body: emailBody})
 		if htmlErr != nil {
 			return fmt.Errorf("generating html template: %w", htmlErr)
 		}

@@ -22,8 +22,6 @@ var (
 	// RxPhone is a regex used to validate phone number, according with the E.164 standard https://en.wikipedia.org/wiki/E.164
 	rxPhone = regexp.MustCompile(`^\+[1-9]{1}[0-9]{9,14}$`)
 	rxOTP   = regexp.MustCompile(`^\d{6}$`)
-	// Any HTML-like tag: <a ...>, </div>, <STYLE>...</STYLE>, etc.
-	rxHTMLTag = regexp.MustCompile(`(?i)<\s*/?\s*[a-z][a-z0-9]*(\s+[^>]*)?>`)
 	// "javascript:" URL scheme anywhere in the string.
 	rxJSScheme                = regexp.MustCompile(`(?i)\bjavascript\s*:`)
 	rxCSSExpr                 = regexp.MustCompile(`(?i)\bexpression\s*\(`)
@@ -230,21 +228,35 @@ func ValidateURLScheme(link string, scheme ...string) error {
 	return nil
 }
 
-// ValidateNoHTML returns an error if the input contains HTML tags, JavaScript schemes, or CSS expressions,
-// as detected by regular expressions, either in encoded or decoded form.
+// ValidateNoHTML errors if the input contains HTML tags, JS schemes, or CSS expressions, encoded or not.
+// Tags are detected with the HTML tokenizer (not a regex) so evasions like <svg/onload=...> are caught.
 func ValidateNoHTML(s string) error {
 	if s == "" {
 		return nil
 	}
 
-	if rxHTMLTag.MatchString(s) || rxJSScheme.MatchString(s) || rxCSSExpr.MatchString(s) {
+	if containsHTMLTag(s) || rxJSScheme.MatchString(s) || rxCSSExpr.MatchString(s) {
 		return errors.New("input contains HTML or active content")
 	}
 
 	unescaped := html.UnescapeString(s)
-	if rxHTMLTag.MatchString(unescaped) || rxJSScheme.MatchString(unescaped) || rxCSSExpr.MatchString(unescaped) {
+	if containsHTMLTag(unescaped) || rxJSScheme.MatchString(unescaped) || rxCSSExpr.MatchString(unescaped) {
 		return errors.New("input contains HTML or active content")
 	}
 
 	return nil
+}
+
+// containsHTMLTag reports whether s contains any HTML tag, using the tokenizer so slash-separated tags
+// like <svg/onload=...> (missed by a regex, but live elements in a browser) are detected.
+func containsHTMLTag(s string) bool {
+	z := html.NewTokenizer(strings.NewReader(s))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return false
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			return true
+		}
+	}
 }
