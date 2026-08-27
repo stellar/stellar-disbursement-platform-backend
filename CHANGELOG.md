@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Validate receiver-facing message input on every write path. [#1198](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1198)
+
 ### Security and Dependencies
 
 - Move the SDP metrics port off application Service onto a dedicated ClusterIP Service, and pin the TSS metrics Service to ClusterIP. [#1193](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1193)
