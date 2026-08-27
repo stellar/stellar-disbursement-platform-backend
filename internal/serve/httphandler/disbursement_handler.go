@@ -138,6 +138,11 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 }
 
 func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq *http.Request, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
+	// Validate here so every ingress path (JSON and multipart/CSV) is covered — both funnel through this function.
+	if v := d.validateRequest(ctx, req); v.HasErrors() {
+		return nil, httperror.BadRequest("", nil, v.Errors)
+	}
+
 	var wallet *data.Wallet
 	var err error
 
@@ -796,11 +801,7 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 }
 
 func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, r *http.Request, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
-	v := d.validateRequest(ctx, req)
-	if v.HasErrors() {
-		return nil, httperror.BadRequest("", nil, v.Errors)
-	}
-
+	// Validation runs inside createNewDisbursement so it also covers the multipart/CSV path.
 	return d.createNewDisbursement(ctx, r, d.Models.DBConnectionPool, user.ID, req)
 }
 

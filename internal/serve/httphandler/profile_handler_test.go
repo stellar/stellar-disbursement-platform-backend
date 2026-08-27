@@ -400,6 +400,54 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			}`,
 		},
 		{
+			name:  "returns BadRequest when otp_message_template contains HTML",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUserByID", mock.Anything, mock.Anything).
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"otp_message_template": "<a href='evil.com'>Your code</a>"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"otp_message_template": "otp_message_template cannot contain HTML, JS or CSS"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when organization_name contains HTML",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUserByID", mock.Anything, mock.Anything).
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"organization_name": "<b>Evil</b> Corp"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"organization_name": "organization_name cannot contain HTML, JS or CSS"
+				}
+			}`,
+		},
+		{
 			name:  "returns BadRequest when receiver_registration_message_template exceeds 255 characters",
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {

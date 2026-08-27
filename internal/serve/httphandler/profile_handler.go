@@ -205,7 +205,12 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		}
 	}
 
+	if reqBody.OTPMessageTemplate != nil {
+		validator.CheckError(utils.ValidateNoHTML(*reqBody.OTPMessageTemplate), "otp_message_template", "otp_message_template cannot contain HTML, JS or CSS")
+	}
+
 	if reqBody.OrganizationName != "" {
+		validator.CheckError(utils.ValidateNoHTML(reqBody.OrganizationName), "organization_name", "organization_name cannot contain HTML, JS or CSS")
 		validator.CheckError(utils.ValidateStringLength(reqBody.OrganizationName, "organization_name", 64), "organization_name", "")
 	}
 
