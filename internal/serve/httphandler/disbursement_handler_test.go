@@ -2619,6 +2619,23 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 			expectedStatus: http.StatusCreated,
 		},
 		{
+			name: "🔴 receiver_registration_message_template contains HTML (multipart/CSV path)",
+			disbursementData: map[string]interface{}{
+				"name":                                   "disbursement with html template",
+				"asset_id":                               asset.ID,
+				"wallet_id":                              enabledWallet.ID,
+				"registration_contact_type":              data.RegistrationContactTypePhone,
+				"verification_field":                     data.VerificationTypeDateOfBirth,
+				"receiver_registration_message_template": "<b>Claim</b> your payment",
+			},
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "receiver_registration_message_template cannot contain HTML, JS or CSS",
+		},
+		{
 			name: "🔴 disabled wallet",
 			disbursementData: map[string]interface{}{
 				"name":                      "disbursement with disabled wallet",
