@@ -172,6 +172,10 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		return nil, ChallengeValidationError(fmt.Sprintf("%s is not a valid account id", req.Account))
 	}
 
+	if req.Account == s.SEP10SigningKeypair.Address() {
+		return nil, ChallengeValidationError("account must not be the server signing key")
+	}
+
 	var clientSigningKey string
 	if req.ClientDomain != "" {
 		var err error
@@ -258,6 +262,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	// Account exists - verify with threshold
 	if err = s.verifySignaturesWithThreshold(
 		result.Transaction,
+		result.ClientAccountID,
 		result.ClientDomain,
 		account,
 	); err != nil {
@@ -337,6 +342,9 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 	}
 
 	clientAccountID := op.SourceAccount
+	if clientAccountID == serverAccountID {
+		return nil, fmt.Errorf("client account must not be the server account")
+	}
 
 	var memo *txnbuild.MemoID
 	if tx.Memo() != nil {
@@ -396,7 +404,7 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		return nil, fmt.Errorf("client_domain manage_data operation is required")
 	}
 
-	if err := s.verifySignature(tx, network, serverAccountID, "server"); err != nil {
+	if err := s.verifyServerSignature(tx, network, serverAccountID); err != nil {
 		return nil, fmt.Errorf("verifying server signature: %w", err)
 	}
 
@@ -410,7 +418,8 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 	}, nil
 }
 
-func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accountID, accountType string) error {
+// verifyServerSignature does not consume signatures, so it is only safe for the server key, whose signature is consumed again during attribution.
+func (s *sep10Service) verifyServerSignature(tx *txnbuild.Transaction, network, serverAccountID string) error {
 	hash, err := tx.Hash(network)
 	if err != nil {
 		return fmt.Errorf("computing transaction hash: %w", err)
@@ -421,9 +430,9 @@ func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accoun
 		return fmt.Errorf("transaction has no signatures")
 	}
 
-	kp, err := keypair.ParseAddress(accountID)
+	kp, err := keypair.ParseAddress(serverAccountID)
 	if err != nil {
-		return fmt.Errorf("parsing %s account: %w", accountType, err)
+		return fmt.Errorf("parsing server account: %w", err)
 	}
 
 	for _, sig := range signatures {
@@ -432,122 +441,177 @@ func (s *sep10Service) verifySignature(tx *txnbuild.Transaction, network, accoun
 		}
 	}
 
-	return fmt.Errorf("transaction is not signed by %s account %s", accountType, accountID)
+	return fmt.Errorf("transaction is not signed by server account %s", serverAccountID)
 }
 
-func (s *sep10Service) verifyClientSignature(tx *txnbuild.Transaction, network, clientAccountID string) error {
-	return s.verifySignature(tx, network, clientAccountID, "client")
-}
-
-// verifySignaturesForNonExistentAccount verifies signatures for accounts that don't exist on the network yet.
-// For non-existent accounts, we only verify the client's master key signature (and client_domain if present).
+// verifySignaturesForNonExistentAccount verifies signatures for accounts that don't exist on the network
+// yet, where only the client account's master key can authenticate it.
 func (s *sep10Service) verifySignaturesForNonExistentAccount(
 	tx *txnbuild.Transaction,
 	clientAccountID string,
 	clientDomain string,
 ) error {
-	// Check signature count
-	// Expected: server signature + client signature + optional client_domain signature
-	expectedSigCount := 2 // server + client
-	if clientDomain != "" {
-		expectedSigCount = 3 // server + client + client_domain
+	signers := challengeSigners{
+		accountID: clientAccountID,
+		server:    s.SEP10SigningKeypair.Address(),
+		account:   map[string]int{clientAccountID: 0},
 	}
 
-	actualSigCount := len(tx.Signatures())
-	if actualSigCount != expectedSigCount {
-		return fmt.Errorf(
-			"there is more than one client signer on challenge transaction for an account that doesn't exist: expected %d signatures, got %d",
-			expectedSigCount,
-			actualSigCount,
-		)
-	}
-
-	// Verify client signature
-	if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientAccountID); err != nil {
-		return fmt.Errorf("verifying client signature for non-existent account: %w", err)
-	}
-
-	// Verify client_domain signature if present
 	if clientDomain != "" {
 		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
 			return fmt.Errorf("fetching client domain signing key: %w", err)
 		}
-		if err = s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
-			return fmt.Errorf("verifying client domain signature for non-existent account: %w", err)
-		}
+		signers.clientDomain = clientDomainAccountID
 	}
 
-	return nil
+	return s.verifyChallengeSignatures(tx, signers, 0)
+}
+
+// ed25519SignerType is the horizon signer type for the only signer keys that can sign a challenge.
+const ed25519SignerType = "ed25519_public_key"
+
+// challengeSigners holds the keys that may legitimately have signed a challenge transaction.
+type challengeSigners struct {
+	accountID    string
+	server       string
+	clientDomain string
+	account      map[string]int // signers able to authenticate the client account, by weight
+}
+
+// addresses returns every candidate key, deduplicated across roles.
+func (cs challengeSigners) addresses() []string {
+	addresses := make([]string, 0, len(cs.account)+2)
+	addresses = append(addresses, cs.server)
+	if cs.clientDomain != "" && cs.clientDomain != cs.server {
+		addresses = append(addresses, cs.clientDomain)
+	}
+
+	for address := range cs.account {
+		if address == cs.server || address == cs.clientDomain {
+			continue
+		}
+		addresses = append(addresses, address)
+	}
+
+	return addresses
 }
 
 func (s *sep10Service) verifySignaturesWithThreshold(
 	tx *txnbuild.Transaction,
+	clientAccountID string,
 	clientDomain string,
 	account *horizon.Account,
 ) error {
-	// Verify client_domain signature if present
+	signers := challengeSigners{
+		accountID: clientAccountID,
+		server:    s.SEP10SigningKeypair.Address(),
+		account:   make(map[string]int, len(account.Signers)),
+	}
+
 	if clientDomain != "" {
 		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
 		if err != nil {
 			return fmt.Errorf("fetching client domain signing key: %w", err)
 		}
-		if err := s.verifyClientSignature(tx, s.NetworkPassphrase, clientDomainAccountID); err != nil {
-			return fmt.Errorf("verifying client domain signature: %w", err)
-		}
+		signers.clientDomain = clientDomainAccountID
 	}
 
-	// Verify that the cumulative weight of signatures meets the medium threshold
-	// This allows any combination of account signers (master or non-master) to authenticate
-	threshold := int(account.Thresholds.MedThreshold)
-	if err := s.verifyThreshold(tx, account, threshold); err != nil {
-		return fmt.Errorf("verifying signature threshold: %w", err)
+	for _, signer := range account.Signers {
+		if signer.Type != ed25519SignerType {
+			continue
+		}
+		signers.account[signer.Key] = int(signer.Weight)
+	}
+
+	return s.verifyChallengeSignatures(tx, signers, int(account.Thresholds.MedThreshold))
+}
+
+// verifyChallengeSignatures applies SEP-10's signer rules: every signature must belong to an expected
+// signer, and the client account must be represented by at least one signer of its own.
+func (s *sep10Service) verifyChallengeSignatures(
+	tx *txnbuild.Transaction,
+	signers challengeSigners,
+	threshold int,
+) error {
+	matched, unrecognized, err := attributeSignatures(tx, s.NetworkPassphrase, signers.addresses())
+	if err != nil {
+		return err
+	}
+
+	if !matched[signers.server] {
+		return fmt.Errorf("challenge is not signed by server account %s", signers.server)
+	}
+
+	if signers.clientDomain != "" && !matched[signers.clientDomain] {
+		return fmt.Errorf("verifying client domain signature: challenge is not signed by client domain account %s", signers.clientDomain)
+	}
+
+	// SEP-10 requires the server's own signature to be excluded when weighing the account's signers.
+	totalWeight, signersFound := 0, 0
+	for address, weight := range signers.account {
+		if address == signers.server || !matched[address] {
+			continue
+		}
+		signersFound++
+		totalWeight += weight
+	}
+
+	if signersFound == 0 {
+		return fmt.Errorf("verifying client signature: challenge is not signed by any signer of account %s", signers.accountID)
+	}
+
+	if totalWeight < threshold {
+		return fmt.Errorf("verifying signature threshold: signatures with weight %d do not meet threshold %d", totalWeight, threshold)
+	}
+
+	if unrecognized > 0 {
+		return fmt.Errorf("challenge has %d unrecognized signature(s)", unrecognized)
 	}
 
 	return nil
 }
 
-// verifyThreshold checks if the sum of the weights of the signers present on the transaction
-// meets or exceeds the required threshold.
-func (s *sep10Service) verifyThreshold(
-	tx *txnbuild.Transaction,
-	account *horizon.Account,
-	threshold int,
-) error {
-	signerWeights := make(map[string]int)
-	for _, signer := range account.Signers {
-		signerWeights[signer.Key] = int(signer.Weight)
-	}
-
-	hash, err := tx.Hash(s.NetworkPassphrase)
+// attributeSignatures matches every signature to at most one candidate key, consuming both, and reports
+// how many signatures could not be attributed.
+func attributeSignatures(tx *txnbuild.Transaction, networkPassphrase string, addresses []string) (map[string]bool, int, error) {
+	hash, err := tx.Hash(networkPassphrase)
 	if err != nil {
-		return fmt.Errorf("computing transaction hash: %w", err)
+		return nil, 0, fmt.Errorf("computing transaction hash: %w", err)
 	}
 
-	usedSigners := make(map[string]bool)
-	totalWeight := 0
+	candidates := make(map[string]*keypair.FromAddress, len(addresses))
+	for _, address := range addresses {
+		kp, parseErr := keypair.ParseAddress(address)
+		if parseErr != nil {
+			continue
+		}
+		candidates[address] = kp
+	}
+
+	matched := make(map[string]bool, len(candidates))
+	unrecognized := 0
 
 	for _, sig := range tx.Signatures() {
-		for signer, weight := range signerWeights {
-			if usedSigners[signer] {
-				continue
-			}
-			kp, err := keypair.ParseAddress(signer)
-			if err != nil {
+		signer := ""
+		for address, kp := range candidates {
+			if matched[address] || kp.Hint() != sig.Hint {
 				continue
 			}
 			if kp.Verify(hash[:], sig.Signature) == nil {
-				totalWeight += weight
-				usedSigners[signer] = true
+				signer = address
 				break
 			}
 		}
+
+		if signer == "" {
+			unrecognized++
+			continue
+		}
+		matched[signer] = true
 	}
 
-	if totalWeight < threshold {
-		return fmt.Errorf("signatures do not meet threshold: got %d, need %d", totalWeight, threshold)
-	}
-	return nil
+	return matched, unrecognized, nil
 }
 
 func (s *sep10Service) generateToken(
@@ -725,6 +789,11 @@ func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (str
 
 	if _, parseErr := keypair.ParseAddress(stellarToml.SigningKey); parseErr != nil {
 		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", stellarToml.SigningKey)
+	}
+
+	// otherwise the server's own challenge signature would satisfy the client_domain signature.
+	if stellarToml.SigningKey == s.SEP10SigningKeypair.Address() {
+		return "", fmt.Errorf("SIGNING_KEY of client_domain %s must not be the server signing key", clientDomain)
 	}
 
 	return stellarToml.SigningKey, nil

@@ -33,8 +33,10 @@ func ExecuteHTMLTemplate(templateName string, data interface{}) (string, error) 
 	return executedTemplate.String(), nil
 }
 
+// EmptyBodyEmailTemplate wraps a plain-text body in the HTML email shell.
+// Body is a string so html/template escapes it on render; pass raw text, not trusted markup.
 type EmptyBodyEmailTemplate struct {
-	Body template.HTML
+	Body string
 }
 
 func ExecuteHTMLTemplateForEmailEmptyBody(data EmptyBodyEmailTemplate) (string, error) {
