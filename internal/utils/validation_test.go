@@ -452,6 +452,9 @@ func Test_ValidateNoHTML_Valid(t *testing.T) {
 		"Whitespace    \n\t  ",
 		"This doesn't contain any HTML tags or scripts.",
 		"Text with word expression but not as code.",
+		"Claim your payment: {{.RegistrationLink}}",
+		"Meeting at 3 < 5 pm, see you",
+		"Price <100 dollars, save 20% & more",
 	}
 
 	for i, tc := range validTestCases {
@@ -476,6 +479,11 @@ func Test_ValidateNoHTML(t *testing.T) {
 		"JAVASCRIPT:ALERT(localStorage.getItem('sdp_session'))",
 		"javascript:alert('XSS')",
 		"JAVASCRIPT:ALERT('XSS')",
+		// Slash-separated tags: missed by a regex denylist, parsed as live elements by browsers.
+		"<svg/onload=alert(document.domain)>",
+		"<img/src=x onerror=alert(document.domain)>",
+		`<a/href="https://evil.com">legit text</a/>`,
+		"<svg/onload=alert(1)>",
 	}
 
 	for i, tc := range rawHTMLTestCases {

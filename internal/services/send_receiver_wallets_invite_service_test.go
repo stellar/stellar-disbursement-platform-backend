@@ -679,7 +679,9 @@ func TestSendReceiverWalletInviteService_SendInvite(t *testing.T) {
 
 		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
 
-		customInvitationMessage := "My custom receiver wallet registration invite. MyOrg 👋"
+		// Special chars and a tag must stay RAW in msg.Body: the body is shared with the SMS channel, so it
+		// must not be HTML-escaped here; the email path escapes at the wrapper instead (see Design F).
+		customInvitationMessage := "Save 20% & win <b>now</b>! MyOrg 👋"
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{ReceiverRegistrationMessageTemplate: &customInvitationMessage})
 		require.NoError(t, err)
 
