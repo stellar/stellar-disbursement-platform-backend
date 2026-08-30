@@ -103,7 +103,7 @@ jobs:
       TEST_TYPE: ${{ matrix.TEST_TYPE }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Cleanup data
         working-directory: internal/integrationtests/docker
