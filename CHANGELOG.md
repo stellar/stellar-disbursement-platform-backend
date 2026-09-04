@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Move the SDP metrics port off application Service onto a dedicated ClusterIP Service, and pin the TSS metrics Service to ClusterIP. [#1193](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1193)
 - Move `LOG_SHIPPING_URL` to global section in helm chart as a secret value. [#1193](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1193)
 - Require client signer when verifying SEP-10 challenges [#1196](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1196)
+- Verify the SEP-10 `client_domain` signature against the operation source account. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
+- Return `400 Bad Request` instead of `500` when a `client_domain` signing key cannot be resolved. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
 
 ## [7.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.1...7.0.0))
 
