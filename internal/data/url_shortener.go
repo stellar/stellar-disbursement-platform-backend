@@ -2,13 +2,13 @@ package data
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -16,7 +16,8 @@ import (
 
 const (
 	maxCodeGenerationAttempts = 5
-	shortCodeLength           = 6
+	shortCodeLength = 10
+	shortCodeAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
 )
 
 type ShortURL struct {
@@ -105,6 +106,27 @@ type CodeGenerator interface {
 type RandomCodeGenerator struct{}
 
 func (g *RandomCodeGenerator) Generate(length int) string {
-	genUUID := uuid.New().String()
-	return strings.ReplaceAll(genUUID[:length], "-", "")
+	if length <= 0 {
+		return ""
+	}
+
+	// Bytes at or above this limit are discarded to avoid modulo bias (256 is not a multiple of 36).
+	const unbiasedLimit = 256 - 256%len(shortCodeAlphabet)
+	code := make([]byte, 0, length)
+	buf := make([]byte, length)
+	for len(code) < length {
+		if _, err := rand.Read(buf); err != nil {
+			panic(fmt.Sprintf("reading random bytes for short code: %v", err))
+		}
+		for _, b := range buf {
+			if int(b) >= unbiasedLimit {
+				continue
+			}
+			code = append(code, shortCodeAlphabet[int(b)%len(shortCodeAlphabet)])
+			if len(code) == length {
+				break
+			}
+		}
+	}
+	return string(code)
 }
