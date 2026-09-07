@@ -170,6 +170,30 @@ func Test_URLShortenerModel_GetOrCreateShortCode(t *testing.T) {
 	}
 }
 
+func Test_URLShortenerModel_GetOrCreateShortCode_realGenerator(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	model := NewURLShortenerModel(dbConnectionPool)
+	originalURL := "https://stellar.org/" + t.Name()
+
+	// Exercises the real generator against the real column width (VARCHAR(10)).
+	code, err := model.GetOrCreateShortCode(ctx, originalURL)
+	require.NoError(t, err)
+	assert.Len(t, code, shortCodeLength)
+	for _, char := range code {
+		assert.Contains(t, shortCodeAlphabet, string(char))
+	}
+
+	resolvedURL, err := model.GetOriginalURL(ctx, code)
+	require.NoError(t, err)
+	assert.Equal(t, originalURL, resolvedURL)
+}
+
 func Test_RandomCodeGenerator_Generate(t *testing.T) {
 	generator := &RandomCodeGenerator{}
 
