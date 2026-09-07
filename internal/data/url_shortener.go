@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -16,8 +15,8 @@ import (
 
 const (
 	maxCodeGenerationAttempts = 5
-	shortCodeLength = 10
-	shortCodeAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+	shortCodeLength           = 10
+	shortCodeAlphabet         = "0123456789abcdefghijklmnopqrstuvwxyz"
 )
 
 type ShortURL struct {
