@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stellar/go-stellar-sdk/xdr"
 
@@ -113,7 +114,9 @@ type ChallengeValidationResult struct {
 	HomeDomain      string
 	Memo            *txnbuild.MemoID
 	ClientDomain    string
-	Nonce           string
+	// ClientDomainAccountID is the source account of the client_domain operation, i.e. the key that must sign.
+	ClientDomainAccountID string
+	Nonce                 string
 }
 
 func NewSEP10Service(
@@ -181,7 +184,8 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 		var err error
 		clientSigningKey, err = s.fetchSigningKeyFromClientDomain(req.ClientDomain)
 		if err != nil {
-			return nil, fmt.Errorf("fetching client domain signing key: %w", err)
+			log.Ctx(ctx).Errorf("resolving client_domain %s signing key: %v", req.ClientDomain, err)
+			return nil, ChallengeValidationError("unable to resolve a valid SIGNING_KEY from the client_domain stellar.toml")
 		}
 	}
 
@@ -201,6 +205,10 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 
 	tx, err := s.buildChallengeTx(ctx, req.Account, webAuthDomain, req.HomeDomain, req.ClientDomain, clientSigningKey, memoParam)
 	if err != nil {
+		var validationErr ChallengeValidationError
+		if errors.As(err, &validationErr) {
+			return nil, validationErr
+		}
 		return nil, fmt.Errorf("building challenge transaction %w", err)
 	}
 
@@ -239,7 +247,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 			if verifyErr := s.verifySignaturesForNonExistentAccount(
 				result.Transaction,
 				result.ClientAccountID,
-				result.ClientDomain,
+				result.ClientDomainAccountID,
 			); verifyErr != nil {
 				return nil, verifyErr
 			}
@@ -263,7 +271,7 @@ func (s *sep10Service) ValidateChallenge(ctx context.Context, req ValidationRequ
 	if err = s.verifySignaturesWithThreshold(
 		result.Transaction,
 		result.ClientAccountID,
-		result.ClientDomain,
+		result.ClientDomainAccountID,
 		account,
 	); err != nil {
 		return nil, err
@@ -367,7 +375,7 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 		return nil, fmt.Errorf("random nonce before encoding as base64 should be 48 bytes long")
 	}
 
-	var clientDomain string
+	var clientDomain, clientDomainAccountID string
 	foundClientDomain := false
 	for i, operation := range operations[1:] {
 		manageDataOp, ok := operation.(*txnbuild.ManageData)
@@ -391,7 +399,12 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 			if _, err := xdr.AddressToAccountId(manageDataOp.SourceAccount); err != nil {
 				return nil, fmt.Errorf("client_domain operation has invalid source account: %w", err)
 			}
+			// otherwise the server's own challenge signature would satisfy the client_domain signature.
+			if manageDataOp.SourceAccount == serverAccountID {
+				return nil, fmt.Errorf("client_domain operation must not be sourced to the server account")
+			}
 			clientDomain = string(manageDataOp.Value)
+			clientDomainAccountID = manageDataOp.SourceAccount
 			foundClientDomain = true
 		default:
 			if manageDataOp.SourceAccount != serverAccountID {
@@ -409,12 +422,13 @@ func (s *sep10Service) validateChallengeCustom(challengeTx, serverAccountID, net
 	}
 
 	return &ChallengeValidationResult{
-		Transaction:     tx,
-		ClientAccountID: clientAccountID,
-		HomeDomain:      matchedHomeDomain,
-		Memo:            memo,
-		ClientDomain:    clientDomain,
-		Nonce:           nonceB64,
+		Transaction:           tx,
+		ClientAccountID:       clientAccountID,
+		HomeDomain:            matchedHomeDomain,
+		Memo:                  memo,
+		ClientDomain:          clientDomain,
+		ClientDomainAccountID: clientDomainAccountID,
+		Nonce:                 nonceB64,
 	}, nil
 }
 
@@ -449,20 +463,13 @@ func (s *sep10Service) verifyServerSignature(tx *txnbuild.Transaction, network, 
 func (s *sep10Service) verifySignaturesForNonExistentAccount(
 	tx *txnbuild.Transaction,
 	clientAccountID string,
-	clientDomain string,
+	clientDomainAccountID string,
 ) error {
 	signers := challengeSigners{
-		accountID: clientAccountID,
-		server:    s.SEP10SigningKeypair.Address(),
-		account:   map[string]int{clientAccountID: 0},
-	}
-
-	if clientDomain != "" {
-		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
-		if err != nil {
-			return fmt.Errorf("fetching client domain signing key: %w", err)
-		}
-		signers.clientDomain = clientDomainAccountID
+		accountID:       clientAccountID,
+		server:          s.SEP10SigningKeypair.Address(),
+		clientDomainKey: clientDomainAccountID,
+		account:         map[string]int{clientAccountID: 0},
 	}
 
 	return s.verifyChallengeSignatures(tx, signers, 0)
@@ -473,22 +480,22 @@ const ed25519SignerType = "ed25519_public_key"
 
 // challengeSigners holds the keys that may legitimately have signed a challenge transaction.
 type challengeSigners struct {
-	accountID    string
-	server       string
-	clientDomain string
-	account      map[string]int // signers able to authenticate the client account, by weight
+	accountID       string
+	server          string
+	clientDomainKey string
+	account         map[string]int // signers able to authenticate the client account, by weight
 }
 
 // addresses returns every candidate key, deduplicated across roles.
 func (cs challengeSigners) addresses() []string {
 	addresses := make([]string, 0, len(cs.account)+2)
 	addresses = append(addresses, cs.server)
-	if cs.clientDomain != "" && cs.clientDomain != cs.server {
-		addresses = append(addresses, cs.clientDomain)
+	if cs.clientDomainKey != "" && cs.clientDomainKey != cs.server {
+		addresses = append(addresses, cs.clientDomainKey)
 	}
 
 	for address := range cs.account {
-		if address == cs.server || address == cs.clientDomain {
+		if address == cs.server || address == cs.clientDomainKey {
 			continue
 		}
 		addresses = append(addresses, address)
@@ -500,21 +507,14 @@ func (cs challengeSigners) addresses() []string {
 func (s *sep10Service) verifySignaturesWithThreshold(
 	tx *txnbuild.Transaction,
 	clientAccountID string,
-	clientDomain string,
+	clientDomainAccountID string,
 	account *horizon.Account,
 ) error {
 	signers := challengeSigners{
-		accountID: clientAccountID,
-		server:    s.SEP10SigningKeypair.Address(),
-		account:   make(map[string]int, len(account.Signers)),
-	}
-
-	if clientDomain != "" {
-		clientDomainAccountID, err := s.fetchSigningKeyFromClientDomain(clientDomain)
-		if err != nil {
-			return fmt.Errorf("fetching client domain signing key: %w", err)
-		}
-		signers.clientDomain = clientDomainAccountID
+		accountID:       clientAccountID,
+		server:          s.SEP10SigningKeypair.Address(),
+		clientDomainKey: clientDomainAccountID,
+		account:         make(map[string]int, len(account.Signers)),
 	}
 
 	for _, signer := range account.Signers {
@@ -543,8 +543,8 @@ func (s *sep10Service) verifyChallengeSignatures(
 		return fmt.Errorf("challenge is not signed by server account %s", signers.server)
 	}
 
-	if signers.clientDomain != "" && !matched[signers.clientDomain] {
-		return fmt.Errorf("verifying client domain signature: challenge is not signed by client domain account %s", signers.clientDomain)
+	if signers.clientDomainKey != "" && !matched[signers.clientDomainKey] {
+		return fmt.Errorf("verifying client domain signature: challenge is not signed by client domain account %s", signers.clientDomainKey)
 	}
 
 	// SEP-10 requires the server's own signature to be excluded when weighing the account's signers.
@@ -694,7 +694,12 @@ func (s *sep10Service) buildChallengeTx(ctx context.Context, clientAccountID, we
 
 	if clientDomainAccountID != "" {
 		if _, parseErr := keypair.ParseAddress(clientDomainAccountID); parseErr != nil {
-			return nil, fmt.Errorf("invalid client domain account ID: %s is not a valid Stellar account ID", clientDomainAccountID)
+			return nil, ChallengeValidationError(fmt.Sprintf("client_domain SIGNING_KEY %s is not a valid Stellar account ID", clientDomainAccountID))
+		}
+		// otherwise the server's own challenge signature would satisfy the client_domain signature.
+		if clientDomainAccountID == s.SEP10SigningKeypair.Address() {
+			log.Ctx(ctx).Errorf("client_domain %s publishes the server signing key as its SIGNING_KEY", clientDomain)
+			return nil, ChallengeValidationError("client_domain must not publish the server signing key as its SIGNING_KEY")
 		}
 	}
 
@@ -789,11 +794,6 @@ func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (str
 
 	if _, parseErr := keypair.ParseAddress(stellarToml.SigningKey); parseErr != nil {
 		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", stellarToml.SigningKey)
-	}
-
-	// otherwise the server's own challenge signature would satisfy the client_domain signature.
-	if stellarToml.SigningKey == s.SEP10SigningKeypair.Address() {
-		return "", fmt.Errorf("SIGNING_KEY of client_domain %s must not be the server signing key", clientDomain)
 	}
 
 	return stellarToml.SigningKey, nil

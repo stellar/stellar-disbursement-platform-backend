@@ -368,7 +368,7 @@ func TestSEP10Service_CreateChallenge(t *testing.T) {
 				ClientDomain: "invalid-domain.com",
 			},
 			expectError: true,
-			errMsg:      "unable to fetch stellar.toml from invalid-domain.com",
+			errMsg:      "unable to resolve a valid SIGNING_KEY from the client_domain stellar.toml",
 		},
 		{
 			name: "timeout validation",
@@ -1129,7 +1129,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 		validationReq := ValidationRequest{Transaction: signedTxBase64}
 		_, err = service.ValidateChallenge(context.Background(), validationReq)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "fetching client domain signing key")
+		assert.Contains(t, err.Error(), "verifying client domain signature")
 	})
 }
 
@@ -1363,16 +1363,17 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 			HomeDomain:   "stellar.local:8000",
 			ClientDomain: "chaos.cadia.com",
 		})
-		assert.ErrorContains(t, err, "must not be the server signing key")
+		var validationErr ChallengeValidationError
+		require.ErrorAs(t, err, &validationErr)
+		assert.ErrorContains(t, err, "client_domain must not publish the server signing key")
 	})
 
 	t.Run("rejects challenge whose client_domain operation is sourced to the server signing key", func(t *testing.T) {
 		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), false)
-		service.HTTPClient = createMockHTTPClient(t, kps.server)
 
 		tx := buildRawChallenge(t, kps, kps.client.Address(), kps.server.Address())
 		resp, err := validateSignedBy(t, service, tx, kps.client)
-		assert.ErrorContains(t, err, "must not be the server signing key")
+		assert.ErrorContains(t, err, "client_domain operation must not be sourced to the server account")
 		assert.Nil(t, resp)
 	})
 
@@ -1438,5 +1439,102 @@ func TestSEP10Service_ValidateChallenge_SignerRequirements(t *testing.T) {
 		resp, err := validateSignedBy(t, service, tx, kps.client)
 		require.NoError(t, err)
 		assert.NotEmpty(t, resp.Token)
+	})
+}
+
+// createRotatingMockHTTPClient serves firstKP's SIGNING_KEY on the first fetch and thenKP's on every fetch after,
+// simulating a client domain that rotates its key mid-flow.
+func createRotatingMockHTTPClient(t *testing.T, firstKP, thenKP *keypair.Full) *mocks.HTTPClientMock {
+	mockClient := mocks.NewHTTPClientMock(t)
+
+	fetches := 0
+	mockClient.
+		On("Get", mock.AnythingOfType("string")).
+		Return(func(_ string) *http.Response {
+			fetches++
+			kp := firstKP
+			if fetches > 1 {
+				kp = thenKP
+			}
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kp.Address() + "\"\n")),
+			}
+		}, nil)
+	return mockClient
+}
+
+// TestSEP10Service_ClientDomainVerification covers SEP-10's rule that the client_domain signature is verified
+// against the source account of the client_domain operation, and the status a client domain failure maps to.
+func TestSEP10Service_ClientDomainVerification(t *testing.T) {
+	t.Parallel()
+	kps := newTestKeypairs()
+
+	defaultAccount := func() *horizonclient.MockClient {
+		return createMockHorizonClient(kps.client.Address(), horizon.AccountThresholds{MedThreshold: 0}, []horizon.Signer{
+			{Key: kps.client.Address(), Weight: 1, Type: "ed25519_public_key"},
+		})
+	}
+
+	t.Run("verifies the client domain signature against the challenge operation source account", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+		service.HTTPClient = createRotatingMockHTTPClient(t, kps.clientDomain, keypair.MustRandom())
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "chaos.cadia.com")
+		resp, err := validateSignedBy(t, service, tx, kps.client, kps.clientDomain)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Token)
+	})
+
+	t.Run("rejects a signature from the client domain's current key when the challenge pinned another", func(t *testing.T) {
+		rotatedKP := keypair.MustRandom()
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+		service.HTTPClient = createRotatingMockHTTPClient(t, kps.clientDomain, rotatedKP)
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "chaos.cadia.com")
+		resp, err := validateSignedBy(t, service, tx, kps.client, rotatedKP)
+		assert.ErrorContains(t, err, "client domain")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("does not fetch the client domain stellar.toml during validation", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+
+		mockClient := mocks.NewHTTPClientMock(t)
+		mockClient.
+			On("Get", mock.AnythingOfType("string")).
+			Return(&http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kps.clientDomain.Address() + "\"\n")),
+			}, nil).
+			Once()
+		service.HTTPClient = mockClient
+
+		tx := createChallengeTxFor(t, service, kps.client.Address(), "chaos.cadia.com")
+		resp, err := validateSignedBy(t, service, tx, kps.client, kps.clientDomain)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Token)
+	})
+
+	t.Run("reports an unresolvable client domain signing key as client input", func(t *testing.T) {
+		service := createSEP10ServiceWithHorizon(t, kps, defaultAccount(), true)
+
+		mockClient := mocks.NewHTTPClientMock(t)
+		mockClient.
+			On("Get", mock.AnythingOfType("string")).
+			Return(func(_ string) *http.Response {
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(""))}
+			}, nil)
+		service.HTTPClient = mockClient
+
+		_, err := service.CreateChallenge(context.Background(), ChallengeRequest{
+			Account:      kps.client.Address(),
+			HomeDomain:   "stellar.local:8000",
+			ClientDomain: "chaos.cadia.com",
+		})
+
+		var validationErr ChallengeValidationError
+		require.ErrorAs(t, err, &validationErr)
+		assert.NotContains(t, err.Error(), "SIGNING_KEY not present")
 	})
 }
