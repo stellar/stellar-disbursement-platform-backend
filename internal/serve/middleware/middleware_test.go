@@ -299,6 +299,124 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
+	t.Run("returns Unauthorized when the token carries no tenant", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+		// An empty tenant claim must not be allowed to run under the header-supplied tenant.
+		req.Header.Set(TenantHeaderKey, "victim_tenant")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("", nil).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns Unauthorized when the token's tenant cannot be resolved (deactivated/deleted)", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+		// A caller naming another tenant in the header must not be able to ride it in when the
+		// token's own tenant no longer resolves.
+		req.Header.Set(TenantHeaderKey, "victim_tenant")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("test_tenant_id", nil).
+			Once()
+		mTenantManager.
+			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			Return((*schema.Tenant)(nil), tenant.ErrTenantDoesNotExist).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns InternalServerError when the tenant lookup fails unexpectedly", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("test_tenant_id", nil).
+			Once()
+		mTenantManager.
+			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			Return((*schema.Tenant)(nil), errors.New("connection refused")).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("returns Unauthorized when the tenant ID cannot be read from the token", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("", auth.ErrInvalidToken).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
 	t.Run("returns the response successfully", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
 		require.NoError(t, err)
