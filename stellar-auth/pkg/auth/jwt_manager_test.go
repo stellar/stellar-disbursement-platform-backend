@@ -140,6 +140,25 @@ func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 
 		assert.NotEqual(t, token, refreshedToken)
 	})
+
+	t.Run("preserves the token's tenant on refresh, ignoring the context tenant", func(t *testing.T) {
+		expiresAt := time.Now().Add(time.Minute * tokenRefreshWindow)
+		token, err := jwtManager.GenerateToken(ctx, &User{}, expiresAt)
+		require.NoError(t, err)
+
+		// Refresh under a different context tenant: the refreshed token must keep the original one.
+		otherTenant := schema.Tenant{ID: "other-tenant-id", Name: "other-tenant"}
+		otherCtx := sdpcontext.SetTenantInContext(context.Background(), &otherTenant)
+
+		newExpiresAt := time.Now().Add(time.Minute * 5)
+		refreshedToken, err := jwtManager.RefreshToken(otherCtx, token, newExpiresAt)
+		require.NoError(t, err)
+		require.NotEqual(t, token, refreshedToken)
+
+		tenantID, err := jwtManager.GetTenantIDFromToken(otherCtx, refreshedToken)
+		require.NoError(t, err)
+		assert.Equal(t, currentTenant.ID, tenantID)
+	})
 }
 
 func Test_DefaultJWTManager_parseToken(t *testing.T) {

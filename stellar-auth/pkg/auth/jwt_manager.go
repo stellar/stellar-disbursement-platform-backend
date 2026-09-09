@@ -65,24 +65,30 @@ func (m *defaultJWTManager) parseToken(tokenString string) (*jwtgo.Token, *claim
 }
 
 func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expiresAt time.Time) (string, error) {
+	tenantID := ""
+	// TODO: Always throw this error after migrations are merged [SDP-953]
+	if currentTenant, err := sdpcontext.GetTenantFromContext(ctx); err != nil {
+		log.Ctx(ctx).Error(err)
+	} else {
+		tenantID = currentTenant.ID
+	}
+
+	return m.signToken(user, tenantID, expiresAt)
+}
+
+// signToken builds and signs a token for the given user and tenant.
+func (m *defaultJWTManager) signToken(user *User, tenantID string, expiresAt time.Time) (string, error) {
 	esPrivateKey, err := jwtgo.ParseECPrivateKeyFromPEM([]byte(m.privateKey))
 	if err != nil {
 		return "", fmt.Errorf("parsing EC Private Key: %w", err)
 	}
 
 	c := &claims{
-		User: user,
+		User:     user,
+		TenantID: tenantID,
 		RegisteredClaims: jwtgo.RegisteredClaims{
 			ExpiresAt: jwtgo.NewNumericDate(expiresAt),
 		},
-	}
-
-	// TODO: Always throw this error after migrations are merged [SDP-953]
-	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-	if err != nil {
-		log.Ctx(ctx).Error(err)
-	} else {
-		c.TenantID = currentTenant.ID
 	}
 
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodES256, c)
@@ -109,7 +115,7 @@ func (m *defaultJWTManager) RefreshToken(ctx context.Context, tokenString string
 		return tokenString, nil
 	}
 
-	tokenString, err = m.GenerateToken(ctx, c.User, expiresAt)
+	tokenString, err = m.signToken(c.User, c.TenantID, expiresAt)
 	if err != nil {
 		return "", fmt.Errorf("generating new refreshed token: %w", err)
 	}
