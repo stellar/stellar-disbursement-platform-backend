@@ -170,76 +170,67 @@ func Test_URLShortenerModel_GetOrCreateShortCode(t *testing.T) {
 	}
 }
 
+func Test_URLShortenerModel_GetOrCreateShortCode_realGenerator(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	model := NewURLShortenerModel(dbConnectionPool)
+	originalURL := "https://stellar.org/" + t.Name()
+
+	// Exercises the real generator against the real column width (VARCHAR(10)).
+	code, err := model.GetOrCreateShortCode(ctx, originalURL)
+	require.NoError(t, err)
+	assert.Len(t, code, shortCodeLength)
+	for _, char := range code {
+		assert.Contains(t, shortCodeAlphabet, string(char))
+	}
+
+	resolvedURL, err := model.GetOriginalURL(ctx, code)
+	require.NoError(t, err)
+	assert.Equal(t, originalURL, resolvedURL)
+}
+
 func Test_RandomCodeGenerator_Generate(t *testing.T) {
 	generator := &RandomCodeGenerator{}
 
-	testCases := []struct {
-		name           string
-		length         int
-		expectedLength int
-	}{
-		{
-			name:           "generates code of length 5",
-			length:         5,
-			expectedLength: 5,
-		},
-		{
-			name:           "generates code of length 8",
-			length:         8,
-			expectedLength: 8,
-		},
-		{
-			name:           "generates code of length 9 (includes first hyphen)",
-			length:         9,
-			expectedLength: 8,
-		},
-		{
-			name:           "generates code of length 14 (includes two hyphens)",
-			length:         14,
-			expectedLength: 12,
-		},
-		{
-			name:           "generates code of length 1",
-			length:         1,
-			expectedLength: 1,
-		},
-	}
+	t.Run("generates codes of the exact requested length from the base36 alphabet", func(t *testing.T) {
+		for _, length := range []int{1, shortCodeLength, 32} {
+			code := generator.Generate(length)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := generator.Generate(tc.length)
-
-			assert.Equal(t, tc.expectedLength, len(code))
-			assert.NotContains(t, code, "-")
-
+			assert.Len(t, code, length)
 			for _, char := range code {
-				assert.True(t, (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f'),
-					"Character '%c' is not a valid UUID character", char)
+				assert.Contains(t, shortCodeAlphabet, string(char), "character %q is not in the short code alphabet", char)
 			}
-		})
-	}
+		}
+	})
+
+	t.Run("returns empty string for non-positive lengths", func(t *testing.T) {
+		assert.Empty(t, generator.Generate(0))
+		assert.Empty(t, generator.Generate(-1))
+	})
 
 	t.Run("generates unique codes", func(t *testing.T) {
 		codes := make(map[string]bool)
-		generator := &RandomCodeGenerator{}
-
 		for i := 0; i < 100; i++ {
-			code := generator.Generate(8)
+			code := generator.Generate(shortCodeLength)
 			assert.False(t, codes[code], "Duplicate code generated: %s", code)
 			codes[code] = true
 		}
-
-		assert.Equal(t, 100, len(codes))
+		assert.Len(t, codes, 100)
 	})
 
-	t.Run("handles small lengths", func(t *testing.T) {
-		generator := &RandomCodeGenerator{}
-
-		code := generator.Generate(0)
-		assert.Equal(t, 0, len(code))
-
-		code = generator.Generate(32)
-		assert.LessOrEqual(t, len(code), 32)
-		assert.NotContains(t, code, "-")
+	t.Run("uses every character of the alphabet", func(t *testing.T) {
+		// 7200 characters: the chance any of the 36 symbols never appears is (35/36)^7200 ≈ 1e-88.
+		seen := make(map[rune]bool)
+		for i := 0; i < 720; i++ {
+			for _, char := range generator.Generate(shortCodeLength) {
+				seen[char] = true
+			}
+		}
+		assert.Len(t, seen, len(shortCodeAlphabet))
 	})
 }
