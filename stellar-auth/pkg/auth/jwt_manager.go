@@ -76,7 +76,7 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 		},
 	}
 
-	// A token must always be scoped to a tenant. 
+	// A token must always be scoped to a tenant.
 	// Fail closed rather than issuing a tenantless token.
 	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
