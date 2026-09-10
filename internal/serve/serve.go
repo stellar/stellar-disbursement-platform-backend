@@ -783,7 +783,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.RequirePermission(
 			data.ReadAll,
-			middleware.AnyRoleMiddleware(authManager),
+			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Get("/balances", httphandler.BalancesHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			CircleService:               o.CircleService,
