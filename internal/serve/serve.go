@@ -464,7 +464,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.With(middleware.RequirePermission(
 			data.ReadAll,
 			middleware.AnyRoleMiddleware(authManager),
-		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager}.PostRefreshToken)
+		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager, TenantManager: o.tenantManager}.PostRefreshToken)
 
 		// Disbursement endpoints
 		r.Route("/disbursements", func(r chi.Router) {
