@@ -82,6 +82,9 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 	if err != nil {
 		return "", fmt.Errorf("getting tenant from context to generate token: %w", err)
 	}
+	if currentTenant == nil || currentTenant.ID == "" {
+		return "", fmt.Errorf("generating token: no tenant scoped in context")
+	}
 	c.TenantID = currentTenant.ID
 
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodES256, c)

@@ -66,6 +66,28 @@ func Test_DefaultJWTManager_GenerateToken(t *testing.T) {
 		assert.ErrorContains(t, err, "getting tenant from context to generate token")
 		assert.Empty(t, token)
 	})
+
+	t.Run("returns error (no panic) when the context holds a nil tenant", func(t *testing.T) {
+		jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
+		nilCtx := sdpcontext.SetTenantInContext(context.Background(), (*schema.Tenant)(nil))
+
+		expiresAt := time.Now().Add(time.Minute * 5)
+		token, err := jwtManager.GenerateToken(nilCtx, &User{}, expiresAt)
+
+		assert.ErrorContains(t, err, "no tenant scoped in context")
+		assert.Empty(t, token)
+	})
+
+	t.Run("returns error when the context tenant has an empty ID", func(t *testing.T) {
+		jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
+		emptyIDCtx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: ""})
+
+		expiresAt := time.Now().Add(time.Minute * 5)
+		token, err := jwtManager.GenerateToken(emptyIDCtx, &User{}, expiresAt)
+
+		assert.ErrorContains(t, err, "no tenant scoped in context")
+		assert.Empty(t, token)
+	})
 }
 
 func Test_DefaultJWTManager_ValidateToken(t *testing.T) {
