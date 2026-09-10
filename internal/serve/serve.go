@@ -368,6 +368,11 @@ const (
 	rateLimitWindow       = 20 * time.Second
 )
 
+// rateLimitKeyByClientIP keys a rate limiter by the canonicalized client IP.
+func rateLimitKeyByClientIP(r *http.Request) (string, error) {
+	return httprate.CanonicalizeIP(chimiddleware.GetClientIP(r.Context())), nil
+}
+
 func handleHTTP(o ServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
@@ -378,12 +383,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(httprate.LimitBy(
 		rateLimitPer20Seconds,
 		rateLimitWindow,
-		httprate.JoinKeys(
-			func(r *http.Request) (string, error) {
-				return httprate.CanonicalizeIP(chimiddleware.GetClientIP(r.Context())), nil
-			},
-			httprate.KeyByEndpoint,
-		),
+		httprate.JoinKeys(rateLimitKeyByClientIP, httprate.KeyByEndpoint),
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager, o.SingleTenantMode))
@@ -783,7 +783,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.RequirePermission(
 			data.ReadAll,
-			middleware.AnyRoleMiddleware(authManager),
+			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Get("/balances", httphandler.BalancesHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			CircleService:               o.CircleService,
@@ -853,7 +853,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			PasswordValidator: o.PasswordValidator,
 		}.ServeHTTP)
 
-		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
+		// Keyed by IP only: the global limiter treats every /r/{code} as a distinct endpoint and never counts enumeration.
+		r.With(httprate.LimitBy(rateLimitPer20Seconds, rateLimitWindow, rateLimitKeyByClientIP)).
+			Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 
 		// Embedded wallet routes (only if feature is enabled)
 		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
