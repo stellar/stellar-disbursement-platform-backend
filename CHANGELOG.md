@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Harden receiver-facing messages against HTML injection. [#1197](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1197)
 - Validate receiver-facing message input on every write path. [#1198](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1198)
+- Fail closed when token tenant cannot be resolved. [#1205](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1205)
 
 ### Security and Dependencies
 

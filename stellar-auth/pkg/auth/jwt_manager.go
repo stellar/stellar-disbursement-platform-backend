@@ -7,7 +7,6 @@ import (
 	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
-	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
@@ -77,13 +76,16 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 		},
 	}
 
-	// TODO: Always throw this error after migrations are merged [SDP-953]
+	// A token must always be scoped to a tenant.
+	// Fail closed rather than issuing a tenantless token.
 	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {
-		log.Ctx(ctx).Error(err)
-	} else {
-		c.TenantID = currentTenant.ID
+		return "", fmt.Errorf("getting tenant from context to generate token: %w", err)
 	}
+	if currentTenant == nil || currentTenant.ID == "" {
+		return "", fmt.Errorf("generating token: no tenant scoped in context")
+	}
+	c.TenantID = currentTenant.ID
 
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodES256, c)
 
