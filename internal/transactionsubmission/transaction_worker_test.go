@@ -1383,7 +1383,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			transactionHandler.
 				On("RequiresRebuildOnRetry").
 				Return(false).
-				Once()
+				Maybe()
 
 			tw.txHandler = transactionHandler
 
@@ -1471,8 +1471,16 @@ func Test_TransactionWorker_handleFailedTransaction_unknownOutcomeHoldsLock(t *t
 			wantHashKept: false,
 		},
 		{
-			name:            "504 with recorded hash but a rebuild-on-retry handler wipes the hash and unlocks",
+			name:            "504 with recorded hash and a rebuild-on-retry handler holds the lock too",
 			hErr:            horizonErrWithStatus(http.StatusGatewayTimeout),
+			setHash:         true,
+			requiresRebuild: true,
+			wantLockHeld:    true,
+			wantHashKept:    true,
+		},
+		{
+			name:            "429 with recorded hash and a rebuild-on-retry handler wipes the hash and unlocks",
+			hErr:            horizonErrWithStatus(http.StatusTooManyRequests),
 			setHash:         true,
 			requiresRebuild: true,
 			wantLockHeld:    false,
@@ -1520,7 +1528,7 @@ func Test_TransactionWorker_handleFailedTransaction_unknownOutcomeHoldsLock(t *t
 			transactionHandler.
 				On("RequiresRebuildOnRetry").
 				Return(tc.requiresRebuild).
-				Once()
+				Maybe()
 			tw.txHandler = transactionHandler
 
 			// Run test:
@@ -1567,7 +1575,7 @@ func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
 
 	// holdAndReselect runs a 504 through the worker so the bundle is held, proves the poll loop cannot select it while
 	// the ledger bound is live, and returns the bundle as reselected once the bound has passed.
-	holdAndReselect := func(t *testing.T, ctx context.Context) (TransactionWorker, TxJob) {
+	holdAndReselect := func(t *testing.T, ctx context.Context, requiresRebuild bool) (TransactionWorker, TxJob) {
 		t.Helper()
 
 		tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
@@ -1593,7 +1601,7 @@ func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
 				mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
 			}).
 			Return()
-		transactionHandler.On("RequiresRebuildOnRetry").Return(false).Once()
+		transactionHandler.On("RequiresRebuildOnRetry").Return(requiresRebuild).Maybe()
 		tw.txHandler = transactionHandler
 
 		// STEP 1: the 504 holds the bundle.
@@ -1621,6 +1629,7 @@ func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
 
 	testCases := []struct {
 		name              string
+		requiresRebuild   bool
 		horizonTxResponse horizon.Transaction
 		horizonTxError    error
 		wantStatus        store.TransactionStatus
@@ -1638,6 +1647,13 @@ func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
 			wantStatus:     store.TransactionStatusProcessing,
 			wantHashKept:   false,
 		},
+		{
+			name:              "rebuild-on-retry handler (wallet creation) is held too and reconciled to SUCCESS",
+			requiresRebuild:   true,
+			horizonTxResponse: horizon.Transaction{Successful: true, ResultXdr: resultXDR},
+			wantStatus:        store.TransactionStatusSuccess,
+			wantHashKept:      true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1646,7 +1662,7 @@ func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-			tw, reselectedJob := holdAndReselect(t, ctx)
+			tw, reselectedJob := holdAndReselect(t, ctx, tc.requiresRebuild)
 
 			// STEP 4: the reselected bundle goes through runJob, which routes it to reconcile because the hash is set.
 			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)

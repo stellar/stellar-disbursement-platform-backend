@@ -205,7 +205,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //	RPC: unexpected errors
 //
 // Errors that keep the bundle locked until its ledger bound expires, because the recorded envelope may still be
-// included (only when a hash was recorded and the handler does not rebuild on retry):
+// included (any handler, whenever a hash was already recorded for the attempt):
 //
 //	Horizon: 5xx (incl. 504 Timeout), client-side timeouts, transport errors
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, txErr utils.TransactionError) error {
@@ -246,24 +246,23 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, fmt.Sprintf("%s transaction error - cannot be retried", strings.ToLower(txErr.GetErrorType())))
 		}
 	} else {
-		requiresRebuild := tw.txHandler.RequiresRebuildOnRetry()
-		if isRetryable && requiresRebuild {
-			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
-				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
-			}
-		}
-
 		var horizonErr utils.HorizonSpecificError
 		if errors.As(txErr, &horizonErr) && horizonErr.IsBadSequence() {
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "tx_bad_seq detected!")
 		}
 
-		if !requiresRebuild && txJob.Transaction.StellarTransactionHash.Valid && txErr.IsOutcomeUnknown() {
+		if txJob.Transaction.StellarTransactionHash.Valid && txErr.IsOutcomeUnknown() {
 			log.Ctx(ctx).WithFields(log.F{
 				"tx_hash":                    txJob.Transaction.StellarTransactionHash.String,
 				"locked_until_ledger_number": txJob.LockedUntilLedgerNumber,
 			}).Warn("unknown Horizon outcome; holding transaction and channel account locks until the ledger bound expires")
 			return nil
+		}
+
+		if isRetryable && tw.txHandler.RequiresRebuildOnRetry() {
+			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
+			}
 		}
 	}
 
