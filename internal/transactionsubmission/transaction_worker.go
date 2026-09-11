@@ -247,7 +247,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 		}
 	} else {
 		requiresRebuild := tw.txHandler.RequiresRebuildOnRetry()
-		if requiresRebuild {
+		if isRetryable && requiresRebuild {
 			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
 				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
 			}
