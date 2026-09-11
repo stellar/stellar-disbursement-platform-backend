@@ -203,6 +203,11 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //
 //	Horizon: 400 tx_too_late, unexpected errors
 //	RPC: unexpected errors
+//
+// Errors that keep the bundle locked until its ledger bound expires, because the recorded envelope may still be
+// included (only when a hash was recorded and the handler does not rebuild on retry):
+//
+//	Horizon: 5xx (incl. 504 Timeout), client-side timeouts, transport errors
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, txErr utils.TransactionError) error {
 	// Emit the failure with discrete, structured fields (horizon_status_code, tx_result_code,
 	// operation_result_codes, ...) so operators can filter/alert on specific result codes, instead of
@@ -241,7 +246,8 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, fmt.Sprintf("%s transaction error - cannot be retried", strings.ToLower(txErr.GetErrorType())))
 		}
 	} else {
-		if txErr.IsRetryable() && tw.txHandler.RequiresRebuildOnRetry() {
+		requiresRebuild := tw.txHandler.RequiresRebuildOnRetry()
+		if requiresRebuild {
 			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
 				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
 			}
@@ -250,6 +256,14 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 		var horizonErr utils.HorizonSpecificError
 		if errors.As(txErr, &horizonErr) && horizonErr.IsBadSequence() {
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "tx_bad_seq detected!")
+		}
+
+		if !requiresRebuild && txJob.Transaction.StellarTransactionHash.Valid && txErr.IsOutcomeUnknown() {
+			log.Ctx(ctx).WithFields(log.F{
+				"tx_hash":                    txJob.Transaction.StellarTransactionHash.String,
+				"locked_until_ledger_number": txJob.LockedUntilLedgerNumber,
+			}).Warn("unknown Horizon outcome; holding transaction and channel account locks until the ledger bound expires")
+			return nil
 		}
 	}
 
@@ -307,8 +321,8 @@ func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *
 
 // TODO: add tests
 // unlockJob will unlock the channel account and transaction instantaneously, so they can be made available ASAP. If
-// this method is not called, the algorithm will fall back to get these resources qutomatically unlocked when their
-// `locked-to-ledger` expire.
+// this method is not called, the algorithm will fall back to get these resources automatically unlocked when their
+// `locked-to-ledger` expire, which is required when the submission outcome is unknown (the envelope may still land).
 func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
 	_, err := tw.chAccModel.Unlock(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey)
 	if err != nil {
@@ -391,6 +405,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
+	// Authoritative 404: a bundle with a hash is only reselected after its lock (== MaxLedger) expires or a definitive 4xx.
 	log.Ctx(ctx).Warnf("Previous transaction didn't make through, marking %v for resubmission...", txJob)
 
 	_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID)

@@ -27,6 +27,8 @@ Instead of each Horizon error code being handled in a bespoke manner, they are c
 - `504`: Timeouts
 - `400`'s with error code `tx_insufficient_fee`, `tx_too_late`, `tx_bad_seq`
 
+A `504` (or any other `5xx`, or a client-side timeout) is different from a `4xx`: it means the outcome is unknown. The submitted envelope may have reached stellar-core and may still be included until its ledger bound. In that case the TSS keeps the transaction and its channel account locked until `locked_until_ledger_number` (which equals the envelope's `MaxLedger`, roughly 10 ledgers ahead) expires. Once it does, the worker looks the hash up on Horizon: if the transaction landed it is marked successful, and only if it never landed is a fresh transaction built. Rebuilding earlier would let the same payment be submitted twice. The trade-off is that during a Horizon outage every in-flight channel account is held for one lock window, so size `NUM_CHANNEL_ACCOUNTS` accordingly.
+
 ## Transaction Submitter
 ### CLI Usage: `tss`
 ```sh

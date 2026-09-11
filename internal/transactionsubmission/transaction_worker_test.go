@@ -1279,10 +1279,15 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 	require.NoError(t, err)
 
-	// Assert transaction status
+	// Assert transaction status: a 400 is a definitive rejection, so the bundle is released and the hash is kept.
 	updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
 	require.NoError(t, err)
 	assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+	assert.True(t, updatedTx.StellarTransactionHash.Valid)
+	assert.False(t, updatedTx.IsLocked(1))
+	updatedChAcc, err := store.NewChannelAccountModel(dbConnectionPool).Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+	require.NoError(t, err)
+	assert.False(t, updatedChAcc.IsLocked(1))
 }
 
 func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTriggerJitter(t *testing.T) {
@@ -1293,12 +1298,14 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 	defer dbConnectionPool.Close()
 
 	testCases := []struct {
-		name string
-		hErr *utils.HorizonErrorWrapper
+		name         string
+		hErr         *utils.HorizonErrorWrapper
+		wantLockHeld bool
 	}{
-		// - 400 - tx_too_late
+		// - 400 - tx_too_late: definitive rejection, the bundle is released.
 		{
-			name: "400 (tx_too_late) - Bad Request",
+			name:         "400 (tx_too_late) - Bad Request",
+			wantLockHeld: false,
 			hErr: utils.NewHorizonErrorWrapper(horizonclient.Error{
 				Problem: problem.P{
 					Status: http.StatusBadRequest,
@@ -1310,19 +1317,21 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				},
 			}),
 		},
-		// - 502 - unable to connect to horizon
+		// - 502 - unable to connect to horizon: outcome unknown, the bundle stays locked.
 		{
-			name: "502 - Bad Gateway",
+			name:         "502 - Bad Gateway - outcome unknown",
+			wantLockHeld: true,
 			hErr: utils.NewHorizonErrorWrapper(horizonclient.Error{
 				Problem: problem.P{
 					Status: http.StatusBadGateway,
 				},
 			}),
 		},
-		// unexpected error
+		// non-Horizon error (client timeout, transport failure): outcome unknown, the bundle stays locked.
 		{
-			name: "502 - Bad Gateway",
-			hErr: utils.NewHorizonErrorWrapper(errors.New("foo bar error")),
+			name:         "non-Horizon error - outcome unknown",
+			hErr:         utils.NewHorizonErrorWrapper(errors.New("foo bar error")),
+			wantLockHeld: true,
 		},
 	}
 
@@ -1389,10 +1398,283 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, tc.hErr)
 			require.NoError(t, err)
 
-			// Assert transaction status
+			// Assert transaction status, hash and lock state
 			updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
 			require.NoError(t, err)
 			assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+			assert.True(t, updatedTx.StellarTransactionHash.Valid)
+			assert.True(t, updatedTx.XDRSent.Valid)
+			assert.Equal(t, tc.wantLockHeld, updatedTx.IsLocked(1))
+			updatedChAcc, err := store.NewChannelAccountModel(dbConnectionPool).Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantLockHeld, updatedChAcc.IsLocked(1))
+			if tc.wantLockHeld {
+				assert.Equal(t, int32(2), updatedTx.LockedUntilLedgerNumber.Int32)
+				assert.Equal(t, int32(2), updatedChAcc.LockedUntilLedgerNumber.Int32)
+			}
+		})
+	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_unknownOutcomeHoldsLock(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	const (
+		currentLedger  = 1
+		lockedToLedger = 2
+		txHash         = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+		envelopeXDR    = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+		distAccount    = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
+	)
+	horizonErrWithStatus := func(status int) *utils.HorizonErrorWrapper {
+		return utils.NewHorizonErrorWrapper(horizonclient.Error{Problem: problem.P{Status: status}})
+	}
+
+	testCases := []struct {
+		name            string
+		hErr            *utils.HorizonErrorWrapper
+		setHash         bool
+		requiresRebuild bool
+		wantLockHeld    bool
+		wantHashKept    bool
+	}{
+		{
+			name:         "504 with recorded hash holds the lock",
+			hErr:         horizonErrWithStatus(http.StatusGatewayTimeout),
+			setHash:      true,
+			wantLockHeld: true,
+			wantHashKept: true,
+		},
+		{
+			name:         "non-Horizon error (client timeout, transport) with recorded hash holds the lock",
+			hErr:         utils.NewHorizonErrorWrapper(errors.New("context deadline exceeded")),
+			setHash:      true,
+			wantLockHeld: true,
+			wantHashKept: true,
+		},
+		{
+			name:         "429 with recorded hash is a definitive rejection: unlocks and keeps the hash",
+			hErr:         horizonErrWithStatus(http.StatusTooManyRequests),
+			setHash:      true,
+			wantLockHeld: false,
+			wantHashKept: true,
+		},
+		{
+			name:         "504 without a recorded hash unlocks (nothing was submitted)",
+			hErr:         horizonErrWithStatus(http.StatusGatewayTimeout),
+			setHash:      false,
+			wantLockHeld: false,
+			wantHashKept: false,
+		},
+		{
+			name:            "504 with recorded hash but a rebuild-on-retry handler wipes the hash and unlocks",
+			hErr:            horizonErrWithStatus(http.StatusGatewayTimeout),
+			setHash:         true,
+			requiresRebuild: true,
+			wantLockHeld:    false,
+			wantHashKept:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
+			tw.jobUUID = uuid.NewString()
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+			if tc.setHash {
+				tx, updateErr := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, distAccount)
+				require.NoError(t, updateErr)
+				txJob.Transaction = *tx
+			}
+
+			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", tc.hErr).Return().Once()
+			tw.txProcessingLimiter = mockTxProcessingLimiter
+
+			mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tw.monitorSvc = tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.
+				On("MonitorTransactionProcessingFailed", ctx, &txJob, mock.Anything, true, tc.hErr.Error()).
+				Run(func(args mock.Arguments) {
+					mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+				}).
+				Return()
+			transactionHandler.
+				On("RequiresRebuildOnRetry").
+				Return(tc.requiresRebuild).
+				Once()
+			tw.txHandler = transactionHandler
+
+			// Run test:
+			err := tw.handleFailedTransaction(ctx, &txJob, horizon.Transaction{}, tc.hErr)
+			require.NoError(t, err)
+			transactionHandler.AssertExpectations(t)
+
+			// Assert transaction status, hash and lock state
+			updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+			require.NoError(t, err)
+			assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+			assert.Equal(t, tc.wantHashKept, updatedTx.StellarTransactionHash.Valid)
+			assert.Equal(t, tc.wantHashKept, updatedTx.XDRSent.Valid)
+			assert.Equal(t, tc.wantLockHeld, updatedTx.IsLocked(currentLedger))
+
+			updatedChAcc, err := store.NewChannelAccountModel(dbConnectionPool).Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantLockHeld, updatedChAcc.IsLocked(currentLedger))
+
+			if tc.wantLockHeld {
+				assert.Equal(t, int32(lockedToLedger), updatedTx.LockedUntilLedgerNumber.Int32)
+				assert.Equal(t, int32(lockedToLedger), updatedChAcc.LockedUntilLedgerNumber.Int32)
+			}
+		})
+	}
+}
+
+func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	const (
+		currentLedger  = 1
+		lockedToLedger = 2
+		expiredLedger  = lockedToLedger + 1
+		txHash         = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+		envelopeXDR    = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+		distAccount    = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
+		resultXDR      = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+	)
+
+	// holdAndReselect runs a 504 through the worker so the bundle is held, proves the poll loop cannot select it while
+	// the ledger bound is live, and returns the bundle as reselected once the bound has passed.
+	holdAndReselect := func(t *testing.T, ctx context.Context) (TransactionWorker, TxJob) {
+		t.Helper()
+
+		tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
+		tw.jobUUID = uuid.NewString()
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+		tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, distAccount)
+		require.NoError(t, err)
+		txJob.Transaction = *tx
+
+		hErr := utils.NewHorizonErrorWrapper(horizonclient.Error{Problem: problem.P{Status: http.StatusGatewayTimeout}})
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+		tw.txProcessingLimiter = mockTxProcessingLimiter
+
+		mMonitorClient := sdpMonitor.NewMockMonitorClient(t)
+		mMonitorClient.On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).Return(nil).Once()
+		tw.monitorSvc = tssMonitor.TSSMonitorService{Version: "0.01", GitCommitHash: "0xABC", Client: mMonitorClient}
+
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.
+			On("MonitorTransactionProcessingFailed", ctx, &txJob, mock.Anything, true, hErr.Error()).
+			Run(func(args mock.Arguments) {
+				mMonitorClient.MonitorCounters(sdpMonitor.PaymentErrorTag, map[string]string{"error_type": "transaction_error"})
+			}).
+			Return()
+		transactionHandler.On("RequiresRebuildOnRetry").Return(false).Once()
+		tw.txHandler = transactionHandler
+
+		// STEP 1: the 504 holds the bundle.
+		err = tw.handleFailedTransaction(ctx, &txJob, horizon.Transaction{}, hErr)
+		require.NoError(t, err)
+
+		bundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
+		require.NoError(t, err)
+
+		// STEP 2: while the ledger bound is still live, the poll loop cannot select the bundle.
+		bundles, err := bundleModel.LoadAndLockTuples(ctx, lockedToLedger, lockedToLedger+preconditions.IncrementForMaxLedgerBounds, 10)
+		require.NoError(t, err)
+		assert.Empty(t, bundles)
+
+		// STEP 3: once the ledger bound has passed, the bundle is reselected with its hash intact.
+		bundles, err = bundleModel.LoadAndLockTuples(ctx, expiredLedger, expiredLedger+preconditions.IncrementForMaxLedgerBounds, 10)
+		require.NoError(t, err)
+		require.Len(t, bundles, 1)
+		assert.Equal(t, txJob.Transaction.ID, bundles[0].Transaction.ID)
+		assert.Equal(t, txHash, bundles[0].Transaction.StellarTransactionHash.String)
+		assert.Equal(t, expiredLedger+preconditions.IncrementForMaxLedgerBounds, bundles[0].LockedUntilLedgerNumber)
+
+		return tw, TxJob(*bundles[0])
+	}
+
+	testCases := []struct {
+		name              string
+		horizonTxResponse horizon.Transaction
+		horizonTxError    error
+		wantStatus        store.TransactionStatus
+		wantHashKept      bool
+	}{
+		{
+			name:              "reconcile finds the original landed and marks it SUCCESS",
+			horizonTxResponse: horizon.Transaction{Successful: true, ResultXdr: resultXDR},
+			wantStatus:        store.TransactionStatusSuccess,
+			wantHashKept:      true,
+		},
+		{
+			name:           "reconcile gets an authoritative 404 and wipes the hash for a rebuild",
+			horizonTxError: horizonclient.Error{Problem: problem.P{Status: http.StatusNotFound}},
+			wantStatus:     store.TransactionStatusProcessing,
+			wantHashKept:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw, reselectedJob := holdAndReselect(t, ctx)
+
+			// STEP 4: the reselected bundle goes through runJob, which routes it to reconcile because the hash is set.
+			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+			mockLedgerNumberTracker.On("GetLedgerNumber").Return(expiredLedger, nil).Times(2)
+			tw.engine.LedgerNumberTracker = mockLedgerNumberTracker
+
+			hMock := &horizonclient.MockClient{}
+			hMock.On("TransactionDetail", txHash).Return(tc.horizonTxResponse, tc.horizonTxError).Once()
+			tw.engine.HorizonClient = hMock
+
+			transactionHandler := &MockTransactionHandler{}
+			transactionHandler.On("MonitorTransactionProcessingSuccess", ctx, &reselectedJob, mock.Anything).Return()
+			transactionHandler.On("MonitorTransactionReconciliationSuccess", ctx, &reselectedJob, mock.Anything, mock.Anything).Return()
+			tw.txHandler = transactionHandler
+
+			err := tw.runJob(ctx, &reselectedJob)
+			require.NoError(t, err)
+			hMock.AssertExpectations(t)
+
+			updatedTx, err := tw.txModel.Get(ctx, reselectedJob.Transaction.ID)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantStatus, updatedTx.Status)
+			assert.Equal(t, tc.wantHashKept, updatedTx.StellarTransactionHash.Valid)
+			assert.False(t, updatedTx.IsLocked(expiredLedger))
+
+			updatedChAcc, err := store.NewChannelAccountModel(dbConnectionPool).Get(ctx, dbConnectionPool, reselectedJob.ChannelAccount.PublicKey, 0)
+			require.NoError(t, err)
+			assert.False(t, updatedChAcc.IsLocked(expiredLedger))
 		})
 	}
 }
@@ -2274,10 +2556,23 @@ func Test_TransactionWorker_submit(t *testing.T) {
 		name                       string
 		horizonResponse            horizon.Transaction
 		horizonError               error
+		setHash                    bool
 		wantFinalTransactionStatus store.TransactionStatus
 		wantFinalResultXDR         string
+		wantLockHeld               bool
 		prepareMocks               func(*testing.T, TxJob, *crashtracker.MockCrashTrackerClient)
 	}{
+		{
+			name:                       "504 with a recorded hash keeps the tx PROCESSING and holds the bundle lock",
+			horizonResponse:            horizon.Transaction{},
+			horizonError:               horizonclient.Error{Problem: problem.P{Status: http.StatusGatewayTimeout}},
+			setHash:                    true,
+			wantFinalTransactionStatus: store.TransactionStatusProcessing,
+			wantLockHeld:               true,
+			prepareMocks: func(t *testing.T, txJob TxJob, _ *crashtracker.MockCrashTrackerClient) {
+				// No crash-tracker report for a timeout
+			},
+		},
 		{
 			name:                       "unrecoverable horizon error is handled and tx status is marked as ERROR",
 			horizonResponse:            horizon.Transaction{},
@@ -2305,6 +2600,13 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
+			if tc.setHash {
+				const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+				const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+				tx, updateErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+				require.NoError(t, updateErr)
+				txJob.Transaction = *tx
+			}
 			feeBumpTx := &txnbuild.FeeBumpTransaction{}
 
 			mockHorizonClient := &horizonclient.MockClient{}
@@ -2337,6 +2639,9 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				Return().
 				Once()
 
+			// Only consulted on the retryable path (e.g. the 504 case).
+			transactionHandler.On("RequiresRebuildOnRetry").Return(false).Maybe()
+
 			transactionWorker := TransactionWorker{
 				dbConnectionPool: dbConnectionPool,
 				txModel:          txModel,
@@ -2363,11 +2668,12 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.wantFinalTransactionStatus, refreshedTx.Status)
 			assert.Equal(t, tc.wantFinalResultXDR, refreshedTx.XDRReceived.String)
+			assert.Equal(t, tc.wantLockHeld, refreshedTx.IsLocked(1))
 
-			// check if the channel account was unlocked:
+			// check whether the channel account was unlocked (or deliberately held):
 			refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
 			require.NoError(t, err)
-			assert.False(t, refreshedChAcc.IsLocked(int32(txJob.LockedUntilLedgerNumber)))
+			assert.Equal(t, tc.wantLockHeld, refreshedChAcc.IsLocked(int32(txJob.LockedUntilLedgerNumber)))
 
 			mockHorizonClient.AssertExpectations(t)
 			mockCrashTrackerClient.AssertExpectations(t)
