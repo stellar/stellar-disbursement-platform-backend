@@ -424,6 +424,54 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			}`,
 		},
 		{
+			name:  "returns BadRequest when otp_message_template contains an unbounded range construct",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUserByID", mock.Anything, mock.Anything).
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"otp_message_template": "{{range 9223372036854775807}}{{end}}{{.OTP}}"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"otp_message_template": "message template may only contain text and field substitutions like {{.OTP}}"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when receiver_registration_message_template contains an unbounded range construct",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUserByID", mock.Anything, mock.Anything).
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"receiver_registration_message_template": "{{range 1000}}{{range 1000}}A{{end}}{{end}}"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			networkType:    utils.PubnetNetworkType,
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"receiver_registration_message_template": "message template may only contain text and field substitutions like {{.OTP}}"
+				}
+			}`,
+		},
+		{
 			name:  "returns BadRequest when organization_name contains HTML",
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {

@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"text/template"
+	"text/template/parse"
 	"time"
 	"unicode/utf8"
 
@@ -260,5 +262,67 @@ func containsHTMLTag(s string) bool {
 		default:
 			// text, comments, doctype — keep scanning
 		}
+	}
+}
+
+// ValidateMessageTemplate rejects anything but literal text and simple field substitutions like {{.OTP}}, so a
+// stored template can't loop or expand without bound at render time (CWE-400). Length and HTML are checked separately.
+func ValidateMessageTemplate(s string) error {
+	// Empty means "use the default"; nothing to render.
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+
+	tmpl, err := template.New("").Parse(s)
+	if err != nil {
+		return fmt.Errorf("message template is not valid: %w", err)
+	}
+	// A {{define}} adds a second named template to the set; only plain substitution templates are allowed.
+	if len(tmpl.Templates()) > 1 {
+		return errors.New("message template may not define nested templates")
+	}
+	if tmpl.Tree == nil || tmpl.Tree.Root == nil {
+		return nil
+	}
+	return validateTemplateNodes(tmpl.Tree.Root)
+}
+
+// validateTemplateNodes allows only text and single-field-substitution actions; every branching node is rejected.
+func validateTemplateNodes(root *parse.ListNode) error {
+	for _, n := range root.Nodes {
+		switch node := n.(type) {
+		case *parse.TextNode:
+			// literal text is inert
+		case *parse.ActionNode:
+			if err := validateActionPipe(node.Pipe); err != nil {
+				return err
+			}
+		default:
+			return errors.New("message template may only contain text and field substitutions like {{.OTP}}")
+		}
+	}
+	return nil
+}
+
+// validateActionPipe permits only {{.Field}} or {{.}}: no declarations, pipelines, or function calls.
+func validateActionPipe(pipe *parse.PipeNode) error {
+	if pipe == nil {
+		return errors.New("message template contains an empty action")
+	}
+	if len(pipe.Decl) > 0 {
+		return errors.New("message template may not declare variables")
+	}
+	if len(pipe.Cmds) != 1 {
+		return errors.New("message template may not use pipelines")
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) != 1 {
+		return errors.New("message template may only substitute a single field, like {{.OTP}}")
+	}
+	switch cmd.Args[0].(type) {
+	case *parse.FieldNode, *parse.DotNode:
+		return nil
+	default:
+		return errors.New("message template may only substitute fields like {{.OTP}}, not function calls or expressions")
 	}
 }
