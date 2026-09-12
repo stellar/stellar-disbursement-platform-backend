@@ -66,6 +66,10 @@ func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbur
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+	if req.ReceiverRegistrationMessageTemplate != "" {
+		v.CheckError(utils.ValidateStringLength(req.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
+	}
+	v.CheckError(utils.ValidateMessageTemplate(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "")
 	if !req.RegistrationContactType.IncludesWalletAddress {
 		trimmedWalletID := strings.TrimSpace(req.WalletID)
 		v.Check(trimmedWalletID != "", "wallet_id", "wallet_id is required")

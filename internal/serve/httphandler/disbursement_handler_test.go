@@ -151,6 +151,20 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 receiver_registration_message_template contains an unbounded range construct",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            wallet.ID,
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "{{range 1000}}{{range 1000}}A{{end}}{{end}}",
+			},
+			expectedErrors: map[string]interface{}{
+				"receiver_registration_message_template": "message template may only contain text and field substitutions like {{.OTP}}",
+			},
+		},
+		{
 			name: "🟢 all fields are valid",
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",

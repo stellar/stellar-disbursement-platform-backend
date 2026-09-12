@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Require a tenant role check on `GET /balances`. [#1206](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1206)
 - Reject token refresh when the token's tenant has been deactivated. [#1207](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1207)
 - Hold TSS transaction and channel-account locks until the envelope's ledger bound expires when Horizon returns an unknown outcome (5xx/timeout). [#1208](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1208)
+- Harden receiver-facing messages against unbounded template expansion. [#1209](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1209)
 
 ### Security and Dependencies
 

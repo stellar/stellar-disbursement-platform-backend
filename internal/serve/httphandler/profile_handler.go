@@ -203,10 +203,15 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		if *reqBody.ReceiverRegistrationMessageTemplate != "" {
 			validator.CheckError(utils.ValidateStringLength(*reqBody.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
 		}
+		validator.CheckError(utils.ValidateMessageTemplate(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "")
 	}
 
 	if reqBody.OTPMessageTemplate != nil {
 		validator.CheckError(utils.ValidateNoHTML(*reqBody.OTPMessageTemplate), "otp_message_template", "otp_message_template cannot contain HTML, JS or CSS")
+		if *reqBody.OTPMessageTemplate != "" {
+			validator.CheckError(utils.ValidateStringLength(*reqBody.OTPMessageTemplate, "otp_message_template", 255), "otp_message_template", "")
+		}
+		validator.CheckError(utils.ValidateMessageTemplate(*reqBody.OTPMessageTemplate), "otp_message_template", "")
 	}
 
 	if reqBody.OrganizationName != "" {
