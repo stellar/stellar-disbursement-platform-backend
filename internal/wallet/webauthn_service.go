@@ -199,7 +199,7 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 			UserVerification: protocol.VerificationRequired,
 		}),
 		// Request credential properties extension to confirm resident key support
-		webauthn.WithExtensions(map[string]any{"credProps": true}),
+		webauthn.WithExtensions(webauthn.WithExtensionCredProps()),
 	}
 
 	// BeginRegistration creates the challenge and parameters for the client:
