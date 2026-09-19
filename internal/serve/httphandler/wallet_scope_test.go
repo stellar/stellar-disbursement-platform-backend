@@ -267,9 +267,9 @@ var capabilityEnforcementSites = map[string]struct {
 	function     string
 }{
 	"can_create_disbursement": {"PostDisbursement", "disbursement_handler.go", "createNewDisbursement"},
-	"can_start_disbursement":  {"PatchDisbursementStatus", "../../services/disbursement_management_service.go", "StartDisbursement"},
-	"can_pause_disbursement":  {"PatchDisbursementStatus", "../../services/disbursement_management_service.go", "PauseDisbursement"},
-	"can_cancel_disbursement": {"PatchDisbursementStatus", "../../services/disbursement_management_service.go", "CancelDisbursement"},
+	"can_start_disbursement":  {"PatchDisbursementStatus", "disbursement_handler.go", "PatchDisbursementStatus"},
+	"can_pause_disbursement":  {"PatchDisbursementStatus", "disbursement_handler.go", "PatchDisbursementStatus"},
+	"can_cancel_disbursement": {"PatchDisbursementStatus", "disbursement_handler.go", "PatchDisbursementStatus"},
 	"can_create_payment":      {"PostDirectPayment", "payments_handler.go", "PostDirectPayment"},
 	"can_retry_payment":       {"RetryPayments", "payments_handler.go", "RetryPayments"},
 	"can_cancel_payment":      {"PatchPaymentStatus", "payments_handler.go", "PatchPaymentStatus"},
@@ -277,9 +277,9 @@ var capabilityEnforcementSites = map[string]struct {
 
 // Test_WalletCapabilityMatrix_Conformance keeps walletCapabilityMatrix honest by reading the
 // role sets straight out of the enforcement sites: the route declarations in serve.go and the
-// wallet-membership gates in the handlers and the disbursement service. If someone changes what
-// a route or a gate requires, this fails and the matrix has to follow — the matrix is a
-// projection of those rules for the client, never a second set of them.
+// wallet-membership gates in the handlers. If someone changes what a route or a gate requires,
+// this fails and the matrix has to follow — the matrix is a projection of those rules for the
+// client, never a second set of them.
 func Test_WalletCapabilityMatrix_Conformance(t *testing.T) {
 	routeRoles := parseRouteRoles(t, "../serve.go")
 	gateRoles := map[string]map[string][]data.UserRole{}
@@ -407,7 +407,6 @@ func parseWalletGateRoles(t *testing.T, path string) map[string][]data.UserRole 
 	gates := map[string]struct{}{
 		"ensureWalletActionAllowed":   {},
 		"resolveSourceWalletForWrite": {},
-		"EnsureUserCanActOnWallet":    {},
 	}
 
 	rolesByFunction := map[string][]data.UserRole{}
