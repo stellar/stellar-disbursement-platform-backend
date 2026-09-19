@@ -23,7 +23,7 @@ import (
 )
 
 // Test_WalletTransitionGates proves each state transition is gated on the source wallet: users need
-// a qualifying role on it, API keys need it in scope, Owners pass everywhere.
+// a qualifying role on it (Owners pass everywhere); API keys need it in scope.
 func Test_WalletTransitionGates(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
