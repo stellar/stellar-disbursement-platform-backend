@@ -659,20 +659,26 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	switch toStatus {
-	case data.StartedDisbursementStatus:
-		// The balance check must run against THIS disbursement's own source wallet, so the
-		// disbursement is loaded here purely to reach it (see resolveSourceDistributionAccount).
-		disbursement, getErr := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
-		if getErr != nil {
-			if errors.Is(getErr, data.ErrRecordNotFound) {
-				httperror.NotFound("disbursement not found", getErr, nil).Render(w)
-				return
-			}
-			httperror.InternalError(ctx, "Cannot get disbursement", getErr, nil).Render(w)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("disbursement not found", err, nil).Render(w)
 			return
 		}
+		httperror.InternalError(ctx, "Cannot get disbursement", err, nil).Render(w)
+		return
+	}
 
+	// a status change is a state transition — gate on the disbursement's source wallet.
+	if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
+		data.FinancialControllerUserRole, data.ApproverUserRole); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
+	switch toStatus {
+	case data.StartedDisbursementStatus:
+		// The balance check must run against THIS disbursement's own source wallet.
 		sourceWallet, walletErr := d.Models.DistributionWallets.Get(ctx, d.Models.DBConnectionPool, disbursement.SourceWalletID)
 		if walletErr != nil {
 			httperror.InternalError(ctx, "Cannot get distribution account", walletErr, nil).Render(w)
@@ -713,8 +719,6 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
-		case errors.Is(err, services.ErrWalletActionForbidden):
-			httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		case errors.As(err, &insufficientBalanceErr):

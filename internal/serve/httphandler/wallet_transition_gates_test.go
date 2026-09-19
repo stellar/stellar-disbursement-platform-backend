@@ -17,16 +17,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// Test_W3_TransitionGates_MismatchedWallet proves "Approval or initiation against a mismatched
-// wallet is rejected at every state transition" for the payment-level and lifecycle actions:
-// cancel payment, retry payments, delete draft disbursement, upload instructions. A fully
-// role-qualified member of wallet A gets 403 on entities sourced from wallet B; the same
-// member succeeds on wallet A; Owners pass everywhere.
-func Test_W3_TransitionGates_MismatchedWallet(t *testing.T) {
+// Test_WalletTransitionGates proves each state transition is gated on the source wallet: users need
+// a qualifying role on it, API keys need it in scope, Owners pass everywhere.
+func Test_WalletTransitionGates(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -53,33 +51,60 @@ func Test_W3_TransitionGates_MismatchedWallet(t *testing.T) {
 	}
 	owner := &auth.User{ID: "gate-owner", Email: "o@gate.test", IsOwner: true}
 
+	// Single-role actors for the disbursement status matrix; each is granted its role on one wallet.
+	newActor := func(id string, role data.UserRole, walletID string) *auth.User {
+		if walletID != "" {
+			_, mErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, id, walletID, role, nil)
+			require.NoError(t, mErr)
+		}
+		return &auth.User{ID: id, Email: id + "@gate.test", Roles: []string{string(role)}}
+	}
+	approverOnA := newActor("gate-approver-a", data.ApproverUserRole, walletA.ID)
+	initiatorOnA := newActor("gate-initiator-a", data.InitiatorUserRole, walletA.ID)
+	approverOnB := newActor("gate-approver-b", data.ApproverUserRole, walletBID)
+	approverNoWallet := newActor("gate-approver-none", data.ApproverUserRole, "")
+	developer := newActor("gate-developer", data.DeveloperUserRole, "")
+
+	// An API key answers from its own scope: its creator's role and memberships are irrelevant.
+	ownerKeyOnA := &data.APIKey{ID: "gate-owner-key-a", CreatedBy: owner.ID, DistributionWalletIDs: []string{walletA.ID}}
+	ownerKeyUnscoped := &data.APIKey{ID: "gate-owner-key-unscoped", CreatedBy: owner.ID}
+	developerKeyOnB := &data.APIKey{ID: "gate-developer-key-b", CreatedBy: developer.ID, DistributionWalletIDs: []string{walletBID}}
+
 	authManagerMock := &auth.AuthManagerMock{}
-	authManagerMock.On("GetUserByID", mock.Anything, memberA.ID).Return(memberA, nil)
-	authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+	for _, actor := range []*auth.User{memberA, owner, approverOnA, initiatorOnA, approverOnB, approverNoWallet, developer} {
+		authManagerMock.On("GetUserByID", mock.Anything, actor.ID).Return(actor, nil)
+	}
 	authManagerMock.On("GetUser", mock.Anything, mock.Anything).Return(memberA, nil).Maybe()
 
-	disbursementHandler := DisbursementHandler{Models: models, AuthManager: authManagerMock}
+	disbursementHandler := DisbursementHandler{
+		Models:                        models,
+		AuthManager:                   authManagerMock,
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models, AuthManager: authManagerMock},
+	}
 	paymentsHandler := PaymentsHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
 
 	r := chi.NewRouter()
 	r.Delete("/disbursements/{id}", disbursementHandler.DeleteDisbursement)
+	r.Patch("/disbursements/{id}/status", disbursementHandler.PatchDisbursementStatus)
 	r.Patch("/payments/{id}/status", paymentsHandler.PatchPaymentStatus)
 	r.Patch("/payments/retry", paymentsHandler.RetryPayments)
 
-	doAs := func(userID, method, path, body string) *httptest.ResponseRecorder {
-		var reader *strings.Reader
-		if body == "" {
-			reader = strings.NewReader("")
-		} else {
-			reader = strings.NewReader(body)
-		}
-		req := httptest.NewRequest(method, path, reader)
+	// A nil apiKey is the JWT path; otherwise the request carries the key and no token.
+	doAsPrincipal := func(userID string, apiKey *data.APIKey, method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		reqCtx := sdpcontext.SetUserIDInContext(ctx, userID)
-		reqCtx = sdpcontext.SetTokenInContext(reqCtx, "test-token")
+		if apiKey != nil {
+			reqCtx = sdpcontext.SetAPIKeyInContext(reqCtx, apiKey)
+		} else {
+			reqCtx = sdpcontext.SetTokenInContext(reqCtx, "test-token")
+		}
 		req = req.WithContext(reqCtx)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 		return rr
+	}
+	doAs := func(userID, method, path, body string) *httptest.ResponseRecorder {
+		return doAsPrincipal(userID, nil, method, path, body)
 	}
 
 	newDisbursement := func(name, walletID string, status data.DisbursementStatus) *data.Disbursement {
@@ -132,4 +157,108 @@ func Test_W3_TransitionGates_MismatchedWallet(t *testing.T) {
 		rr = doAs(memberA.ID, http.MethodDelete, "/disbursements/"+draftA.ID, "")
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
+
+	const (
+		start  = "STARTED"
+		pause  = "PAUSED"
+		cancel = "CANCELED"
+	)
+	fromStatus := map[string]data.DisbursementStatus{
+		start:  data.ReadyDisbursementStatus,
+		pause:  data.StartedDisbursementStatus,
+		cancel: data.ReadyDisbursementStatus,
+	}
+	patchStatus := func(actor *auth.User, apiKey *data.APIKey, disbursementID, status string) *httptest.ResponseRecorder {
+		return doAsPrincipal(actor.ID, apiKey, http.MethodPatch, "/disbursements/"+disbursementID+"/status", fmt.Sprintf(`{"status": %q}`, status))
+	}
+
+	t.Run("disbursement status: one case per (action × principal × wallet)", func(t *testing.T) {
+		matrix := []struct {
+			action       string
+			actor        *auth.User
+			apiKey       *data.APIKey
+			targetWallet string
+			wantGate403  bool
+		}{
+			// Pause a disbursement sourced from wallet A:
+			{pause, approverOnA, nil, walletA.ID, false},
+			{pause, memberA, nil, walletA.ID, false},     // financial controller on A
+			{pause, initiatorOnA, nil, walletA.ID, true}, // initiator does not qualify for transitions
+			{pause, approverOnB, nil, walletA.ID, true},  // cross-wallet
+			{pause, approverNoWallet, nil, walletA.ID, true},
+			{pause, owner, nil, walletA.ID, false},
+			// Pause a disbursement sourced from wallet B:
+			{pause, approverOnA, nil, walletBID, true}, // cross-wallet (the canonical AC)
+			{pause, approverOnB, nil, walletBID, false},
+			{pause, owner, nil, walletBID, false},
+			// Start (the gate fires before any transition/balance logic):
+			{start, approverOnA, nil, walletBID, true},
+			{start, approverNoWallet, nil, walletA.ID, true},
+			{start, approverOnB, nil, walletA.ID, true},
+			// Cancel:
+			{cancel, approverOnA, nil, walletBID, true},
+			{cancel, approverOnB, nil, walletBID, false},
+			// API keys: an owner-minted key does not inherit its creator's tenant-wide reach…
+			{start, owner, ownerKeyOnA, walletBID, true},
+			{pause, owner, ownerKeyOnA, walletBID, true},
+			{cancel, owner, ownerKeyOnA, walletBID, true},
+			{pause, owner, ownerKeyUnscoped, walletA.ID, true},
+			{pause, owner, ownerKeyOnA, walletA.ID, false},
+			// …and a key in scope needs no role or membership from its creator.
+			{pause, developer, developerKeyOnB, walletBID, false},
+			{cancel, developer, developerKeyOnB, walletBID, false},
+			{pause, developer, developerKeyOnB, walletA.ID, true},
+		}
+
+		for i, tc := range matrix {
+			principal := tc.actor.ID
+			if tc.apiKey != nil {
+				principal = tc.apiKey.ID
+			}
+			name := fmt.Sprintf("%s as %s on wallet=%s gate403=%v", tc.action, principal, short(tc.targetWallet, walletA.ID, walletBID), tc.wantGate403)
+			t.Run(name, func(t *testing.T) {
+				disbursement := newDisbursement(fmt.Sprintf("gate-status-%d-%s", i, principal), tc.targetWallet, fromStatus[tc.action])
+
+				rr := patchStatus(tc.actor, tc.apiKey, disbursement.ID, tc.action)
+
+				got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+				require.NoError(t, gErr)
+				if tc.wantGate403 {
+					require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+					require.Contains(t, rr.Body.String(), services.ErrWalletActionForbidden.Error())
+					require.Equal(t, fromStatus[tc.action], got.Status, "a rejected transition must leave the status untouched")
+				} else {
+					require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+					require.NotEqual(t, fromStatus[tc.action], got.Status)
+				}
+			})
+		}
+	})
+
+	t.Run("disbursement status: an explicit grant on the wallet unlocks the action", func(t *testing.T) {
+		disbursement := newDisbursement("gate-status-grant-unlocks", walletBID, data.StartedDisbursementStatus)
+
+		rr := patchStatus(approverNoWallet, nil, disbursement.ID, pause)
+		require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+
+		_, mErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, approverNoWallet.ID, walletBID, data.ApproverUserRole, nil)
+		require.NoError(t, mErr)
+
+		rr = patchStatus(approverNoWallet, nil, disbursement.ID, pause)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, gErr)
+		require.Equal(t, data.PausedDisbursementStatus, got.Status)
+	})
+}
+
+func short(id string, a, b string) string {
+	switch id {
+	case a:
+		return "A"
+	case b:
+		return "B"
+	default:
+		return id
+	}
 }
