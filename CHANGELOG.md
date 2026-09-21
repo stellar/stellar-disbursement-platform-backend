@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- Reject bridge opt-in with a `customer_id` another tenant has already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
+- Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
 
 ### Fixed
 
