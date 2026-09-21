@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
@@ -17,6 +20,7 @@ import (
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ServiceOptions_Validate(t *testing.T) {
@@ -188,7 +192,7 @@ func Test_Service_OptInToBridge(t *testing.T) {
 		svc := createService(t, mockClient, models)
 
 		// Insert existing integration
-		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+		_, err := models.BridgeIntegration.Insert(ctx, models.DBConnectionPool, data.BridgeIntegrationInsert{
 			KYCLinkID:  utils.StringPtr("existing-kyc-id"),
 			CustomerID: "existing-customer-id",
 			OptedInBy:  "existing-user",
@@ -432,7 +436,7 @@ func Test_Service_GetBridgeIntegration(t *testing.T) {
 		}
 
 		// Insert integration
-		integration, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+		integration, err := models.BridgeIntegration.Insert(ctx, models.DBConnectionPool, data.BridgeIntegrationInsert{
 			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
@@ -555,7 +559,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		}
 
 		// Insert integration
-		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+		_, err := models.BridgeIntegration.Insert(ctx, models.DBConnectionPool, data.BridgeIntegrationInsert{
 			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
@@ -584,7 +588,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		}
 
 		// Insert integration
-		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+		_, err := models.BridgeIntegration.Insert(ctx, models.DBConnectionPool, data.BridgeIntegrationInsert{
 			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
@@ -622,7 +626,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		}
 
 		// Insert integration
-		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+		_, err := models.BridgeIntegration.Insert(ctx, models.DBConnectionPool, data.BridgeIntegrationInsert{
 			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
@@ -681,7 +685,7 @@ func Test_Service_CreateVirtualAccount(t *testing.T) {
 		}
 
 		// Insert integration
-		_, err := models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+		_, err := models.BridgeIntegration.Insert(ctx, models.DBConnectionPool, data.BridgeIntegrationInsert{
 			KYCLinkID:  utils.StringPtr("kyc-link-123"),
 			CustomerID: "customer-123",
 			OptedInBy:  "user-123",
@@ -924,7 +928,7 @@ func Test_Service_OptInForExistingCustomer_Validation(t *testing.T) {
 
 func Test_Service_OptInForExistingCustomer_Integration(t *testing.T) {
 	models := data.SetupModels(t)
-	ctx := context.Background()
+	ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: "tenant-id", Name: "test-tenant"})
 
 	t.Run("successful manual opt-in", func(t *testing.T) {
 		_, err := models.DBConnectionPool.ExecContext(ctx, "DELETE FROM bridge_integration")
@@ -958,5 +962,129 @@ func Test_Service_OptInForExistingCustomer_Integration(t *testing.T) {
 		assert.Equal(t, "user-123", *retrieved.OptedInBy)
 		// For manual onboarding, KYCLinkID should be nil since no KYC link is created
 		assert.Nil(t, retrieved.KYCLinkID)
+	})
+}
+
+func Test_Service_OptInForExistingCustomer_AcrossTenants(t *testing.T) {
+	// Cleanups run last-in first-out, so every pool closes before the test database is dropped.
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+	competitorPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { competitorPool.Close() })
+
+	// Each tenant gets a real sdp_<name> schema, its own pool and its own service.
+	type tenantEnv struct {
+		ctx     context.Context
+		models  *data.Models
+		service *Service
+		client  *MockClient
+	}
+	newTenantEnv := func(t *testing.T, name string) tenantEnv {
+		t.Helper()
+		dsn := tenant.PrepareDBForTenant(t, dbt, name)
+		pool, poolErr := db.OpenDBConnectionPool(dsn)
+		require.NoError(t, poolErr)
+		t.Cleanup(func() { pool.Close() })
+		models, modelsErr := data.NewModels(pool)
+		require.NoError(t, modelsErr)
+
+		client := NewMockClient(t)
+		service := createService(t, client, models)
+
+		ctx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: name + "-id", Name: name})
+		return tenantEnv{ctx: ctx, models: models, service: service, client: client}
+	}
+	expectActiveCustomer := func(client *MockClient, customerID string) {
+		client.
+			On("GetCustomer", mock.Anything, customerID).
+			Return(&CustomerInfo{ID: customerID, Status: CustomerStatusActive}, nil).
+			Once()
+	}
+
+	tenantA := newTenantEnv(t, "tenanta")
+	tenantB := newTenantEnv(t, "tenantb")
+	tenantC := newTenantEnv(t, "tenantc")
+
+	t.Run("second tenant cannot bind a customer ID another tenant holds", func(t *testing.T) {
+		expectActiveCustomer(tenantA.client, "customer-direct")
+		result, optInErr := tenantA.service.OptInForExistingCustomer(tenantA.ctx, "customer-direct", "user-a")
+		require.NoError(t, optInErr)
+		assert.Equal(t, "customer-direct", *result.CustomerID)
+
+		expectActiveCustomer(tenantB.client, "customer-direct")
+		result, optInErr = tenantB.service.OptInForExistingCustomer(tenantB.ctx, "customer-direct", "user-b")
+		require.ErrorIs(t, optInErr, ErrBridgeCustomerAlreadyBound)
+		assert.Nil(t, result)
+
+		_, getErr := tenantB.models.BridgeIntegration.Get(tenantB.ctx)
+		assert.ErrorIs(t, getErr, data.ErrRecordNotFound)
+	})
+
+	t.Run("a different customer ID is still accepted", func(t *testing.T) {
+		expectActiveCustomer(tenantB.client, "customer-other")
+		result, optInErr := tenantB.service.OptInForExistingCustomer(tenantB.ctx, "customer-other", "user-b")
+		require.NoError(t, optInErr)
+		assert.Equal(t, "customer-other", *result.CustomerID)
+	})
+
+	t.Run("customer ID created through the KYC link flow cannot be bound by another tenant", func(t *testing.T) {
+		// tenantB holds "customer-other"; simulate a KYC-link row the same way OptInToBridge stores it.
+		_, execErr := tenantB.models.DBConnectionPool.ExecContext(tenantB.ctx,
+			"UPDATE bridge_integration SET kyc_link_id = 'kyc-link-b', customer_id = 'customer-kyc'")
+		require.NoError(t, execErr)
+
+		expectActiveCustomer(tenantC.client, "customer-kyc")
+		result, optInErr := tenantC.service.OptInForExistingCustomer(tenantC.ctx, "customer-kyc", "user-c")
+		require.ErrorIs(t, optInErr, ErrBridgeCustomerAlreadyBound)
+		assert.Nil(t, result)
+	})
+
+	t.Run("opt-in waits on the customer ID lock and re-checks once it is released", func(t *testing.T) {
+		tenantD := newTenantEnv(t, "tenantd")
+
+		// Hold the lock the way a competing opt-in would.
+		lockTx, txErr := competitorPool.BeginTxx(context.Background(), nil)
+		require.NoError(t, txErr)
+		defer func() { _ = lockTx.Rollback() }()
+		require.NoError(t, acquireBridgeCustomerLock(context.Background(), lockTx, "customer-race"))
+
+		expectActiveCustomer(tenantC.client, "customer-race")
+		done := make(chan error, 1)
+		go func() {
+			_, optInErr := tenantC.service.OptInForExistingCustomer(tenantC.ctx, "customer-race", "user-c")
+			done <- optInErr
+		}()
+
+		select {
+		case optInErr := <-done:
+			require.FailNow(t, "opt-in did not wait for the customer ID lock", "returned: %v", optInErr)
+		case <-time.After(500 * time.Millisecond):
+		}
+
+		// The competitor commits its row, then releases the lock.
+		_, insertErr := tenantD.models.BridgeIntegration.Insert(tenantD.ctx, tenantD.models.DBConnectionPool, data.BridgeIntegrationInsert{
+			CustomerID: "customer-race",
+			OptedInBy:  "user-d",
+		})
+		require.NoError(t, insertErr)
+		require.NoError(t, lockTx.Commit())
+
+		select {
+		case optInErr := <-done:
+			require.ErrorIs(t, optInErr, ErrBridgeCustomerAlreadyBound)
+		case <-time.After(10 * time.Second):
+			require.FailNow(t, "opt-in did not resume after the lock was released")
+		}
+		_, getErr := tenantC.models.BridgeIntegration.Get(tenantC.ctx)
+		assert.ErrorIs(t, getErr, data.ErrRecordNotFound)
+	})
+
+	t.Run("fails when the tenant is not in the context", func(t *testing.T) {
+		tenantE := newTenantEnv(t, "tenante")
+		expectActiveCustomer(tenantE.client, "customer-no-tenant")
+		result, optInErr := tenantE.service.OptInForExistingCustomer(context.Background(), "customer-no-tenant", "user-e")
+		require.ErrorContains(t, optInErr, "getting tenant from context")
+		assert.Nil(t, result)
 	})
 }
