@@ -168,6 +168,16 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 
 			// Accessible by all users
 			if len(requiredRoles) == 0 {
+				// No role query runs on this path, so deactivation has to be checked here.
+				userID, idErr := sdpcontext.GetUserIDFromContext(ctx)
+				if idErr != nil {
+					httperror.Unauthorized("", nil, nil).Render(rw)
+					return
+				}
+				if _, userErr := authManager.GetUserByID(ctx, userID); userErr != nil {
+					httperror.Unauthorized("", nil, nil).Render(rw)
+					return
+				}
 				next.ServeHTTP(rw, req)
 				return
 			}

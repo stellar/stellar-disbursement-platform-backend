@@ -477,9 +477,11 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 func Test_AnyRoleMiddleware(t *testing.T) {
 	jwtManagerMock := &auth.JWTManagerMock{}
 	roleManagerMock := &auth.RoleManagerMock{}
+	authenticatorMock := &auth.AuthenticatorMock{}
 	authManager := auth.NewAuthManager(
 		auth.WithCustomJWTManagerOption(jwtManagerMock),
 		auth.WithCustomRoleManagerOption(roleManagerMock),
+		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
 
 	const url = "/restricted"
@@ -701,9 +703,10 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
 
-	t.Run("returns Status Ok when no roles is required", func(t *testing.T) {
+	t.Run("returns Status Ok when no roles is required and the user is active", func(t *testing.T) {
 		token := "mytoken"
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		require.NoError(t, err)
 
@@ -714,6 +717,11 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		r := chi.NewRouter()
 		setRestrictedEndpoint(r, requiredRoles...)
 
+		authenticatorMock.
+			On("GetUser", mock.Anything, "user-id").
+			Return(&auth.User{ID: "user-id"}, nil).
+			Once()
+
 		r.ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -723,6 +731,56 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
+
+	t.Run("returns Unauthorized when no roles is required and the user is deactivated", func(t *testing.T) {
+		token := "mytoken"
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "user-id")
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r := chi.NewRouter()
+		setRestrictedEndpoint(r)
+
+		authenticatorMock.
+			On("GetUser", mock.Anything, "user-id").
+			Return(nil, auth.ErrUserNotFound).
+			Once()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns Unauthorized when no roles is required and no user ID is in the request context", func(t *testing.T) {
+		token := "mytoken"
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r := chi.NewRouter()
+		setRestrictedEndpoint(r)
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	authenticatorMock.AssertExpectations(t)
 }
 
 func Test_CorsMiddleware(t *testing.T) {

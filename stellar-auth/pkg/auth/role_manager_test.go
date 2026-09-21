@@ -71,6 +71,27 @@ func Test_DefaultRoleManager_getUserRolesInfo(t *testing.T) {
 		assert.False(t, ur.IsOwner)
 		assert.Empty(t, ur.Roles)
 	})
+
+	t.Run("returns ErrUserNotFound when the user is deactivated", func(t *testing.T) {
+		for _, isOwner := range []bool{true, false} {
+			rau := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, isOwner, "role1")
+			u := &User{ID: rau.ID, Email: rau.Email}
+
+			_, err := dbConnectionPool.ExecContext(ctx, "UPDATE auth_users SET is_active = false WHERE id = $1", rau.ID)
+			require.NoError(t, err)
+
+			ur, err := rm.getUserRolesInfo(ctx, u)
+			assert.ErrorIs(t, err, ErrUserNotFound)
+			assert.Nil(t, ur)
+
+			_, err = dbConnectionPool.ExecContext(ctx, "UPDATE auth_users SET is_active = true WHERE id = $1", rau.ID)
+			require.NoError(t, err)
+
+			ur, err = rm.getUserRolesInfo(ctx, u)
+			require.NoError(t, err)
+			assert.Equal(t, isOwner, ur.IsOwner)
+		}
+	})
 }
 
 func Test_DefaultRoleManager_GetUserRoles(t *testing.T) {
@@ -241,6 +262,22 @@ func Test_DefaultRoleManager_HasAnyRoles(t *testing.T) {
 		hasRoles, err = rm.HasAnyRoles(ctx, u, []string{"role1", "role3"})
 		require.NoError(t, err)
 		assert.True(t, hasRoles)
+	})
+
+	t.Run("returns ErrUserNotFound when the user is deactivated", func(t *testing.T) {
+		rau := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, false, "role1")
+		u := &User{ID: rau.ID, Email: rau.Email}
+
+		hasRoles, err := rm.HasAnyRoles(ctx, u, []string{"role1"})
+		require.NoError(t, err)
+		assert.True(t, hasRoles)
+
+		_, err = dbConnectionPool.ExecContext(ctx, "UPDATE auth_users SET is_active = false WHERE id = $1", rau.ID)
+		require.NoError(t, err)
+
+		hasRoles, err = rm.HasAnyRoles(ctx, u, []string{"role1"})
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.False(t, hasRoles)
 	})
 }
 
