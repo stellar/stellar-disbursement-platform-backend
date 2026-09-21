@@ -156,6 +156,11 @@ func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.M
 // AnyRoleMiddleware validates if the user has at least one of the required roles to request
 // the current endpoint.
 func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserRole) func(http.Handler) http.Handler {
+	// Accessible by all users (no roles listed means any role)
+	if len(requiredRoles) == 0 {
+		requiredRoles = data.GetAllRoles()
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -164,11 +169,6 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 			if err != nil {
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
-			}
-
-			// Accessible by all users (no roles listed means any role)
-			if len(requiredRoles) == 0 {
-				requiredRoles = data.GetAllRoles()
 			}
 
 			hasAnyRoles, err := authManager.AnyRolesInTokenUser(ctx, token, data.FromUserRoleArrayToStringArray(requiredRoles))
