@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reject bridge opt-in with a `customer_id` another tenant has already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
+
 ### Fixed
 
 - Harden receiver-facing messages against HTML injection. [#1197](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1197)
