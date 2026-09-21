@@ -701,7 +701,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
 
-	t.Run("checks against every role when no roles is required", func(t *testing.T) {
+	t.Run("checks against every role when no roles are required", func(t *testing.T) {
 		token := "mytoken"
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -741,7 +741,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
 
-	t.Run("returns Unauthorized when no roles is required and the user is deactivated", func(t *testing.T) {
+	t.Run("returns Unauthorized when no roles are required and the user is deactivated", func(t *testing.T) {
 		token := "mytoken"
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
