@@ -166,19 +166,19 @@ var walletCapabilityMatrix = []walletCapability{
 		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.InitiatorUserRole},
 	},
 	{
-		// PATCH /disbursements/{id}/status → DisbursementManagementService.StartDisbursement.
+		// PATCH /disbursements/{id}/status (STARTED) → PatchDisbursementStatus.
 		name:        "can_start_disbursement",
 		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
 		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
 	},
 	{
-		// PATCH /disbursements/{id}/status → DisbursementManagementService.PauseDisbursement.
+		// PATCH /disbursements/{id}/status (PAUSED) → PatchDisbursementStatus.
 		name:        "can_pause_disbursement",
 		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
 		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
 	},
 	{
-		// PATCH /disbursements/{id}/status → DisbursementManagementService.CancelDisbursement.
+		// PATCH /disbursements/{id}/status (CANCELED) → PatchDisbursementStatus.
 		name:        "can_cancel_disbursement",
 		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
 		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
