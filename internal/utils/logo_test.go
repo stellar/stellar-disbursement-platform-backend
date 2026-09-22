@@ -2,12 +2,14 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +39,14 @@ func testGIF(t *testing.T, w, h int) []byte {
 
 var corruptHeaderPNG = append([]byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, []byte("not a valid IHDR chunk")...)
 
+// A decoder registered under "jp", a substring of "png jpeg", with its own magic bytes: it
+// proves the format allowlist matches exactly rather than by substring. Test binary only.
+func init() {
+	image.RegisterFormat("jp", "JPFAKE",
+		func(io.Reader) (image.Image, error) { return nil, errors.New("not needed") },
+		func(io.Reader) (image.Config, error) { return image.Config{Width: 1, Height: 1}, nil })
+}
+
 func Test_ValidateLogoHeader(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -51,6 +61,8 @@ func Test_ValidateLogoHeader(t *testing.T) {
 		{name: "not an image", logo: []byte("not-an-image"), wantErr: "invalid file type provided. Expected png or jpeg."},
 		// image/gif is registered in this test binary, so this exercises the explicit format allowlist.
 		{name: "gif is not an accepted format", logo: testGIF(t, 1, 1), wantErr: "invalid file type provided. Expected png or jpeg."},
+		// The "jp" decoder registered in init: a substring match would accept it.
+		{name: "format name that is a substring of the allowlist is rejected", logo: []byte("JPFAKE-not-png-or-jpeg"), wantErr: "invalid file type provided. Expected png or jpeg."},
 		{name: "png signature with a corrupt header", logo: corruptHeaderPNG, wantErr: "invalid or corrupt image"},
 		{name: "decompression bomb", logo: CreatePNGHeaderWithDimensions(t, 22000, 22000), wantErr: fmt.Sprintf("image dimensions 22000x22000 exceed the %dpx per-side limit", MaxLogoDimension)},
 		{name: "width just over the limit", logo: CreatePNGHeaderWithDimensions(t, MaxLogoDimension+1, 10), wantErr: fmt.Sprintf("image dimensions %dx10 exceed the %dpx per-side limit", MaxLogoDimension+1, MaxLogoDimension)},

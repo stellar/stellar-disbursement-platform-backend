@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"strings"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -34,7 +33,7 @@ func ValidateLogoHeader(logo []byte) error {
 		return errors.New("invalid or corrupt image")
 	}
 
-	if !strings.Contains(fmt.Sprintf("%s %s", PNGLogoType, JPEGLogoType), format) {
+	if format != string(PNGLogoType) && format != string(JPEGLogoType) {
 		return errors.New("invalid file type provided. Expected png or jpeg.")
 	}
 
