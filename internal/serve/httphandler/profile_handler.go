@@ -495,23 +495,20 @@ func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req
 		return
 	}
 
-	if len(org.Logo) == 0 {
-		var logoBytes []byte
-		logoBytes, err = fs.ReadFile(h.PublicFilesFS, "img/logo.png")
+	// DecodeConfig reads only the header (format + dimensions); it never allocates the pixel
+	// buffer, so serving a stored logo cannot exhaust memory. Fall back to default logo.
+	cfg, ext, err := image.DecodeConfig(bytes.NewReader(org.Logo))
+	if len(org.Logo) == 0 || err != nil || cfg.Width > data.MaxLogoDimension || cfg.Height > data.MaxLogoDimension {
+		org.Logo, err = fs.ReadFile(h.PublicFilesFS, "img/logo.png")
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot open default logo", err, nil).Render(rw)
 			return
 		}
 
-		org.Logo = logoBytes
-	}
-
-	// DecodeConfig reads only the header to get the format for the filename; it never
-	// allocates the pixel buffer, so serving a stored logo cannot exhaust memory.
-	_, ext, err := image.DecodeConfig(bytes.NewReader(org.Logo))
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot decode organization logo", err, nil).Render(rw)
-		return
+		if _, ext, err = image.DecodeConfig(bytes.NewReader(org.Logo)); err != nil {
+			httperror.InternalError(ctx, "Cannot decode organization logo", err, nil).Render(rw)
+			return
+		}
 	}
 
 	rw.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, fmt.Sprintf("logo.%s", ext)))

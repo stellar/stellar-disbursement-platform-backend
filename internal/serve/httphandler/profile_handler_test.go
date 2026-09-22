@@ -1797,11 +1797,10 @@ func Test_ProfileHandler_GetOrganizationLogo(t *testing.T) {
 		assert.Equal(t, org.Logo, respBody)
 	})
 
-	t.Run("serves a pre-existing oversized-dimension logo without fully decoding it", func(t *testing.T) {
-		// Write directly to the DB, bypassing upload validation, to mimic a logo stored before
-		// the dimension cap existed. The header declares 22000x22000: image.Decode would attempt
-		// a multi-GB allocation, but the read path uses DecodeConfig (header only) and just serves
-		// the raw bytes. Reverting the handler to image.Decode makes this case fail.
+	t.Run("falls back to the default logo when the stored logo exceeds the dimension cap", func(t *testing.T) {
+		// Write directly to the DB, bypassing upload validation, to mimic a logo stored before the
+		// dimension cap existed. Its header declares 22000x22000; the read path only reads the
+		// header (never a full decode) and serves the bundled default instead of the oversized bytes.
 		oversized := pngHeaderWithDimensions(t, 22000, 22000)
 		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET logo = $1", oversized)
 		require.NoError(t, err)
@@ -1816,8 +1815,12 @@ func Test_ProfileHandler_GetOrganizationLogo(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
+		defaultLogo, err := fs.ReadFile(publicfiles.PublicFiles, "img/logo.png")
+		require.NoError(t, err)
+
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, oversized, respBody)
+		assert.Equal(t, defaultLogo, respBody)
+		assert.NotEqual(t, oversized, respBody)
 	})
 }
 
