@@ -480,7 +480,7 @@ func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req
 	// ValidateLogoHeader reads only the header, never a pixel buffer, so serving a stored logo cannot
 	// exhaust memory. A logo that is missing, unreadable, or over the dimension cap falls back
 	// to the bundled default.
-	if err := utils.ValidateLogoHeader(org.Logo); err != nil {
+	if err = utils.ValidateLogoHeader(org.Logo); err != nil {
 		if len(org.Logo) > 0 {
 			log.Ctx(ctx).Warnf("stored organization logo is unusable (%v); serving the default logo", err)
 		}
