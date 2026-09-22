@@ -15,7 +15,7 @@ import (
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
+	// It registers the `Decoders` to handle the image decoding - `image.DecodeConfig`.
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
@@ -91,8 +91,9 @@ type OrganizationUpdate struct {
 type LogoType string
 
 const (
-	PNGLogoType  LogoType = "png"
-	JPEGLogoType LogoType = "jpeg"
+	PNGLogoType      LogoType = "png"
+	JPEGLogoType     LogoType = "jpeg"
+	MaxLogoDimension          = 4096
 
 	// tzRegexExpression validates the TimezoneUTCOffset value. It expects the following format:
 	// 	plus or minus symbol + two numbers + colon symbol + two numbers
@@ -118,13 +119,19 @@ func (ou *OrganizationUpdate) validate() error {
 	}
 
 	if len(ou.Logo) > 0 {
-		_, format, err := image.Decode(bytes.NewBuffer(ou.Logo))
+		// DecodeConfig reads only the header (format + dimensions); it never
+		// allocates the pixel buffer, so a decompression bomb cannot exhaust memory here.
+		cfg, format, err := image.DecodeConfig(bytes.NewBuffer(ou.Logo))
 		if err != nil {
 			return fmt.Errorf("error decoding image bytes: %w", err)
 		}
 
 		if !strings.Contains(fmt.Sprintf("%s %s", PNGLogoType, JPEGLogoType), format) {
 			return fmt.Errorf("invalid image type provided. Expect %s or %s", PNGLogoType, JPEGLogoType)
+		}
+
+		if cfg.Width > MaxLogoDimension || cfg.Height > MaxLogoDimension {
+			return fmt.Errorf("image dimensions %dx%d exceed the %dpx limit", cfg.Width, cfg.Height, MaxLogoDimension)
 		}
 	}
 

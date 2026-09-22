@@ -10,7 +10,7 @@ import (
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
+	// It registers the `Decoders` to handle the image decoding - `image.DecodeConfig`.
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
@@ -152,6 +152,11 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		validator := validators.NewValidator()
 		expectedContentTypes := fmt.Sprintf("%s %s", data.PNGLogoType.ToHTTPContentType(), data.JPEGLogoType.ToHTTPContentType())
 		validator.Check(strings.Contains(expectedContentTypes, fileContentType), "logo", "invalid file type provided. Expected png or jpeg.")
+
+		// Reject decompression-bomb logos: bound the declared dimensions (header only) before storage.
+		if cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(fileContentBytes)); cfgErr == nil {
+			validator.Check(cfg.Width <= data.MaxLogoDimension && cfg.Height <= data.MaxLogoDimension, "logo", "image dimensions too large")
+		}
 		if validator.HasErrors() {
 			httperror.BadRequest("", nil, validator.Errors).Render(rw)
 			return
@@ -501,7 +506,9 @@ func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req
 		org.Logo = logoBytes
 	}
 
-	_, ext, err := image.Decode(bytes.NewReader(org.Logo))
+	// DecodeConfig reads only the header to get the format for the filename; it never
+	// allocates the pixel buffer, so serving a stored logo cannot exhaust memory.
+	_, ext, err := image.DecodeConfig(bytes.NewReader(org.Logo))
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot decode organization logo", err, nil).Render(rw)
 		return
