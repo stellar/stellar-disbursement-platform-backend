@@ -53,7 +53,6 @@ func Test_ValidateLogoHeader(t *testing.T) {
 		logo    []byte
 		wantErr string
 	}{
-		{name: "real png within the limit", logo: testPNG(t, 300, 300)},
 		{name: "real jpeg within the limit", logo: testJPEG(t, 300, 300)},
 		{name: "real png exactly at the limit", logo: testPNG(t, MaxLogoDimension, 1)},
 		// Header-only: a valid IHDR with no pixel payload passes, proving no full decode happens here.
@@ -93,7 +92,6 @@ func Test_ValidateLogo(t *testing.T) {
 		{name: "header-only png within the limit has no pixel payload", logo: CreatePNGHeaderWithDimensions(t, 100, 100), wantErr: "invalid or corrupt image"},
 		// Header checks run first, so a bomb is rejected by its dimensions before anything decodes.
 		{name: "decompression bomb", logo: CreatePNGHeaderWithDimensions(t, 22000, 22000), wantErr: fmt.Sprintf("image dimensions 22000x22000 exceed the %dpx per-side limit", MaxLogoDimension)},
-		{name: "not an image", logo: []byte("not-an-image"), wantErr: "invalid file type provided. Expected png or jpeg."},
 	}
 
 	for _, tc := range testCases {

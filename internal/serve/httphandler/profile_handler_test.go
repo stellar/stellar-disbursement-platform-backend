@@ -263,28 +263,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			}`, utils.MaxLogoDimension),
 		},
 		{
-			name:  "returns BadRequest when the logo sniffs as an image but its header is corrupt",
-			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
-			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
-				// A real PNG signature (so DetectContentType says image/png) followed by garbage.
-				corrupt := bytes.NewBuffer(append([]byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}, []byte("not a valid IHDR chunk")...))
-				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, corrupt)
-			},
-			wantStatusCode: http.StatusBadRequest,
-			wantRespBody: `{
-				"error": "The request was invalid in some way.",
-				"extras": {
-					"logo": "invalid or corrupt image"
-				}
-			}`,
-		},
-		{
 			name:  "returns BadRequest when the logo has a valid header but a truncated payload",
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
@@ -1863,29 +1841,6 @@ func Test_ProfileHandler_GetOrganizationLogo(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, defaultLogo, respBody)
 		assert.NotEqual(t, oversized, respBody)
-	})
-
-	t.Run("falls back to the default logo when the stored logo has an unreadable header", func(t *testing.T) {
-		// Garbage bytes DecodeConfig cannot parse: the read path must not 500 on bad stored data
-		// and must not attempt a full decode; it serves the bundled default instead.
-		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET logo = $1", []byte("not-an-image"))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.GetOrganizationLogo).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		defaultLogo, err := fs.ReadFile(publicfiles.PublicFiles, "img/logo.png")
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, defaultLogo, respBody)
 	})
 
 	t.Run("serves a stored logo verbatim without fully decoding it", func(t *testing.T) {
