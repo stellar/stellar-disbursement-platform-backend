@@ -88,13 +88,7 @@ type OrganizationUpdate struct {
 	ReceiverInvitationsDisabled *bool `json:",omitempty"`
 }
 
-type LogoType string
-
 const (
-	PNGLogoType      LogoType = "png"
-	JPEGLogoType     LogoType = "jpeg"
-	MaxLogoDimension          = 4096
-
 	// tzRegexExpression validates the TimezoneUTCOffset value. It expects the following format:
 	// 	plus or minus symbol + two numbers + colon symbol + two numbers
 	// Example:
@@ -109,32 +103,18 @@ func init() {
 	tzRegex = regexp.MustCompile(tzRegexExpression)
 }
 
-func (lt LogoType) ToHTTPContentType() string {
-	return fmt.Sprintf("image/%s", lt)
-}
-
 func (ou *OrganizationUpdate) validate() error {
 	if ou.areAllFieldsEmpty() {
 		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, Receiver invitation resend interval, Receiver registration invite template, OTP message template, privacy policy link or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
-		// DecodeConfig reads only the header, so a decompression bomb is rejected by its
-		// declared dimensions below before any full decode allocates a pixel buffer.
-		cfg, format, err := image.DecodeConfig(bytes.NewBuffer(ou.Logo))
-		if err != nil {
-			return fmt.Errorf("error decoding image bytes: %w", err)
+		if err := utils.ValidateLogo(ou.Logo); err != nil {
+			return err
 		}
 
-		if !strings.Contains(fmt.Sprintf("%s %s", PNGLogoType, JPEGLogoType), format) {
-			return fmt.Errorf("invalid image type provided. Expect %s or %s", PNGLogoType, JPEGLogoType)
-		}
-
-		if cfg.Width > MaxLogoDimension || cfg.Height > MaxLogoDimension {
-			return fmt.Errorf("image dimensions %dx%d exceed the %dpx limit", cfg.Width, cfg.Height, MaxLogoDimension)
-		}
-
-		// Decode fully to confirm the pixel payload is intact
+		// Dimensions are bounded by utils.ValidateLogo, so fully decoding to confirm the pixel
+		// payload is intact cannot be a decompression bomb.
 		if _, _, err := image.Decode(bytes.NewBuffer(ou.Logo)); err != nil {
 			return fmt.Errorf("error decoding image bytes: %w", err)
 		}

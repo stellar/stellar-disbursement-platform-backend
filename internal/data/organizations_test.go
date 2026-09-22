@@ -3,9 +3,7 @@ package data
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/csv"
-	"hash/crc32"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
@@ -131,7 +129,7 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 
 	ou.Logo = csvBuf.Bytes()
 	err = ou.validate()
-	assert.EqualError(t, err, "error decoding image bytes: image: unknown format")
+	assert.EqualError(t, err, "invalid file type provided. Expected png or jpeg.")
 
 	// invalid image type
 	img = CreateMockImage(t, 300, 300, ImageSizeSmall)
@@ -141,27 +139,10 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 
 	ou.Logo = buf.Bytes()
 	err = ou.validate()
-	assert.EqualError(t, err, "invalid image type provided. Expect png or jpeg")
-
-	// decompression bomb: a tiny header declaring huge dimensions is rejected
-	ou.Logo = pngHeaderWithDimensions(t, 22000, 22000)
-	err = ou.validate()
-	assert.EqualError(t, err, "image dimensions 22000x22000 exceed the 4096px limit")
-
-	// one side over the limit is rejected
-	ou.Logo = pngHeaderWithDimensions(t, MaxLogoDimension+1, 10)
-	err = ou.validate()
-	assert.EqualError(t, err, "image dimensions 4097x10 exceed the 4096px limit")
-
-	// a real image at the limit is accepted
-	buf = new(bytes.Buffer)
-	require.NoError(t, png.Encode(buf, CreateMockImage(t, MaxLogoDimension, 1, ImageSizeSmall)))
-	ou.Logo = buf.Bytes()
-	err = ou.validate()
-	assert.Nil(t, err)
+	assert.EqualError(t, err, "invalid file type provided. Expected png or jpeg.")
 
 	// a valid header with truncated/corrupt pixel data is rejected by the full decode
-	ou.Logo = pngHeaderWithDimensions(t, 100, 100)
+	ou.Logo = utils.CreatePNGHeaderWithDimensions(t, 100, 100)
 	err = ou.validate()
 	assert.ErrorContains(t, err, "error decoding image bytes")
 
@@ -582,30 +563,4 @@ func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool d
 				receiver_registration_message_template = DEFAULT, otp_message_template = DEFAULT, message_channel_priority = '{"SMS", "EMAIL"}'`
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
-}
-
-// pngHeaderWithDimensions builds a minimal valid PNG (signature + IHDR only)
-// declaring w x h. It is a few dozen bytes, so it exercises the dimension cap
-// without allocating a real image the way a decompression bomb would.
-func pngHeaderWithDimensions(t *testing.T, w, h uint32) []byte {
-	t.Helper()
-	var buf bytes.Buffer
-	buf.Write([]byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a})
-	ihdr := make([]byte, 13)
-	binary.BigEndian.PutUint32(ihdr[0:4], w)
-	binary.BigEndian.PutUint32(ihdr[4:8], h)
-	ihdr[8] = 8 // bit depth
-	ihdr[9] = 2 // color type: truecolor
-	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(ihdr)))
-	buf.Write(length[:])
-	buf.WriteString("IHDR")
-	buf.Write(ihdr)
-	crc := crc32.NewIEEE()
-	crc.Write([]byte("IHDR"))
-	crc.Write(ihdr)
-	var crcBytes [4]byte
-	binary.BigEndian.PutUint32(crcBytes[:], crc.Sum32())
-	buf.Write(crcBytes[:])
-	return buf.Bytes()
 }

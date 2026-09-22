@@ -1,19 +1,10 @@
 package httphandler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
-
-	// Don't remove the `image/jpeg` and `image/png` packages import unless
-	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.DecodeConfig`.
-	// See https://pkg.go.dev/image#pkg-overview
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"io/fs"
 	"net/http"
@@ -146,17 +137,8 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 			return
 		}
 
-		// We need to ensure the the type of file is one of the accepted - image/png and image/jpeg
-		fileContentType := http.DetectContentType(fileContentBytes)
-
 		validator := validators.NewValidator()
-		expectedContentTypes := fmt.Sprintf("%s %s", data.PNGLogoType.ToHTTPContentType(), data.JPEGLogoType.ToHTTPContentType())
-		validator.Check(strings.Contains(expectedContentTypes, fileContentType), "logo", "invalid file type provided. Expected png or jpeg.")
-
-		// Reject decompression-bomb logos: bound the declared dimensions (header only) before storage.
-		if cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(fileContentBytes)); cfgErr == nil {
-			validator.Check(cfg.Width <= data.MaxLogoDimension && cfg.Height <= data.MaxLogoDimension, "logo", "image dimensions too large")
-		}
+		validator.CheckError(utils.ValidateLogo(fileContentBytes), "logo", "")
 		if validator.HasErrors() {
 			httperror.BadRequest("", nil, validator.Errors).Render(rw)
 			return
@@ -495,24 +477,23 @@ func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req
 		return
 	}
 
-	// DecodeConfig reads only the header (format + dimensions); it never allocates the pixel
-	// buffer, so serving a stored logo cannot exhaust memory. Fall back to default logo.
-	cfg, ext, err := image.DecodeConfig(bytes.NewReader(org.Logo))
-	if len(org.Logo) == 0 || err != nil || cfg.Width > data.MaxLogoDimension || cfg.Height > data.MaxLogoDimension {
-		org.Logo, err = fs.ReadFile(h.PublicFilesFS, "img/logo.png")
-		if err != nil {
-			httperror.InternalError(ctx, "Cannot open default logo", err, nil).Render(rw)
-			return
+	// ValidateLogo reads only the header, never a pixel buffer, so serving a stored logo cannot
+	// exhaust memory. A logo that is missing, unreadable, or over the dimension cap falls back
+	// to the bundled default.
+	if err := utils.ValidateLogo(org.Logo); err != nil {
+		if len(org.Logo) > 0 {
+			log.Ctx(ctx).Warnf("stored organization logo is unusable (%v); serving the default logo", err)
 		}
 
-		if _, ext, err = image.DecodeConfig(bytes.NewReader(org.Logo)); err != nil {
-			httperror.InternalError(ctx, "Cannot decode organization logo", err, nil).Render(rw)
+		if org.Logo, err = fs.ReadFile(h.PublicFilesFS, "img/logo.png"); err != nil {
+			httperror.InternalError(ctx, "Cannot open default logo", err, nil).Render(rw)
 			return
 		}
 	}
 
-	rw.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, fmt.Sprintf("logo.%s", ext)))
-	rw.Header().Set("Content-Type", http.DetectContentType(org.Logo))
+	contentType := http.DetectContentType(org.Logo)
+	rw.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="logo.%s"`, strings.TrimPrefix(contentType, "image/")))
+	rw.Header().Set("Content-Type", contentType)
 	_, err = rw.Write(org.Logo)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot write organization logo to response", err, nil).Render(rw)
