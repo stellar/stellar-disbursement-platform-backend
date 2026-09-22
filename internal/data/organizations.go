@@ -15,7 +15,7 @@ import (
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.DecodeConfig`.
+	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
@@ -119,8 +119,8 @@ func (ou *OrganizationUpdate) validate() error {
 	}
 
 	if len(ou.Logo) > 0 {
-		// DecodeConfig reads only the header (format + dimensions); it never
-		// allocates the pixel buffer, so a decompression bomb cannot exhaust memory here.
+		// DecodeConfig reads only the header, so a decompression bomb is rejected by its
+		// declared dimensions below before any full decode allocates a pixel buffer.
 		cfg, format, err := image.DecodeConfig(bytes.NewBuffer(ou.Logo))
 		if err != nil {
 			return fmt.Errorf("error decoding image bytes: %w", err)
@@ -132,6 +132,11 @@ func (ou *OrganizationUpdate) validate() error {
 
 		if cfg.Width > MaxLogoDimension || cfg.Height > MaxLogoDimension {
 			return fmt.Errorf("image dimensions %dx%d exceed the %dpx limit", cfg.Width, cfg.Height, MaxLogoDimension)
+		}
+
+		// Decode fully to confirm the pixel payload is intact
+		if _, _, err := image.Decode(bytes.NewBuffer(ou.Logo)); err != nil {
+			return fmt.Errorf("error decoding image bytes: %w", err)
 		}
 	}
 

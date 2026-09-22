@@ -153,10 +153,17 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 	err = ou.validate()
 	assert.EqualError(t, err, "image dimensions 4097x10 exceed the 4096px limit")
 
-	// exactly at the limit is accepted
-	ou.Logo = pngHeaderWithDimensions(t, MaxLogoDimension, MaxLogoDimension)
+	// a real image at the limit is accepted
+	buf = new(bytes.Buffer)
+	require.NoError(t, png.Encode(buf, CreateMockImage(t, MaxLogoDimension, 1, ImageSizeSmall)))
+	ou.Logo = buf.Bytes()
 	err = ou.validate()
 	assert.Nil(t, err)
+
+	// a valid header with truncated/corrupt pixel data is rejected by the full decode
+	ou.Logo = pngHeaderWithDimensions(t, 100, 100)
+	err = ou.validate()
+	assert.ErrorContains(t, err, "error decoding image bytes")
 
 	// timezone UTC offset
 	ou = &OrganizationUpdate{}

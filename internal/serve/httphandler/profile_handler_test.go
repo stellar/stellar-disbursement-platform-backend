@@ -1796,6 +1796,29 @@ func Test_ProfileHandler_GetOrganizationLogo(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, org.Logo, respBody)
 	})
+
+	t.Run("serves a pre-existing oversized-dimension logo without fully decoding it", func(t *testing.T) {
+		// Write directly to the DB, bypassing upload validation, to mimic a logo stored before
+		// the dimension cap existed. The header declares 22000x22000: image.Decode would attempt
+		// a multi-GB allocation, but the read path uses DecodeConfig (header only) and just serves
+		// the raw bytes. Reverting the handler to image.Decode makes this case fail.
+		oversized := pngHeaderWithDimensions(t, 22000, 22000)
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET logo = $1", oversized)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.GetOrganizationLogo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, oversized, respBody)
+	})
 }
 
 // pngHeaderWithDimensions builds a minimal valid PNG (signature + IHDR only)
