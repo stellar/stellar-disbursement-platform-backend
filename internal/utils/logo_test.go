@@ -57,11 +57,11 @@ func Test_ValidateLogoHeader(t *testing.T) {
 		{name: "real png exactly at the limit", logo: testPNG(t, MaxLogoDimension, 1)},
 		// Header-only: a valid IHDR with no pixel payload passes, proving no full decode happens here.
 		{name: "header-only png within the limit", logo: CreatePNGHeaderWithDimensions(t, 100, 100)},
-		{name: "not an image", logo: []byte("not-an-image"), wantErr: "invalid file type provided. Expected png or jpeg."},
+		{name: "not an image", logo: []byte("not-an-image"), wantErr: "invalid file type provided. Expected png or jpeg"},
 		// image/gif is registered in this test binary, so this exercises the explicit format allowlist.
-		{name: "gif is not an accepted format", logo: testGIF(t, 1, 1), wantErr: "invalid file type provided. Expected png or jpeg."},
+		{name: "gif is not an accepted format", logo: testGIF(t, 1, 1), wantErr: "invalid file type provided. Expected png or jpeg"},
 		// The "jp" decoder registered in init: a substring match would accept it.
-		{name: "format name that is a substring of the allowlist is rejected", logo: []byte("JPFAKE-not-png-or-jpeg"), wantErr: "invalid file type provided. Expected png or jpeg."},
+		{name: "format name that is a substring of the allowlist is rejected", logo: []byte("JPFAKE-not-png-or-jpeg"), wantErr: "invalid file type provided. Expected png or jpeg"},
 		{name: "png signature with a corrupt header", logo: corruptHeaderPNG, wantErr: "invalid or corrupt image"},
 		{name: "decompression bomb", logo: CreatePNGHeaderWithDimensions(t, 22000, 22000), wantErr: fmt.Sprintf("image dimensions 22000x22000 exceed the %dpx per-side limit", MaxLogoDimension)},
 		{name: "width just over the limit", logo: CreatePNGHeaderWithDimensions(t, MaxLogoDimension+1, 10), wantErr: fmt.Sprintf("image dimensions %dx10 exceed the %dpx per-side limit", MaxLogoDimension+1, MaxLogoDimension)},

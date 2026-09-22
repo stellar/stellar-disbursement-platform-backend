@@ -129,7 +129,7 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 
 	ou.Logo = csvBuf.Bytes()
 	err = ou.validate()
-	assert.EqualError(t, err, "invalid file type provided. Expected png or jpeg.")
+	assert.EqualError(t, err, "invalid logo: invalid file type provided. Expected png or jpeg")
 
 	// invalid image type
 	img = CreateMockImage(t, 300, 300, ImageSizeSmall)
@@ -139,7 +139,7 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 
 	ou.Logo = buf.Bytes()
 	err = ou.validate()
-	assert.EqualError(t, err, "invalid file type provided. Expected png or jpeg.")
+	assert.EqualError(t, err, "invalid logo: invalid file type provided. Expected png or jpeg")
 
 	// a valid header with no pixel payload passes: the data layer guards safety (format and
 	// dimensions) only; payload integrity is enforced in the upload handler

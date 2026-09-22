@@ -22,19 +22,21 @@ const (
 	MaxLogoDimension          = 2048
 )
 
+var ErrInvalidLogoType = errors.New("invalid file type provided. Expected png or jpeg")
+
 // ValidateLogoHeader checks a logo's format and dimensions from the header alone; it never
 // allocates a pixel buffer.
 func ValidateLogoHeader(logo []byte) error {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(logo))
 	if errors.Is(err, image.ErrFormat) {
-		return errors.New("invalid file type provided. Expected png or jpeg.")
+		return ErrInvalidLogoType
 	}
 	if err != nil {
 		return errors.New("invalid or corrupt image")
 	}
 
 	if format != string(PNGLogoType) && format != string(JPEGLogoType) {
-		return errors.New("invalid file type provided. Expected png or jpeg.")
+		return ErrInvalidLogoType
 	}
 
 	if cfg.Width > MaxLogoDimension || cfg.Height > MaxLogoDimension {

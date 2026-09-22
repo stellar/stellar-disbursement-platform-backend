@@ -237,7 +237,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			wantRespBody: `{
 				"error": "The request was invalid in some way.",
 				"extras": {
-					"logo": "invalid file type provided. Expected png or jpeg."
+					"logo": "invalid file type provided. Expected png or jpeg"
 				}
 			}`,
 		},

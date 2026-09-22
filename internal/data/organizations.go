@@ -103,7 +103,7 @@ func (ou *OrganizationUpdate) validate() error {
 		// The data layer guards safety (format and dimensions) for every writer; payload
 		// integrity needs a full decode and is enforced once, in the upload handler.
 		if err := utils.ValidateLogoHeader(ou.Logo); err != nil {
-			return err
+			return fmt.Errorf("invalid logo: %w", err)
 		}
 	}
 
