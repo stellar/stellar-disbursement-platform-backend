@@ -922,8 +922,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			}
 			r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).
 				Post("/rpc/wallet", rpcProxyHandler.ServeHTTP)
-			r.With(middleware.AuthenticateMiddleware(o.authManager, o.tenantManager)).
-				Post("/rpc/user", rpcProxyHandler.ServeHTTP)
+			r.With(
+				middleware.AuthenticateMiddleware(o.authManager, o.tenantManager),
+				middleware.AnyRoleMiddleware(o.authManager, data.GetAllRoles()...),
+			).Post("/rpc/user", rpcProxyHandler.ServeHTTP)
 		}
 	})
 

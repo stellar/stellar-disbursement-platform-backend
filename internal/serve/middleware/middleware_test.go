@@ -701,7 +701,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
 
-	t.Run("returns Status Ok when no roles is required", func(t *testing.T) {
+	t.Run("checks against every role when no roles are required", func(t *testing.T) {
 		token := "mytoken"
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -709,10 +709,27 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 		w := httptest.NewRecorder()
 
-		requiredRoles := []data.UserRole{}
-
 		r := chi.NewRouter()
-		setRestrictedEndpoint(r, requiredRoles...)
+		setRestrictedEndpoint(r)
+
+		user := &auth.User{
+			ID:    "user-id",
+			Email: "email@email",
+			Roles: []string{data.ApproverUserRole.String()},
+		}
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
+		roleManagerMock.
+			On("HasAnyRoles", mock.Anything, user, data.FromUserRoleArrayToStringArray(data.GetAllRoles())).
+			Return(true, nil).
+			Once()
 
 		r.ServeHTTP(w, req)
 
@@ -723,6 +740,44 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
+
+	t.Run("returns Unauthorized when no roles are required and the user is deactivated", func(t *testing.T) {
+		token := "mytoken"
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r := chi.NewRouter()
+		setRestrictedEndpoint(r)
+
+		user := &auth.User{ID: "user-id", Email: "email@email"}
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
+		roleManagerMock.
+			On("HasAnyRoles", mock.Anything, user, data.FromUserRoleArrayToStringArray(data.GetAllRoles())).
+			Return(false, auth.ErrUserNotFound).
+			Once()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	roleManagerMock.AssertExpectations(t)
 }
 
 func Test_CorsMiddleware(t *testing.T) {
