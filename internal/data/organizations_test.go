@@ -141,10 +141,11 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 	err = ou.validate()
 	assert.EqualError(t, err, "invalid file type provided. Expected png or jpeg.")
 
-	// a valid header with truncated/corrupt pixel data is rejected by the full decode
+	// a valid header with no pixel payload passes: the data layer guards safety (format and
+	// dimensions) only; payload integrity is enforced in the upload handler
 	ou.Logo = utils.CreatePNGHeaderWithDimensions(t, 100, 100)
 	err = ou.validate()
-	assert.ErrorContains(t, err, "error decoding image bytes")
+	assert.NoError(t, err)
 
 	// timezone UTC offset
 	ou = &OrganizationUpdate{}

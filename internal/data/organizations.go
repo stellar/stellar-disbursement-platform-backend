@@ -1,24 +1,15 @@
 package data
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"image"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
-
-	// Don't remove the `image/jpeg` and `image/png` packages import unless
-	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
-	// See https://pkg.go.dev/image#pkg-overview
-	_ "image/jpeg"
-	_ "image/png"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -109,14 +100,10 @@ func (ou *OrganizationUpdate) validate() error {
 	}
 
 	if len(ou.Logo) > 0 {
-		if err := utils.ValidateLogo(ou.Logo); err != nil {
+		// The data layer guards safety (format and dimensions) for every writer; payload
+		// integrity needs a full decode and is enforced once, in the upload handler.
+		if err := utils.ValidateLogoHeader(ou.Logo); err != nil {
 			return err
-		}
-
-		// Dimensions are bounded by utils.ValidateLogo, so fully decoding to confirm the pixel
-		// payload is intact cannot be a decompression bomb.
-		if _, _, err := image.Decode(bytes.NewBuffer(ou.Logo)); err != nil {
-			return fmt.Errorf("error decoding image bytes: %w", err)
 		}
 	}
 

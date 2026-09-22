@@ -285,6 +285,28 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 			}`,
 		},
 		{
+			name:  "returns BadRequest when the logo has a valid header but a truncated payload",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUserByID", mock.Anything, mock.Anything).
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				// Within the dimension cap but with no pixel data: only the full decode can catch it.
+				truncated := bytes.NewBuffer(utils.CreatePNGHeaderWithDimensions(t, 100, 100))
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, truncated)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"logo": "invalid or corrupt image"
+				}
+			}`,
+		},
+		{
 			name:  "returns BadRequest when the request is not valid (both file and data are empty)",
 			token: "token",
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
