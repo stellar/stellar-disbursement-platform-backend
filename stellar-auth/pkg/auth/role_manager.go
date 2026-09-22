@@ -34,7 +34,7 @@ type defaultRoleManager struct {
 }
 
 func (rm *defaultRoleManager) getUserRolesInfo(ctx context.Context, user *User) (*userRolesInfo, error) {
-	const query = "SELECT roles, is_owner FROM auth_users WHERE id = $1"
+	const query = "SELECT roles, is_owner FROM auth_users WHERE id = $1 AND is_active = true"
 
 	var ur userRolesInfo
 	err := rm.dbConnectionPool.GetContext(ctx, &ur, query, user.ID)
