@@ -1080,6 +1080,50 @@ func Test_Service_OptInForExistingCustomer_AcrossTenants(t *testing.T) {
 		assert.ErrorIs(t, getErr, data.ErrRecordNotFound)
 	})
 
+	t.Run("stores the canonical ID from Bridge and rejects another spelling of a held customer", func(t *testing.T) {
+		tenantF := newTenantEnv(t, "tenantf")
+		tenantG := newTenantEnv(t, "tenantg")
+		const canonical = "6a1f0b2c-3d4e-4f50-8a6b-7c8d9e0f1a2b"
+		const upper = "6A1F0B2C-3D4E-4F50-8A6B-7C8D9E0F1A2B"
+
+		// Bridge resolves the uppercase spelling but answers with its own lowercase ID.
+		tenantF.client.
+			On("GetCustomer", mock.Anything, upper).
+			Return(&CustomerInfo{ID: canonical, Status: CustomerStatusActive}, nil).
+			Once()
+		result, optInErr := tenantF.service.OptInForExistingCustomer(tenantF.ctx, upper, "user-f")
+		require.NoError(t, optInErr)
+		assert.Equal(t, canonical, *result.CustomerID)
+		stored, getErr := tenantF.models.BridgeIntegration.Get(tenantF.ctx)
+		require.NoError(t, getErr)
+		assert.Equal(t, canonical, *stored.CustomerID)
+
+		tenantG.client.
+			On("GetCustomer", mock.Anything, upper).
+			Return(&CustomerInfo{ID: canonical, Status: CustomerStatusActive}, nil).
+			Once()
+		result, optInErr = tenantG.service.OptInForExistingCustomer(tenantG.ctx, upper, "user-g")
+		require.ErrorIs(t, optInErr, ErrBridgeCustomerAlreadyBound)
+		assert.Nil(t, result)
+	})
+
+	t.Run("rejects the customer when Bridge returns an empty or different ID", func(t *testing.T) {
+		tenantH := newTenantEnv(t, "tenanth")
+		for name, returned := range map[string]string{"empty": "", "different": "other-customer"} {
+			t.Run(name, func(t *testing.T) {
+				tenantH.client.
+					On("GetCustomer", mock.Anything, "customer-h").
+					Return(&CustomerInfo{ID: returned, Status: CustomerStatusActive}, nil).
+					Once()
+				result, optInErr := tenantH.service.OptInForExistingCustomer(tenantH.ctx, "customer-h", "user-h")
+				require.ErrorIs(t, optInErr, ErrBridgeInvalidCustomerID)
+				assert.Nil(t, result)
+				_, getErr := tenantH.models.BridgeIntegration.Get(tenantH.ctx)
+				assert.ErrorIs(t, getErr, data.ErrRecordNotFound)
+			})
+		}
+	})
+
 	t.Run("fails when the tenant is not in the context", func(t *testing.T) {
 		tenantE := newTenantEnv(t, "tenante")
 		expectActiveCustomer(tenantE.client, "customer-no-tenant")

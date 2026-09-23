@@ -434,8 +434,13 @@ func (s *Service) OptInForExistingCustomer(ctx context.Context, customerID, user
 		return nil, ErrBridgeCustomerNotActive
 	}
 
-	// 3. Store Bridge integration with provided customer ID, unless another tenant already holds it
-	integration, err := s.claimCustomer(ctx, customerID, userID)
+	if !strings.EqualFold(customerInfo.ID, customerID) {
+		log.Ctx(ctx).Errorf("Bridge returned customer ID %q when validating customer ID %s", customerInfo.ID, customerID)
+		return nil, fmt.Errorf("%w: Bridge returned a different customer ID", ErrBridgeInvalidCustomerID)
+	}
+
+	// 3. Store Bridge integration with the canonical customer ID, unless another tenant already holds it
+	integration, err := s.claimCustomer(ctx, customerInfo.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("storing manual Bridge integration in database: %w", err)
 	}
