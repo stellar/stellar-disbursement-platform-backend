@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -441,6 +442,26 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					"bridge_error_message": "Customer not found"
 				}
 			}`,
+		},
+		{
+			name: "manual onboarding with a customer ID linked to another organization",
+			requestBody: PatchRequest{
+				Status:     data.BridgeIntegrationStatusOptedIn,
+				CustomerID: "customer-456",
+			},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				mBridgeService.
+					On("OptInForExistingCustomer", mock.Anything, "customer-456", testUser.ID).
+					Return(nil, fmt.Errorf("storing manual Bridge integration in database: %w", bridge.ErrBridgeCustomerAlreadyBound)).
+					Once()
+			},
+			expectedStatus:   http.StatusConflict,
+			expectedResponse: `{"error": "The provided customer_id is already linked to another organization"}`,
 		},
 		{
 			name: "manual onboarding when already opted in",

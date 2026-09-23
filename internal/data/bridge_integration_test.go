@@ -2,13 +2,19 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -85,7 +91,7 @@ func Test_BridgeIntegrationModel_Get(t *testing.T) {
 			OptedInBy:  "user@example.com",
 		}
 
-		insertedIntegration, err := m.Insert(ctx, insertData)
+		insertedIntegration, err := m.Insert(ctx, dbConnectionPool, insertData)
 		require.NoError(t, err)
 		defer deleteBridgeIntegrationFixture(t, ctx, dbConnectionPool)
 
@@ -113,7 +119,7 @@ func Test_BridgeIntegrationModel_Insert(t *testing.T) {
 			CustomerID: "customer-123",
 		}
 
-		integration, err := m.Insert(ctx, insert)
+		integration, err := m.Insert(ctx, dbConnectionPool, insert)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "OptedInBy is required")
 		assert.Nil(t, integration)
@@ -126,7 +132,7 @@ func Test_BridgeIntegrationModel_Insert(t *testing.T) {
 			OptedInBy:  "user@example.com",
 		}
 
-		integration, err := m.Insert(ctx, insert)
+		integration, err := m.Insert(ctx, dbConnectionPool, insert)
 		assert.NoError(t, err)
 		assert.NotNil(t, integration)
 		defer deleteBridgeIntegrationFixture(t, ctx, dbConnectionPool)
@@ -151,11 +157,11 @@ func Test_BridgeIntegrationModel_Insert(t *testing.T) {
 			OptedInBy:  "user2@example.com",
 		}
 
-		_, err := m.Insert(ctx, insert)
+		_, err := m.Insert(ctx, dbConnectionPool, insert)
 		assert.NoError(t, err)
 		defer deleteBridgeIntegrationFixture(t, ctx, dbConnectionPool)
 
-		_, err = m.Insert(ctx, insert)
+		_, err = m.Insert(ctx, dbConnectionPool, insert)
 		assert.Error(t, err)
 		assert.ErrorContains(t, err, "idx_bridge_integration_singleton")
 	})
@@ -173,7 +179,7 @@ func Test_BridgeIntegrationModel_Update(t *testing.T) {
 			CustomerID: "customer-789",
 			OptedInBy:  "user3@example.com",
 		}
-		integration, err := m.Insert(ctx, insert)
+		integration, err := m.Insert(ctx, dbConnectionPool, insert)
 		require.NoError(t, err)
 		return integration
 	}
@@ -365,7 +371,7 @@ func Test_BridgeIntegrationStatus_Flow(t *testing.T) {
 			OptedInBy:  "flow@example.com",
 		}
 
-		integration, err := m.Insert(ctx, insert)
+		integration, err := m.Insert(ctx, dbConnectionPool, insert)
 		require.NoError(t, err)
 		defer deleteBridgeIntegrationFixture(t, ctx, dbConnectionPool)
 
@@ -412,4 +418,84 @@ func deleteBridgeIntegrationFixture(t *testing.T, ctx context.Context, dbConnect
 	query := "DELETE FROM bridge_integration"
 	_, err := dbConnectionPool.ExecContext(ctx, query)
 	require.NoError(t, err)
+}
+
+func Test_BridgeIntegrationModel_OtherTenantSchemaFor(t *testing.T) {
+	// Cleanups run last-in first-out, so every pool closes before the test database is dropped.
+	dbt := dbtest.Open(t)
+	t.Cleanup(func() { dbt.Close() })
+	adminPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { adminPool.Close() })
+	ctx := context.Background()
+
+	lookup := &BridgeIntegrationModel{dbConnectionPool: adminPool}
+
+	// The tenant package imports this one, so its fixtures are out of reach here.
+	createTenantSchema := func(t *testing.T, tenantName string, withMigrations bool) *Models {
+		t.Helper()
+		schemaName := fmt.Sprintf("sdp_%s", tenantName)
+		_, execErr := adminPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
+		require.NoError(t, execErr)
+		if !withMigrations {
+			return nil
+		}
+
+		dsn, dsnErr := router.GetDSNForTenant(dbt.DSN, tenantName)
+		require.NoError(t, dsnErr)
+		_, migrateErr := db.Migrate(dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
+		require.NoError(t, migrateErr)
+
+		pool, poolErr := db.OpenDBConnectionPool(dsn)
+		require.NoError(t, poolErr)
+		t.Cleanup(func() { pool.Close() })
+		models, modelsErr := NewModels(pool)
+		require.NoError(t, modelsErr)
+		return models
+	}
+
+	t.Run("returns ErrRecordNotFound when no tenant schema exists", func(t *testing.T) {
+		holder, lookupErr := lookup.OtherTenantSchemaFor(ctx, adminPool, "customer-123", "sdp_caller")
+		require.ErrorIs(t, lookupErr, ErrRecordNotFound)
+		assert.Empty(t, holder)
+	})
+
+	modelsA := createTenantSchema(t, "tenanta", true)
+	modelsB := createTenantSchema(t, "tenant-b", true) // needs identifier quoting
+	createTenantSchema(t, "unmigrated", false)
+
+	_, err = modelsA.BridgeIntegration.Insert(ctx, modelsA.DBConnectionPool, BridgeIntegrationInsert{CustomerID: "customer-a", OptedInBy: "user-a"})
+	require.NoError(t, err)
+	_, err = modelsB.BridgeIntegration.Insert(ctx, modelsB.DBConnectionPool, BridgeIntegrationInsert{CustomerID: "customer-b", OptedInBy: "user-b"})
+	require.NoError(t, err)
+
+	t.Run("returns ErrRecordNotFound when no tenant holds the customer", func(t *testing.T) {
+		holder, lookupErr := lookup.OtherTenantSchemaFor(ctx, adminPool, "customer-unknown", "sdp_caller")
+		require.ErrorIs(t, lookupErr, ErrRecordNotFound)
+		assert.Empty(t, holder)
+	})
+
+	t.Run("returns the schema of the tenant holding the customer", func(t *testing.T) {
+		holder, lookupErr := lookup.OtherTenantSchemaFor(ctx, adminPool, "customer-a", "sdp_caller")
+		require.NoError(t, lookupErr)
+		assert.Equal(t, "sdp_tenanta", holder)
+
+		holder, lookupErr = lookup.OtherTenantSchemaFor(ctx, adminPool, "customer-b", "sdp_tenanta")
+		require.NoError(t, lookupErr)
+		assert.Equal(t, "sdp_tenant-b", holder)
+	})
+
+	t.Run("ignores the excluded schema", func(t *testing.T) {
+		holder, lookupErr := lookup.OtherTenantSchemaFor(ctx, adminPool, "customer-a", "sdp_tenanta")
+		require.ErrorIs(t, lookupErr, ErrRecordNotFound)
+		assert.Empty(t, holder)
+	})
+
+	t.Run("runs on the given transaction", func(t *testing.T) {
+		holder, lookupErr := db.RunInTransactionWithResult(ctx, adminPool, nil, func(dbTx db.DBTransaction) (string, error) {
+			return lookup.OtherTenantSchemaFor(ctx, dbTx, "customer-a", "sdp_caller")
+		})
+		require.NoError(t, lookupErr)
+		assert.Equal(t, "sdp_tenanta", holder)
+	})
 }
