@@ -635,7 +635,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		require.ErrorContains(t, err, fmt.Sprintf("validating balance for disbursement: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account (stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
+		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.000000) that was insufficient to fulfill new amount (22222.000000) along with the pending amount (1100.000000). To complete this action, your distribution account (stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least 12211.000000 USDT", disbursementInsufficientBalance.ID)
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 }
@@ -1447,7 +1447,7 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement_AmountDis
 			totalAmount:         "100.00",
 			amountDisbursed:     "60.00",
 			availableBalance:    30.00, // Less than remaining 40.00
-			expectedErrContains: "insufficient to fulfill new amount (40.00)",
+			expectedErrContains: "insufficient to fulfill new amount (40.000000)",
 			description:         "Resumed disbursement should fail when balance < remaining amount",
 		},
 		{
@@ -1507,6 +1507,77 @@ func Test_DisbursementManagementService_validateBalanceForDisbursement_AmountDis
 			} else {
 				assert.NoError(t, err, "Expected success for case: %s", tc.description)
 			}
+		})
+	}
+}
+
+func Test_InsufficientBalanceError_Error(t *testing.T) {
+	testCases := []struct {
+		name             string
+		availableBalance string
+		disbursementAmt  string
+		totalPendingAmt  string
+		wantBalance      string
+		wantDisbursement string
+		wantPending      string
+		wantShortfall    string
+	}{
+		{
+			name:             "fee-drained balance shows the real shortfall",
+			availableBalance: "4.9999800",
+			disbursementAmt:  "1",
+			totalPendingAmt:  "4",
+			wantBalance:      "4.999980",
+			wantDisbursement: "1.000000",
+			wantPending:      "4.000000",
+			wantShortfall:    "0.000020",
+		},
+		{
+			name:             "one-stroop shortfall is not reported as zero",
+			availableBalance: "4.9999999",
+			disbursementAmt:  "1",
+			totalPendingAmt:  "4",
+			wantBalance:      "4.999999",
+			wantDisbursement: "1.000000",
+			wantPending:      "4.000000",
+			wantShortfall:    "0.000001",
+		},
+		{
+			name:             "required amounts round up, balance rounds down",
+			availableBalance: "10.0000009",
+			disbursementAmt:  "7.0000005",
+			totalPendingAmt:  "3.0000005",
+			wantBalance:      "10.000000",
+			wantDisbursement: "7.000001",
+			wantPending:      "3.000001",
+			wantShortfall:    "0.000001",
+		},
+		{
+			name:             "values within six decimals are printed as-is",
+			availableBalance: "3.00",
+			disbursementAmt:  "5.00",
+			totalPendingAmt:  "0",
+			wantBalance:      "3.000000",
+			wantDisbursement: "5.000000",
+			wantPending:      "0.000000",
+			wantShortfall:    "2.000000",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := InsufficientBalanceError{
+				DistributionAddress: "stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA",
+				DisbursementID:      "disbursement-id",
+				DisbursementAsset:   data.Asset{Code: assets.XLMAssetCode},
+				AvailableBalance:    decimal.RequireFromString(tc.availableBalance),
+				DisbursementAmount:  decimal.RequireFromString(tc.disbursementAmt),
+				TotalPendingAmount:  decimal.RequireFromString(tc.totalPendingAmt),
+			}
+
+			wantErr := fmt.Sprintf("the disbursement disbursement-id failed due to an account balance (%s) that was insufficient to fulfill new amount (%s) along with the pending amount (%s). To complete this action, your distribution account (stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least %s XLM",
+				tc.wantBalance, tc.wantDisbursement, tc.wantPending, tc.wantShortfall)
+			assert.Equal(t, wantErr, err.Error())
 		})
 	}
 }

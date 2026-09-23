@@ -1088,6 +1088,30 @@ func Test_InsufficientBalanceForDirectPaymentError_Error(t *testing.T) {
 			assetCode:          "XLM",
 			expectedError:      "insufficient balance for direct payment: requested 1000.500000 XLM, but only 500.250000 available (200.750000 in pending payments). Need 701.000000 more XLM",
 		},
+		{
+			name:               "Fee-drained balance shows the real shortfall",
+			requestedAmount:    mustDecimalFromString("1"),
+			availableBalance:   mustDecimalFromString("4.9999800"),
+			totalPendingAmount: mustDecimalFromString("4"),
+			assetCode:          "XLM",
+			expectedError:      "insufficient balance for direct payment: requested 1.000000 XLM, but only 4.999980 available (4.000000 in pending payments). Need 0.000020 more XLM",
+		},
+		{
+			name:               "One-stroop shortfall is not reported as zero",
+			requestedAmount:    mustDecimalFromString("1"),
+			availableBalance:   mustDecimalFromString("4.9999999"),
+			totalPendingAmount: mustDecimalFromString("4"),
+			assetCode:          "XLM",
+			expectedError:      "insufficient balance for direct payment: requested 1.000000 XLM, but only 4.999999 available (4.000000 in pending payments). Need 0.000001 more XLM",
+		},
+		{
+			name:               "Required amounts round up, balance rounds down",
+			requestedAmount:    mustDecimalFromString("7.0000005"),
+			availableBalance:   mustDecimalFromString("10.0000009"),
+			totalPendingAmount: mustDecimalFromString("3.0000005"),
+			assetCode:          "XLM",
+			expectedError:      "insufficient balance for direct payment: requested 7.000001 XLM, but only 10.000000 available (3.000001 in pending payments). Need 0.000001 more XLM",
+		},
 	}
 
 	for _, tc := range testCases {
