@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -95,7 +97,7 @@ func (bii BridgeIntegrationInsert) Validate() error {
 }
 
 // Insert creates a new Bridge integration record.
-func (m *BridgeIntegrationModel) Insert(ctx context.Context, insert BridgeIntegrationInsert) (*BridgeIntegration, error) {
+func (m *BridgeIntegrationModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, insert BridgeIntegrationInsert) (*BridgeIntegration, error) {
 	if err := insert.Validate(); err != nil {
 		return nil, fmt.Errorf("validating Bridge integration insert: %w", err)
 	}
@@ -108,7 +110,7 @@ func (m *BridgeIntegrationModel) Insert(ctx context.Context, insert BridgeIntegr
 		) RETURNING %s`, bridgeIntegrationColumns)
 
 	var integration BridgeIntegration
-	err := m.dbConnectionPool.GetContext(ctx, &integration, query,
+	err := sqlExec.GetContext(ctx, &integration, query,
 		insert.KYCLinkID, insert.CustomerID, BridgeIntegrationStatusOptedIn, insert.OptedInBy, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("inserting Bridge integration: %w", err)
@@ -201,4 +203,42 @@ func (m *BridgeIntegrationModel) Update(ctx context.Context, update BridgeIntegr
 	}
 
 	return &integration, nil
+}
+
+// OtherTenantSchemaFor returns the tenant schema, other than excludeSchema, whose bridge_integration row names
+// customerID. It returns ErrRecordNotFound when no other tenant holds it.
+func (m *BridgeIntegrationModel) OtherTenantSchemaFor(ctx context.Context, sqlExec db.SQLExecuter, customerID, excludeSchema string) (string, error) {
+	// Soft-deleted tenants still count, tenants whose migrations have not run yet are skipped.
+	const schemasQuery = `
+		SELECT table_schema
+		FROM information_schema.tables
+		WHERE table_name = 'bridge_integration'
+			AND left(table_schema, 4) = 'sdp_'
+			AND table_schema <> $1
+		ORDER BY table_schema`
+
+	var schemas []string
+	if err := sqlExec.SelectContext(ctx, &schemas, schemasQuery, excludeSchema); err != nil {
+		return "", fmt.Errorf("listing tenant schemas with a Bridge integration: %w", err)
+	}
+	if len(schemas) == 0 {
+		return "", ErrRecordNotFound
+	}
+
+	selects := make([]string, 0, len(schemas))
+	for _, schema := range schemas {
+		selects = append(selects, fmt.Sprintf("SELECT %s AS schema_name FROM %s.bridge_integration WHERE customer_id = $1",
+			pq.QuoteLiteral(schema), pq.QuoteIdentifier(schema)))
+	}
+	query := strings.Join(selects, " UNION ALL ") + " LIMIT 1"
+
+	var holder string
+	if err := sqlExec.GetContext(ctx, &holder, query, customerID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrRecordNotFound
+		}
+		return "", fmt.Errorf("looking up Bridge customer across tenant schemas: %w", err)
+	}
+
+	return holder, nil
 }

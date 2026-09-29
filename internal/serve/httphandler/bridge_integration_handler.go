@@ -173,6 +173,9 @@ func (h BridgeIntegrationHandler) optInForExistingCustomer(ctx context.Context, 
 		case errors.Is(err, bridge.ErrBridgeCustomerNotActive):
 			httperror.BadRequest("The provided customer_id is not active", err, nil).Render(w)
 			return
+		case errors.Is(err, bridge.ErrBridgeCustomerAlreadyBound):
+			httperror.Conflict("The provided customer_id is already linked to another organization", err, nil).Render(w)
+			return
 		case errors.As(err, &bridgeError):
 			extras := bridgeErrorToExtras(bridgeError)
 			httperror.BadRequest("Direct opt-in to Bridge integration failed", err, extras).Render(w)
