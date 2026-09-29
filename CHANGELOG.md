@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Enforce API key distribution-account scope on `PATCH` disbursement status. [#1213](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1213)
 - All role checks reject tokens of deactivated users. [#1217](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1217)
 - Prevent memory-exhaustion DoS from decompression-bomb in org logo. [#1218](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1218)
+- Stop insufficient-balance errors from reporting a 0.00 shortfall. [#1219](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1219)
 
 ### Security and Dependencies
 

@@ -110,13 +110,14 @@ func (e InsufficientBalanceForDirectPaymentError) Error() string {
 	requiredAmount := e.RequestedAmount.Add(e.TotalPendingAmount)
 	shortfall := requiredAmount.Sub(e.AvailableBalance)
 
+	// Round against the user so the message never shows enough funds or a zero shortfall.
 	return fmt.Sprintf(
 		"insufficient balance for direct payment: requested %s %s, but only %s available (%s in pending payments). Need %s more %s",
-		e.RequestedAmount.StringFixed(6),
+		e.RequestedAmount.RoundCeil(6).StringFixed(6),
 		e.Asset.Code,
-		e.AvailableBalance.StringFixed(6),
-		e.TotalPendingAmount.StringFixed(6),
-		shortfall.StringFixed(6),
+		e.AvailableBalance.RoundFloor(6).StringFixed(6),
+		e.TotalPendingAmount.RoundCeil(6).StringFixed(6),
+		shortfall.RoundCeil(6).StringFixed(6),
 		e.Asset.Code,
 	)
 }
