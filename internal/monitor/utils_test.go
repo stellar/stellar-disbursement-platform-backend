@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_SanitizeHTTPMethod(t *testing.T) {
+func Test_sanitizeHTTPMethod(t *testing.T) {
 	testCases := []struct {
 		name   string
 		method string
@@ -22,8 +22,8 @@ func Test_SanitizeHTTPMethod(t *testing.T) {
 		{name: "CONNECT passes through", method: http.MethodConnect, want: "CONNECT"},
 		{name: "OPTIONS passes through", method: http.MethodOptions, want: "OPTIONS"},
 		{name: "TRACE passes through", method: http.MethodTrace, want: "TRACE"},
-		{name: "lower case is canonicalized", method: "get", want: "GET"},
-		{name: "mixed case is canonicalized", method: "PoSt", want: "POST"},
+		{name: "lower case collapses", method: "get", want: unknownMethod},
+		{name: "mixed case collapses", method: "PoSt", want: unknownMethod},
 		{name: "unknown token collapses", method: "ZZBOGUS", want: unknownMethod},
 		{name: "arbitrary attacker token collapses", method: "XM00000001", want: unknownMethod},
 		{name: "empty method collapses", method: "", want: unknownMethod},
@@ -31,7 +31,7 @@ func Test_SanitizeHTTPMethod(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, SanitizeHTTPMethod(tc.method))
+			assert.Equal(t, tc.want, sanitizeHTTPMethod(tc.method))
 		})
 	}
 }

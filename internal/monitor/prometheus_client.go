@@ -27,7 +27,7 @@ func (p *prometheusClient) MonitorHTTPRequestDuration(duration time.Duration, la
 	SummaryVecMetrics[HTTPRequestDurationTag].With(prometheus.Labels{
 		"status":      labels.Status,
 		"route":       labels.Route,
-		"method":      SanitizeHTTPMethod(labels.Method),
+		"method":      sanitizeHTTPMethod(labels.Method),
 		"tenant_name": labels.TenantName,
 	}).Observe(duration.Seconds())
 }

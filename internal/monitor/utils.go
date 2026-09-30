@@ -3,7 +3,6 @@ package monitor
 import (
 	"fmt"
 	"net/http"
-	"strings"
 )
 
 const (
@@ -20,14 +19,14 @@ func ParseHTTPResponseStatus(resp *http.Response, reqErr error) (status, statusC
 	return successStatus, fmt.Sprint(resp.StatusCode)
 }
 
-// SanitizeHTTPMethod bounds the cardinality of the `method` metric label.
-// This collapses any unrecognized method to a single constant
-func SanitizeHTTPMethod(method string) string {
-	switch strings.ToUpper(method) {
+// sanitizeHTTPMethod bounds the cardinality of the `method` metric label.
+// Standard methods pass through unchanged, the rest collapse to a single constant.
+func sanitizeHTTPMethod(method string) string {
+	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
 		http.MethodPatch, http.MethodDelete, http.MethodConnect,
 		http.MethodOptions, http.MethodTrace:
-		return strings.ToUpper(method)
+		return method
 	default:
 		return unknownMethod
 	}
