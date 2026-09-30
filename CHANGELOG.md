@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - All role checks reject tokens of deactivated users. [#1217](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1217)
 - Prevent memory-exhaustion DoS from decompression-bomb in org logo. [#1218](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1218)
 - Stop insufficient-balance errors from reporting a 0.00 shortfall. [#1219](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1219)
+- Bound Prometheus `method` metric label to an allowlist to prevent memory-exhaustion from unbounded label cardinality. [#1221](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1221)
 
 ### Security and Dependencies
 
