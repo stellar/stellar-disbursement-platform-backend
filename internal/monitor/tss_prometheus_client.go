@@ -56,7 +56,7 @@ func (p *tssPrometheusClient) MonitorHTTPRequestDuration(duration time.Duration,
 	summary.With(prometheus.Labels{
 		"status": labels.Status,
 		"route":  labels.Route,
-		"method": labels.Method,
+		"method": sanitizeHTTPMethod(labels.Method),
 	}).Observe(duration.Seconds())
 }
 
