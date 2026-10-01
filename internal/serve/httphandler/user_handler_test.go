@@ -3,6 +3,7 @@ package httphandler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -260,6 +261,37 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"user_id is invalid"}}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest when deactivating the last active owner", func(t *testing.T) {
+		mocks := setupMocks(t)
+		token := "mytoken"
+
+		mocks.JWTManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{}, nil).
+			Once()
+		defer mocks.JWTManagerMock.AssertExpectations(t)
+
+		mocks.AuthenticatorMock.
+			On("DeactivateUser", mock.Anything, "user-id").
+			Return(fmt.Errorf("error deactivating user ID user-id: %w", auth.ErrLastOwner)).
+			Once()
+		defer mocks.AuthenticatorMock.AssertExpectations(t)
+
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "a tenant must keep at least one active owner"}`, string(respBody))
 	})
 
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {
@@ -1212,7 +1244,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, `{"error": "cannot grant membership on an archived wallet"}`, string(respBody))
 	})
 
-	t.Run("does not grant a membership to an owner", func(t *testing.T) {
+	t.Run("sets the owner flag and grants no membership to an owner", func(t *testing.T) {
 		token := "mytoken"
 		ctx = sdpcontext.SetTokenInContext(ctx, token)
 
@@ -1220,13 +1252,20 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			On("GetUserID", mock.Anything, token).
 			Return("authenticated-user-id", nil).
 			Once().
-			On("CreateUser", mock.Anything, mock.Anything, "").
+			On("CreateUser", mock.Anything, &auth.User{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "owner@email.com",
+				Roles:     []string{data.OwnerUserRole.String()},
+				IsOwner:   true,
+			}, "").
 			Return(&auth.User{
 				ID:        "user-id-owner",
 				FirstName: "First",
 				LastName:  "Last",
 				Email:     "owner@email.com",
 				Roles:     []string{data.OwnerUserRole.String()},
+				IsOwner:   true,
 				IsActive:  true,
 			}, nil).
 			Once()
@@ -1576,6 +1615,46 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"user_id is invalid"}}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest when demoting the last active owner", func(t *testing.T) {
+		token := "mytoken"
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{ID: "authenticated-user-id"}, nil).
+			Once()
+
+		roleManagerMock.
+			On("UpdateRoles", mock.Anything, &auth.User{ID: "authenticated-user-id"}, []string{data.BusinessUserRole.String()}).
+			Return(auth.ErrLastOwner).
+			Once()
+
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+
+		reqBody := `
+			{
+				"user_id": "authenticated-user-id",
+				"roles": ["business"]
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "a tenant must keep at least one active owner"}`, string(respBody))
 	})
 
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {

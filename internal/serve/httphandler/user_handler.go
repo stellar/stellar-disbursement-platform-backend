@@ -176,6 +176,8 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 			httperror.Unauthorized("", activationErr, nil).Render(rw)
 		} else if errors.Is(activationErr, auth.ErrNoRowsAffected) {
 			httperror.BadRequest("", activationErr, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
+		} else if errors.Is(activationErr, auth.ErrLastOwner) {
+			httperror.BadRequest(auth.ErrLastOwner.Error(), activationErr, nil).Render(rw)
 		} else {
 			httperror.InternalError(ctx, "", activationErr, nil).Render(rw)
 		}
@@ -240,6 +242,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		LastName:  strings.TrimSpace(reqBody.LastName),
 		Email:     utils.TrimAndLower(reqBody.Email),
 		Roles:     data.FromUserRoleArrayToStringArray(reqBody.Roles),
+		IsOwner:   role == data.OwnerUserRole,
 	}
 
 	u, err := h.AuthManager.CreateUser(ctx, &newUser, "")
@@ -350,6 +353,11 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 
 		if errors.Is(updateUserRolesErr, auth.ErrNoRowsAffected) {
 			httperror.BadRequest("", updateUserRolesErr, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
+			return
+		}
+
+		if errors.Is(updateUserRolesErr, auth.ErrLastOwner) {
+			httperror.BadRequest(auth.ErrLastOwner.Error(), updateUserRolesErr, nil).Render(rw)
 			return
 		}
 
