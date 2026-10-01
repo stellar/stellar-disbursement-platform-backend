@@ -299,6 +299,37 @@ func Test_execAddUserFunc(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEqual(t, []string{"role1", "role2"}, dbRoles)
 	})
+
+	t.Run("keeps the owner flag and the owner role in sync", func(t *testing.T) {
+		testCases := []struct {
+			name        string
+			isOwner     bool
+			roles       []string
+			wantIsOwner bool
+			wantRoles   []string
+		}{
+			{name: "owner flag only", isOwner: true, roles: []string{}, wantIsOwner: true, wantRoles: []string{"owner"}},
+			{name: "owner role only", isOwner: false, roles: []string{"owner"}, wantIsOwner: true, wantRoles: []string{"owner"}},
+			{name: "owner flag and owner role", isOwner: true, roles: []string{"owner"}, wantIsOwner: true, wantRoles: []string{"owner"}},
+			{name: "owner flag with another role", isOwner: true, roles: []string{"business"}, wantIsOwner: true, wantRoles: []string{"owner"}},
+			{name: "owner role with another role", isOwner: false, roles: []string{"business", "owner"}, wantIsOwner: true, wantRoles: []string{"owner"}},
+			{name: "non-owner role", isOwner: false, roles: []string{"business"}, wantIsOwner: false, wantRoles: []string{"business"}},
+		}
+		for i, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				email := fmt.Sprintf("owner-sync-%d@email.com", i)
+				err := execAddUser(ctx, dbt.DSN, email, "First", "Last", "mypassword12", tc.isOwner, tc.roles, tenantID)
+				require.NoError(t, err)
+
+				var isOwner bool
+				var dbRoles []string
+				err = tenantConnectionPool.QueryRowxContext(ctx, "SELECT is_owner, roles FROM auth_users WHERE email = $1", email).Scan(&isOwner, pq.Array(&dbRoles))
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantIsOwner, isOwner)
+				assert.Equal(t, tc.wantRoles, dbRoles)
+			})
+		}
+	})
 }
 
 func Test_validateRoles(t *testing.T) {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -360,7 +361,178 @@ func Test_DefaultRoleManager_UpdateRoles(t *testing.T) {
 	assert.Equal(t, []string{"role3"}, roles)
 
 	err = rm.UpdateRoles(ctx, &User{ID: "user-id"}, []string{"role3"})
-	assert.EqualError(t, err, ErrNoRowsAffected.Error())
+	assert.ErrorIs(t, err, ErrNoRowsAffected)
+}
+
+func assertUserOwnerState(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userID string, wantIsOwner bool, wantRoles []string) {
+	t.Helper()
+
+	var got userRolesInfo
+	err := dbConnectionPool.GetContext(ctx, &got, "SELECT roles, is_owner FROM auth_users WHERE id = $1", userID)
+	require.NoError(t, err)
+	assert.Equal(t, wantIsOwner, got.IsOwner)
+	assert.Equal(t, wantRoles, []string(got.Roles))
+}
+
+func Test_DefaultRoleManager_UpdateRoles_ownerFlagAndLastOwner(t *testing.T) {
+	ctx := context.Background()
+	pe := NewDefaultPasswordEncrypter()
+
+	setup := func(t *testing.T) (db.DBConnectionPool, *defaultRoleManager) {
+		dbt := dbtest.Open(t)
+		t.Cleanup(dbt.Close)
+		dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		t.Cleanup(func() { dbConnectionPool.Close() })
+
+		return dbConnectionPool, newDefaultRoleManager(withRoleManagerDBConnectionPool(dbConnectionPool))
+	}
+
+	deactivate := func(t *testing.T, dbConnectionPool db.DBConnectionPool, userID string) {
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE auth_users SET is_active = false WHERE id = $1", userID)
+		require.NoError(t, err)
+	}
+
+	t.Run("demoting a flagged owner clears the flag while another owner remains", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		target := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "financial_controller")
+
+		err := rm.UpdateRoles(ctx, &User{ID: target.ID}, []string{"business"})
+		require.NoError(t, err)
+
+		assertUserOwnerState(t, ctx, dbConnectionPool, target.ID, false, []string{"business"})
+		roles, err := rm.GetUserRoles(ctx, &User{ID: target.ID})
+		require.NoError(t, err)
+		assert.Equal(t, []string{"business"}, roles)
+	})
+
+	t.Run("promoting to owner sets the flag", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		target := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, false, "business")
+
+		err := rm.UpdateRoles(ctx, &User{ID: target.ID}, []string{"owner"})
+		require.NoError(t, err)
+
+		assertUserOwnerState(t, ctx, dbConnectionPool, target.ID, true, []string{"owner"})
+	})
+
+	t.Run("a nil or empty role list clears the flag", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		nilTarget := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		emptyTarget := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+
+		require.NoError(t, rm.UpdateRoles(ctx, &User{ID: nilTarget.ID}, nil))
+		require.NoError(t, rm.UpdateRoles(ctx, &User{ID: emptyTarget.ID}, []string{}))
+
+		assertUserOwnerState(t, ctx, dbConnectionPool, nilTarget.ID, false, nil)
+		assertUserOwnerState(t, ctx, dbConnectionPool, emptyTarget.ID, false, []string{})
+	})
+
+	t.Run("the last active owner cannot be demoted", func(t *testing.T) {
+		testCases := []struct {
+			name    string
+			isOwner bool
+			roles   []string
+		}{
+			{name: "flag only", isOwner: true, roles: []string{"financial_controller"}},
+			{name: "role only", isOwner: false, roles: []string{"owner"}},
+		}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				dbConnectionPool, rm := setup(t)
+				target := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, tc.isOwner, tc.roles...)
+
+				err := rm.UpdateRoles(ctx, &User{ID: target.ID}, []string{"business"})
+				require.ErrorIs(t, err, ErrLastOwner)
+
+				assertUserOwnerState(t, ctx, dbConnectionPool, target.ID, tc.isOwner, tc.roles)
+			})
+		}
+	})
+
+	t.Run("an inactive owner does not count as the remaining owner", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		inactiveOwner := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		deactivate(t, dbConnectionPool, inactiveOwner.ID)
+		target := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+
+		err := rm.UpdateRoles(ctx, &User{ID: target.ID}, []string{"business"})
+		require.ErrorIs(t, err, ErrLastOwner)
+	})
+
+	t.Run("an inactive owner can be demoted", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		target := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		deactivate(t, dbConnectionPool, target.ID)
+
+		err := rm.UpdateRoles(ctx, &User{ID: target.ID}, []string{"business"})
+		require.NoError(t, err)
+
+		assertUserOwnerState(t, ctx, dbConnectionPool, target.ID, false, []string{"business"})
+	})
+
+	t.Run("two owners demoting each other at once leave one owner", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		ownerA := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		ownerB := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+
+		errs := make(chan error, 2)
+		var wg sync.WaitGroup
+		for _, id := range []string{ownerA.ID, ownerB.ID} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				errs <- rm.UpdateRoles(ctx, &User{ID: id}, []string{"business"})
+			}()
+		}
+		wg.Wait()
+		close(errs)
+
+		var succeeded, refused int
+		for err := range errs {
+			if err == nil {
+				succeeded++
+			} else {
+				require.ErrorIs(t, err, ErrLastOwner)
+				refused++
+			}
+		}
+		assert.Equal(t, 1, succeeded)
+		assert.Equal(t, 1, refused)
+	})
+
+	t.Run("demotion and deactivation at once leave one owner", func(t *testing.T) {
+		dbConnectionPool, rm := setup(t)
+		authenticator := newDefaultAuthenticator(withAuthenticatorDatabaseConnectionPool(dbConnectionPool))
+		ownerA := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+		ownerB := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, pe, true, "owner")
+
+		errs := make(chan error, 2)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			errs <- rm.UpdateRoles(ctx, &User{ID: ownerA.ID}, []string{"business"})
+		}()
+		go func() {
+			defer wg.Done()
+			errs <- authenticator.DeactivateUser(ctx, ownerB.ID)
+		}()
+		wg.Wait()
+		close(errs)
+
+		var refused int
+		for err := range errs {
+			if err != nil {
+				require.ErrorIs(t, err, ErrLastOwner)
+				refused++
+			}
+		}
+		assert.Equal(t, 1, refused)
+	})
 }
 
 func Test_withOwnerRoleName(t *testing.T) {
