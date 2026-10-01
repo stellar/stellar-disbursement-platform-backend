@@ -18,10 +18,8 @@ import (
 
 const backfillMigrationName = "2026-06-09.5-backfill-wallet-memberships.sql"
 
-// Test_WalletMemberships_backfill simulates a production UPGRADE: a tenant schema fully
-// migrated up to (but excluding) the membership backfill, with real users and a default
-// wallet, then the backfill applies. Every existing non-owner user must become a member of
-// the default wallet with each of their current roles; owners get no rows.
+// Test_WalletMemberships_backfill upgrades a schema from just before the backfill: scoped users join the default wallet
+// with their roles, tenant-wide users (owners, developers) end with no rows, and developer grants are removed.
 func Test_WalletMemberships_backfill(t *testing.T) {
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
@@ -58,10 +56,10 @@ func Test_WalletMemberships_backfill(t *testing.T) {
 	require.NoError(t, dbConnectionPool.GetContext(ctx, &defaultWalletID, `
 		INSERT INTO distribution_wallets (name, distribution_account_type, is_default)
 		VALUES ('default', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', TRUE) RETURNING id`))
-	_, err = dbConnectionPool.ExecContext(ctx, `
+	var secondaryWalletID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &secondaryWalletID, `
 		INSERT INTO distribution_wallets (name, distribution_account_type)
-		VALUES ('secondary', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT')`)
-	require.NoError(t, err)
+		VALUES ('secondary', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
 	newUser := func(email string, isOwner bool, roles string) string {
 		var id string
@@ -73,6 +71,13 @@ func Test_WalletMemberships_backfill(t *testing.T) {
 	ownerID := newUser("owner@example.com", true, `{owner}`)
 	initiatorID := newUser("initiator@example.com", false, `{initiator}`)
 	multiRoleID := newUser("multi@example.com", false, `{financial_controller,approver}`)
+	developerID := newUser("developer@example.com", false, `{developer}`)
+	// A dashboard-demoted owner: the owner-flag sync grants a developer membership, which must run before it is removed.
+	flaggedDeveloperID := newUser("flagged-developer@example.com", true, `{developer}`)
+	businessID := newUser("business@example.com", false, `{business}`)
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		INSERT INTO wallet_memberships (user_id, wallet_id, role) VALUES ($1, $2, 'developer')`, businessID, secondaryWalletID)
+	require.NoError(t, err)
 
 	// 3. The upgrade: apply the remaining sdp migrations (the backfill runs now).
 	_, err = db.Migrate(dbt.DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
@@ -87,15 +92,23 @@ func Test_WalletMemberships_backfill(t *testing.T) {
 	require.NoError(t, dbConnectionPool.SelectContext(ctx, &rows, `
 		SELECT user_id, wallet_id, role FROM wallet_memberships ORDER BY user_id, role`))
 
-	// Initiator: 1 row. Multi-role: 2 rows. Owner: none. All on the DEFAULT wallet only.
+	// Initiator 1, multi-role 2, business 1 (its developer grant is gone), all on the default wallet.
 	// (Assertions are order-independent: user IDs are random UUIDs, so sort order varies.)
-	require.Len(t, rows, 3)
+	require.Len(t, rows, 4)
 	rolesByUser := map[string][]string{}
 	for _, r := range rows {
 		assert.Equal(t, defaultWalletID, r.WalletID, "backfill must target only the default wallet")
-		assert.NotEqual(t, ownerID, r.UserID, "owners are tenant-wide and get no membership rows")
+		for _, tenantWideID := range []string{ownerID, developerID, flaggedDeveloperID} {
+			assert.NotEqual(t, tenantWideID, r.UserID, "tenant-wide users get no membership rows")
+		}
 		rolesByUser[r.UserID] = append(rolesByUser[r.UserID], r.Role)
 	}
 	assert.ElementsMatch(t, []string{"initiator"}, rolesByUser[initiatorID])
 	assert.ElementsMatch(t, []string{"approver", "financial_controller"}, rolesByUser[multiRoleID])
+	assert.ElementsMatch(t, []string{"business"}, rolesByUser[businessID])
+
+	var flaggedDeveloperIsOwner bool
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &flaggedDeveloperIsOwner,
+		`SELECT is_owner FROM auth_users WHERE id = $1`, flaggedDeveloperID))
+	assert.False(t, flaggedDeveloperIsOwner, "the owner-flag sync demotes a flagged developer")
 }

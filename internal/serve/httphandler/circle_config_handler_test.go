@@ -79,20 +79,15 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 		assertions     func(t *testing.T, rr *httptest.ResponseRecorder)
 	}{
 		{
-			name:        "fails closed when no acting user can be resolved",
-			requestCtx:  sdpcontext.SetTenantInContext(context.Background(), &tnt),
-			requestBody: string(validRequestBody),
-			statusCode:  http.StatusInternalServerError,
-			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+			// Keys are authorized by permission alone: one minted by a non-owner reaches the handler.
+			name: "serves an API key whose creator is not an Owner",
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
-
-				assert.JSONEq(t, `{"error": "Cannot get user from context"}`, rr.Body.String())
+				mDistAccResolver.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+					Once()
 			},
-		},
-		{
-			// RequirePermission short-circuits past the route's Owner check on the API key path,
-			// so a key minted by a non-owner has to be stopped here instead.
-			name: "returns Forbidden for an API key whose creator is not an Owner",
 			requestCtx: sdpcontext.SetUserIDInContext(
 				sdpcontext.SetAPIKeyInContext(
 					sdpcontext.SetTenantInContext(context.Background(), &tnt),
@@ -101,11 +96,11 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 				nonOwnerUserID,
 			),
 			requestBody: string(validRequestBody),
-			statusCode:  http.StatusForbidden,
+			statusCode:  http.StatusBadRequest,
 			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
 				t.Helper()
 
-				assert.JSONEq(t, `{"error": "You don't have permission to perform this action."}`, rr.Body.String())
+				assert.JSONEq(t, `{"error": "This endpoint is only available for tenants using CIRCLE"}`, rr.Body.String())
 			},
 		},
 		{

@@ -23,6 +23,7 @@ const (
 	// FinancialControllerUserRole has the same permissions as the OwnerUserRole except for user management.
 	FinancialControllerUserRole UserRole = "financial_controller"
 	// DeveloperUserRole has only configuration permissions. (wallets, assets management. Also, statistics access permission)
+	// Like OwnerUserRole, it is tenant-wide and never scoped by distribution wallet membership.
 	DeveloperUserRole UserRole = "developer"
 	// BusinessUserRole has read-only permissions - except for user management that they can't read any data.
 	BusinessUserRole UserRole = "business"
@@ -48,6 +49,21 @@ func GetAllRoles() []UserRole {
 func GetBusinessOperationRoles() []UserRole {
 	return []UserRole{
 		OwnerUserRole,
+		FinancialControllerUserRole,
+		BusinessUserRole,
+		InitiatorUserRole,
+		ApproverUserRole,
+	}
+}
+
+// IsTenantWideRole reports whether the role spans every distribution wallet and so never holds memberships.
+func IsTenantWideRole(role UserRole) bool {
+	return role == OwnerUserRole || role == DeveloperUserRole
+}
+
+// GetWalletScopableRoles returns the roles that can be granted on a single distribution wallet.
+func GetWalletScopableRoles() []UserRole {
+	return []UserRole{
 		FinancialControllerUserRole,
 		BusinessUserRole,
 		InitiatorUserRole,

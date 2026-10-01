@@ -19,13 +19,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// resolveWalletReadScope computes the caller's read-visibility scope for
-// membership-filtered endpoints (taxonomy): nil = Owner, no filtering; non-nil = the exact
-// wallet set the caller may see (possibly empty).
-//
-// An API key answers from its own stored scope and never loads a user: a key's reach is fixed at
-// creation, so it neither depends on its creator still being active nor moves when their
-// memberships change.
+// resolveWalletReadScope returns the caller's read scope: nil = tenant-wide (no filter), otherwise the exact, possibly empty, wallet set.
+// An API key answers from its own stored scope without loading a user, so its creator's status and memberships don't matter.
 func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
 	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
 		return apiKey.WalletScope(), nil
@@ -39,8 +34,8 @@ func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, m
 		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
 
-	// Owners are tenant-wide by definition — no membership lookup (and no DB) needed.
-	if user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+	// Owners and developers are tenant-wide by definition — no membership lookup (and no DB) needed.
+	if services.IsTenantWideUser(user) {
 		return nil, nil
 	}
 
@@ -203,60 +198,41 @@ var walletCapabilityMatrix = []walletCapability{
 	},
 }
 
-// walletCapabilitiesFor computes what a caller may actually do on one wallet, given their global
-// roles and the membership roles they hold on that wallet. Owners are tenant-wide: neither gate
-// applies to them. There is deliberately no "effective role" here — the two gates do not
-// collapse into one, which is exactly why the pair has to be reported as a capability set.
+// walletCapabilitiesFor computes what a caller may do on one wallet from their global and membership
+// roles. Tenant-wide users skip the membership gate; only owners also clear every global gate.
 func walletCapabilitiesFor(user *auth.User, membershipRoles []data.UserRole) map[string]bool {
 	isOwner := user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole))
+	tenantWide := services.IsTenantWideUser(user)
 	globalRoles := userRoles(user)
 
 	capabilities := make(map[string]bool, len(walletCapabilityMatrix))
 	for _, capability := range walletCapabilityMatrix {
 		globalOK := isOwner || rolesIntersect(globalRoles, capability.globalRoles)
-		walletOK := isOwner || rolesIntersect(membershipRoles, capability.walletRoles)
+		walletOK := tenantWide || rolesIntersect(membershipRoles, capability.walletRoles)
 		capabilities[capability.name] = globalOK && walletOK
 	}
 	return capabilities
 }
 
-// walletGrantIsInert reports whether granting role to user would confer nothing whatsoever.
-//
-// The reviewer's rule is "reject a grant that narrows to nothing", and his example was an
-// approver membership on a global developer. Measured on WRITE capability alone that pair is
-// indeed empty — but it is not inert, and rejecting it would break the product:
-//
-//   - A membership is also the READ-visibility grant. GetWalletIDsForUser selects every
-//     membership row regardless of role, and ResolveWalletReadScope filters on that set, so ANY
-//     membership makes the account visible to its holder.
-//   - serve.go admits developers to the membership-scoped reads via GetAllRoles(), and
-//     GetDistributionWallets filters by membership. So a membership is the ONLY way a developer
-//     ever sees an account at all; rejecting the grant leaves their account list permanently
-//     empty with no API call able to populate it.
-//
-// The genuinely inert case is the one the check was written to catch — "a no-op the operator
-// cannot see" — and it is the opposite grantee: a global Owner. Owners short-circuit both gates
-// (EnsureUserCanActOnWallet and ResolveWalletReadScope return early for them), so the row
-// changes nothing at all, and the operator cannot tell it had no effect.
-//
-// Grants that confer read but not write are real and are allowed here. Making their consequence
-// legible is the job of the grant picker's per-role annotation, which is the reviewer's own
-// separate fix for the same confusion — enforcement rejects no-ops, the affordance explains the
-// rest.
-func walletGrantIsInert(user *auth.User, _ data.UserRole) bool {
-	return user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole))
+// walletGrantIsInert reports whether granting a membership to user would confer nothing: owners and
+// developers are tenant-wide, so a row changes nothing for them and the operator could not tell.
+func walletGrantIsInert(user *auth.User) bool {
+	return services.IsTenantWideUser(user)
 }
 
 // inertGrantReason explains a rejected grant in the operator's terms.
-func inertGrantReason(role data.UserRole) string {
-	article := "a"
-	if name := role.String(); name != "" && strings.ContainsRune("aeiou", rune(name[0])) {
-		article = "an"
-	}
-
+func inertGrantReason(role, granteeRole data.UserRole) string {
 	return fmt.Sprintf(
-		"%s %s membership grants nothing to an owner: owners already have tenant-wide access to "+
-			"every distribution account, so this membership would have no effect", article, role)
+		"%s %s membership grants nothing to %s %s: %ss already have tenant-wide access to "+
+			"every distribution account, so this membership would have no effect",
+		indefiniteArticle(role), role, indefiniteArticle(granteeRole), granteeRole, granteeRole)
+}
+
+func indefiniteArticle(role data.UserRole) string {
+	if name := role.String(); name != "" && strings.ContainsRune("aeiou", rune(name[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 func userRoles(user *auth.User) []data.UserRole {
@@ -335,9 +311,9 @@ func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authMan
 			if !errors.Is(getErr, data.ErrRecordNotFound) {
 				return nil, httperror.InternalError(ctx, "Cannot resolve the source wallet", getErr, nil)
 			}
-			// Unknown wallet: Owners get an honest 404; everyone else gets the same 403 as
-			// an unentitled wallet — existence is never disclosed.
-			if !viaAPIKey && user.IsOwner {
+			// Unknown wallet: tenant-wide users get an honest 404; everyone else gets the same 403
+			// as an unentitled wallet — existence is never disclosed.
+			if !viaAPIKey && services.IsTenantWideUser(user) {
 				return nil, httperror.NotFound("distribution wallet not found", getErr, nil)
 			}
 			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), getErr, nil)

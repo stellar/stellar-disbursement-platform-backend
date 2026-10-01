@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -59,6 +60,7 @@ func setupHandler(t *testing.T) (APIKeyHandler, context.Context) {
 // is their own access, and nothing about the key changes afterwards when that access does.
 func Test_CreateAPIKey_WalletScope(t *testing.T) {
 	const developerUserID = "d24d2a52-9a4d-4b2f-b1b1-4d9f2a7f0c31"
+	const memberUserID = "6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b"
 
 	setup := func(t *testing.T, user *auth.User) (APIKeyHandler, context.Context, *data.DistributionWallet, string) {
 		t.Helper()
@@ -73,8 +75,8 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 			INSERT INTO distribution_wallets (name, distribution_account_type)
 			VALUES ('scope-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
-		if !user.IsOwner {
-			_, err = models.WalletMemberships.Insert(ctx, pool, user.ID, walletA.ID, data.DeveloperUserRole, nil)
+		if !services.IsTenantWideUser(user) {
+			_, err = models.WalletMemberships.Insert(ctx, pool, user.ID, walletA.ID, data.UserRole(user.Roles[0]), nil)
 			require.NoError(t, err)
 		}
 
@@ -95,12 +97,13 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 	}
 
 	developer := &auth.User{ID: developerUserID, Roles: []string{string(data.DeveloperUserRole)}}
+	member := &auth.User{ID: memberUserID, Roles: []string{string(data.FinancialControllerUserRole)}}
 	owner := &auth.User{ID: adminUserID, IsOwner: true}
 
-	t.Run("a non-owner may scope a key to a wallet they hold", func(t *testing.T) {
-		handler, ctx, walletA, _ := setup(t, developer)
+	t.Run("a scoped member may scope a key to a wallet they hold", func(t *testing.T) {
+		handler, ctx, walletA, _ := setup(t, member)
 		rr := create(t, handler, ctx, map[string]any{
-			"name":                    "developer key",
+			"name":                    "member key",
 			"permissions":             []string{"read:payments"},
 			"distribution_wallet_ids": []string{walletA.ID},
 		})
@@ -111,8 +114,8 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 		assert.Equal(t, []string{walletA.ID}, []string(got.DistributionWalletIDs))
 	})
 
-	t.Run("a non-owner may not scope a key beyond their own memberships", func(t *testing.T) {
-		handler, ctx, _, walletBID := setup(t, developer)
+	t.Run("a scoped member may not scope a key beyond their own memberships", func(t *testing.T) {
+		handler, ctx, _, walletBID := setup(t, member)
 		rr := create(t, handler, ctx, map[string]any{
 			"name":                    "overreaching key",
 			"permissions":             []string{"read:payments"},
@@ -122,8 +125,8 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 		assert.NotContains(t, rr.Body.String(), "scope-wallet-b", "the refusal discloses no wallet detail")
 	})
 
-	t.Run("omitting the field inherits a non-owner's memberships, not the tenant", func(t *testing.T) {
-		handler, ctx, walletA, walletBID := setup(t, developer)
+	t.Run("omitting the field inherits a scoped member's memberships, not the tenant", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, member)
 		rr := create(t, handler, ctx, map[string]any{
 			"name": "inheriting key", "permissions": []string{"read:payments"},
 		})
@@ -135,17 +138,19 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 		assert.NotContains(t, got.DistributionWalletIDs, walletBID)
 	})
 
-	t.Run("omitting the field inherits every active wallet for an owner", func(t *testing.T) {
-		handler, ctx, walletA, walletBID := setup(t, owner)
-		rr := create(t, handler, ctx, map[string]any{
-			"name": "owner key", "permissions": []string{"read:payments"},
-		})
-		require.Equal(t, http.StatusCreated, rr.Code)
+	for name, creator := range map[string]*auth.User{"owner": owner, "developer": developer} {
+		t.Run("omitting the field inherits every active wallet for a tenant-wide "+name, func(t *testing.T) {
+			handler, ctx, walletA, walletBID := setup(t, creator)
+			rr := create(t, handler, ctx, map[string]any{
+				"name": "tenant-wide key", "permissions": []string{"read:payments"},
+			})
+			require.Equal(t, http.StatusCreated, rr.Code)
 
-		var got data.APIKey
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
-		assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(got.DistributionWalletIDs))
-	})
+			var got data.APIKey
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+			assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(got.DistributionWalletIDs))
+		})
+	}
 
 	t.Run("an explicit empty list is honored as no wallet access", func(t *testing.T) {
 		handler, ctx, _, _ := setup(t, owner)

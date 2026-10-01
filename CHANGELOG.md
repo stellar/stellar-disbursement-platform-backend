@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
+- Make the `developer` role tenant-wide: developers are no longer scoped by distribution-account membership, cannot be granted account access, and API keys they create reach every active account, as owner-created keys do.
+- Retire the `developer` membership role. Existing grants of it to non-developers are removed, so those users lose access to the affected accounts and must be reassigned a role on them from the dashboard; the migration logs the count per tenant.
+- Stop requiring an API key's creator to be an Owner on `/distribution-wallets` and `/organization` endpoints; keys are authorized by permission and account scope alone. Archive, promote-to-default and membership changes require the account to be in the key's scope, and promote-to-default also requires the account being demoted to be in scope.
+- Moving a user to a tenant-wide role revokes their account memberships; moving an owner or developer to a scoped role grants them the default distribution account, as inviting a user does.
 
 ### Fixed
 

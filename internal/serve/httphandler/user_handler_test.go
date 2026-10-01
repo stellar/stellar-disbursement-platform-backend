@@ -438,6 +438,20 @@ func Test_CreateUserRequest_validate(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴error - wallet_id on a developer",
+			request: CreateUserRequest{
+				FirstName: "First",
+				LastName:  "Last",
+				Email:     "email@email.com",
+				Roles:     []data.UserRole{data.DeveloperUserRole},
+				WalletID:  "some-wallet-id",
+			},
+			expectError: true,
+			errorExtras: map[string]interface{}{
+				"wallet_id": "the developer role is tenant-wide and cannot be scoped to a wallet",
+			},
+		},
+		{
 			name: "🔴error - invalid email format",
 			request: CreateUserRequest{
 				FirstName: "First",
@@ -1000,7 +1014,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			FirstName: "First",
 			LastName:  "Last",
 			Email:     "email@email.com",
-			Roles:     []string{data.DeveloperUserRole.String()},
+			Roles:     []string{data.BusinessUserRole.String()},
 		}
 
 		expectedUser := &auth.User{
@@ -1053,7 +1067,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "email@email.com",
-				"roles": ["developer"]
+				"roles": ["business"]
 			}
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
@@ -1075,7 +1089,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"last_name": "Last",
 				"email": "email@email.com",
 				"is_active": true,
-				"roles": ["developer"]
+				"roles": ["business"]
 			}
 		`
 
@@ -1100,7 +1114,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "email@email.com",
-				"roles": ["developer"]
+				"roles": ["business"]
 			}
 		`
 		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(body))
@@ -1141,7 +1155,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				FirstName: "First",
 				LastName:  "Last",
 				Email:     "wallet-b@email.com",
-				Roles:     []string{data.DeveloperUserRole.String()},
+				Roles:     []string{data.BusinessUserRole.String()},
 				IsActive:  true,
 			}, nil).
 			Once()
@@ -1152,7 +1166,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "wallet-b@email.com",
-				"roles": ["developer"],
+				"roles": ["business"],
 				"wallet_id": "` + walletB.ID + `"
 			}
 		`
@@ -1184,7 +1198,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "unknown-wallet@email.com",
-				"roles": ["developer"],
+				"roles": ["business"],
 				"wallet_id": "non-existent-wallet-id"
 			}
 		`
@@ -1226,7 +1240,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "archived-wallet@email.com",
-				"roles": ["developer"],
+				"roles": ["business"],
 				"wallet_id": "` + archived.ID + `"
 			}
 		`
@@ -1244,54 +1258,57 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, `{"error": "cannot grant membership on an archived wallet"}`, string(respBody))
 	})
 
-	t.Run("sets the owner flag and grants no membership to an owner", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+	for _, role := range []data.UserRole{data.OwnerUserRole, data.DeveloperUserRole} {
+		t.Run("grants no membership to a tenant-wide "+role.String()+", and the owner flag only to an owner", func(t *testing.T) {
+			token := "mytoken"
+			ctx = sdpcontext.SetTokenInContext(ctx, token)
+			isOwner := role == data.OwnerUserRole
 
-		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
-			On("CreateUser", mock.Anything, &auth.User{
-				FirstName: "First",
-				LastName:  "Last",
-				Email:     "owner@email.com",
-				Roles:     []string{data.OwnerUserRole.String()},
-				IsOwner:   true,
-			}, "").
-			Return(&auth.User{
-				ID:        "user-id-owner",
-				FirstName: "First",
-				LastName:  "Last",
-				Email:     "owner@email.com",
-				Roles:     []string{data.OwnerUserRole.String()},
-				IsOwner:   true,
-				IsActive:  true,
-			}, nil).
-			Once()
-		messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil).Once()
+			authManagerMock.
+				On("GetUserID", mock.Anything, token).
+				Return("authenticated-user-id", nil).
+				Once().
+				On("CreateUser", mock.Anything, &auth.User{
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     role.String() + "@email.com",
+					Roles:     []string{role.String()},
+					IsOwner:   isOwner,
+				}, "").
+				Return(&auth.User{
+					ID:        "user-id-" + role.String(),
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     role.String() + "@email.com",
+					Roles:     []string{role.String()},
+					IsOwner:   isOwner,
+					IsActive:  true,
+				}, nil).
+				Once()
+			messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil).Once()
 
-		body := `
-			{
-				"first_name": "First",
-				"last_name": "Last",
-				"email": "owner@email.com",
-				"roles": ["owner"]
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
-		require.NoError(t, err)
+			body := fmt.Sprintf(`
+				{
+					"first_name": "First",
+					"last_name": "Last",
+					"email": "%s@email.com",
+					"roles": [%q]
+				}
+			`, role, role)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+			require.NoError(t, err)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
 
-		require.Equal(t, http.StatusCreated, w.Result().StatusCode)
+			require.Equal(t, http.StatusCreated, w.Result().StatusCode)
 
-		// owners are tenant-wide, so they must never hold membership rows
-		walletIDs, err := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, "user-id-owner")
-		require.NoError(t, err)
-		assert.Empty(t, walletIDs)
-	})
+			// tenant-wide users must never hold membership rows
+			walletIDs, err := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, "user-id-"+role.String())
+			require.NoError(t, err)
+			assert.Empty(t, walletIDs)
+		})
+	}
 
 	t.Run("deactivates the user when the membership grant fails", func(t *testing.T) {
 		token := "mytoken"
@@ -1302,7 +1319,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		// pre-existing identical grant makes the handler's insert fail on the unique constraint,
 		// which is the only way the user row and the membership row can diverge
 		const orphanUserID = "user-id-orphan"
-		_, err := models.WalletMemberships.Insert(ctx, dbConnectionPool, orphanUserID, defaultWallet.ID, data.DeveloperUserRole, nil)
+		_, err := models.WalletMemberships.Insert(ctx, dbConnectionPool, orphanUserID, defaultWallet.ID, data.BusinessUserRole, nil)
 		require.NoError(t, err)
 
 		authManagerMock.
@@ -1315,7 +1332,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				FirstName: "First",
 				LastName:  "Last",
 				Email:     "orphan@email.com",
-				Roles:     []string{data.DeveloperUserRole.String()},
+				Roles:     []string{data.BusinessUserRole.String()},
 				IsActive:  true,
 			}, nil).
 			Once().
@@ -1328,7 +1345,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"first_name": "First",
 				"last_name": "Last",
 				"email": "orphan@email.com",
-				"roles": ["developer"]
+				"roles": ["business"]
 			}
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
@@ -1406,9 +1423,11 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 
 	jwtManagerMock := &auth.JWTManagerMock{}
 	roleManagerMock := &auth.RoleManagerMock{}
+	authenticatorMock := &auth.AuthenticatorMock{}
 	authManager := auth.NewAuthManager(
 		auth.WithCustomJWTManagerOption(jwtManagerMock),
 		auth.WithCustomRoleManagerOption(roleManagerMock),
+		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
 
 	handler := &UserHandler{AuthManager: authManager}
@@ -1583,14 +1602,14 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
-			Twice().
+			Once().
 			On("GetUserFromToken", mock.Anything, token).
 			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Once()
 
-		roleManagerMock.
-			On("UpdateRoles", mock.Anything, &auth.User{ID: "user-id"}, []string{data.DeveloperUserRole.String()}).
-			Return(auth.ErrNoRowsAffected).
+		authenticatorMock.
+			On("GetUser", mock.Anything, "user-id").
+			Return(nil, errors.New("not found")).
 			Once()
 
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
@@ -1617,46 +1636,6 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"user_id is invalid"}}`, string(respBody))
 	})
 
-	t.Run("returns BadRequest when demoting the last active owner", func(t *testing.T) {
-		token := "mytoken"
-
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Twice().
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "authenticated-user-id"}, nil).
-			Once()
-
-		roleManagerMock.
-			On("UpdateRoles", mock.Anything, &auth.User{ID: "authenticated-user-id"}, []string{data.BusinessUserRole.String()}).
-			Return(auth.ErrLastOwner).
-			Once()
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		reqBody := `
-			{
-				"user_id": "authenticated-user-id",
-				"roles": ["business"]
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "a tenant must keep at least one active owner"}`, string(respBody))
-	})
-
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {
 		token := "mytoken"
 
@@ -1673,6 +1652,11 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
+
+		authenticatorMock.
+			On("GetUser", mock.Anything, "user-id").
+			Return(&auth.User{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}, nil).
+			Once()
 
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 
@@ -1711,8 +1695,13 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Once()
 
 		roleManagerMock.
-			On("UpdateRoles", mock.Anything, &auth.User{ID: "user-id"}, []string{data.DeveloperUserRole.String()}).
+			On("UpdateRoles", mock.Anything, &auth.User{ID: "user-id"}, []string{data.BusinessUserRole.String()}).
 			Return(nil).
+			Once()
+
+		authenticatorMock.
+			On("GetUser", mock.Anything, "user-id").
+			Return(&auth.User{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}, nil).
 			Once()
 
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
@@ -1720,7 +1709,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		reqBody := `
 			{
 				"user_id": "user-id",
-				"roles": ["developer"]
+				"roles": ["business"]
 			}
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
@@ -2165,5 +2154,116 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+}
+
+func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	const token, actorID = "token", "owner-actor"
+	patch := func(t *testing.T, subject *auth.User, newRole data.UserRole, expectUpdate bool) *httptest.ResponseRecorder {
+		t.Helper()
+		authManagerMock := &auth.AuthManagerMock{}
+		authManagerMock.On("GetUserID", mock.Anything, token).Return(actorID, nil)
+		authManagerMock.On("GetUserByID", mock.Anything, subject.ID).Return(subject, nil)
+		if expectUpdate {
+			authManagerMock.On("UpdateUserRoles", mock.Anything, token, subject.ID, []string{newRole.String()}).Return(nil).Once()
+		}
+		defer authManagerMock.AssertExpectations(t)
+
+		handler := UserHandler{AuthManager: authManagerMock, Models: models}
+		body := fmt.Sprintf(`{"user_id": %q, "roles": [%q]}`, subject.ID, newRole)
+		req := httptest.NewRequest(http.MethodPatch, "/users/roles", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler.UpdateUserRoles(rr, req.WithContext(sdpcontext.SetTokenInContext(req.Context(), token)))
+		return rr
+	}
+	rolesOf := func(t *testing.T, userID string) map[string]data.UserRole {
+		t.Helper()
+		memberships, listErr := models.WalletMemberships.ListByUser(ctx, dbConnectionPool, userID)
+		require.NoError(t, listErr)
+		byWallet := map[string]data.UserRole{}
+		for _, m := range memberships {
+			byWallet[m.WalletID] = m.Role
+		}
+		return byWallet
+	}
+
+	t.Run("leaving a tenant-wide role without a default wallet fails before the role changes", func(t *testing.T) {
+		developer := &auth.User{ID: "dev-no-default", Roles: []string{data.DeveloperUserRole.String()}}
+		rr := patch(t, developer, data.ApproverUserRole, false)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
+
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	var walletBID string
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type)
+		VALUES ('roles-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
+
+	t.Run("becoming a developer revokes every membership", func(t *testing.T) {
+		member := &auth.User{ID: "member-promoted", Roles: []string{data.BusinessUserRole.String()}}
+		for _, walletID := range []string{defaultWallet.ID, walletBID} {
+			_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, member.ID, walletID, data.BusinessUserRole, nil)
+			require.NoError(t, err)
+		}
+
+		rr := patch(t, member, data.DeveloperUserRole, true)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.Empty(t, rolesOf(t, member.ID))
+	})
+
+	for _, subject := range []*auth.User{
+		{ID: "developer-demoted", Roles: []string{data.DeveloperUserRole.String()}},
+		{ID: "owner-demoted", IsOwner: true, Roles: []string{data.OwnerUserRole.String()}},
+	} {
+		t.Run(subject.ID+": leaving a tenant-wide role grants the default wallet", func(t *testing.T) {
+			rr := patch(t, subject, data.ApproverUserRole, true)
+			require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+			assert.Equal(t, map[string]data.UserRole{defaultWallet.ID: data.ApproverUserRole}, rolesOf(t, subject.ID))
+
+			memberships, listErr := models.WalletMemberships.ListByUser(ctx, dbConnectionPool, subject.ID)
+			require.NoError(t, listErr)
+			require.NotNil(t, memberships[0].GrantedBy)
+			assert.Equal(t, actorID, *memberships[0].GrantedBy)
+		})
+	}
+
+	t.Run("the last active owner cannot leave: 400 and no default-wallet grant", func(t *testing.T) {
+		owner := &auth.User{ID: "last-owner", IsOwner: true, Roles: []string{data.OwnerUserRole.String()}}
+		authManagerMock := &auth.AuthManagerMock{}
+		authManagerMock.On("GetUserID", mock.Anything, token).Return(owner.ID, nil)
+		authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+		authManagerMock.On("UpdateUserRoles", mock.Anything, token, owner.ID, []string{data.BusinessUserRole.String()}).
+			Return(auth.ErrLastOwner).Once()
+		defer authManagerMock.AssertExpectations(t)
+
+		handler := UserHandler{AuthManager: authManagerMock, Models: models}
+		body := fmt.Sprintf(`{"user_id": %q, "roles": ["business"]}`, owner.ID)
+		req := httptest.NewRequest(http.MethodPatch, "/users/roles", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler.UpdateUserRoles(rr, req.WithContext(sdpcontext.SetTokenInContext(req.Context(), token)))
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error": "a tenant must keep at least one active owner"}`, rr.Body.String())
+		assert.Empty(t, rolesOf(t, owner.ID))
+	})
+
+	t.Run("a scoped role change leaves memberships alone", func(t *testing.T) {
+		member := &auth.User{ID: "member-rerolled", Roles: []string{data.BusinessUserRole.String()}}
+		_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, member.ID, walletBID, data.BusinessUserRole, nil)
+		require.NoError(t, err)
+
+		rr := patch(t, member, data.ApproverUserRole, true)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.Equal(t, map[string]data.UserRole{walletBID: data.BusinessUserRole}, rolesOf(t, member.ID))
 	})
 }
