@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -155,6 +156,108 @@ func Test_RPCProxyHandler_ServeHTTP(t *testing.T) {
 			if tc.expectedBodyMatch != "" {
 				assert.Contains(t, rr.Body.String(), tc.expectedBodyMatch)
 			}
+		})
+	}
+}
+
+func Test_RPCProxyHandler_ServeHTTP_forwardsOnlyAllowListedRequestData(t *testing.T) {
+	const requestBody = `{"jsonrpc":"2.0","method":"getHealth","id":1}`
+
+	// Headers every proxied request carries. Accept-Encoding and Content-Length are set by Go's HTTP transport.
+	baseHeaders := func() http.Header {
+		h := http.Header{}
+		h.Set("Content-Type", "application/json")
+		h.Set("Accept", "application/json")
+		h.Set("User-Agent", rpcProxyUserAgent)
+		h.Set("Accept-Encoding", "gzip")
+		h.Set("Content-Length", strconv.Itoa(len(requestBody)))
+		return h
+	}
+	withHeader := func(h http.Header, key, value string) http.Header {
+		h.Set(key, value)
+		return h
+	}
+
+	testCases := []struct {
+		name               string
+		rpcPathAndQuery    string
+		rpcAuthHeaderKey   string
+		rpcAuthHeaderValue string
+		wantPath           string
+		wantRawQuery       string
+		wantHeaders        http.Header
+	}{
+		{
+			name:        "without RPC auth header",
+			wantPath:    "/",
+			wantHeaders: baseHeaders(),
+		},
+		{
+			name:               "with RPC auth header",
+			rpcAuthHeaderKey:   "X-API-Key",
+			rpcAuthHeaderValue: "operator-rpc-key",
+			wantPath:           "/",
+			wantHeaders:        withHeader(baseHeaders(), "X-API-Key", "operator-rpc-key"),
+		},
+		{
+			name:            "with path and query in the RPC URL",
+			rpcPathAndQuery: "/soroban/rpc?apikey=operator-url-key",
+			wantPath:        "/soroban/rpc",
+			wantRawQuery:    "apikey=operator-url-key",
+			wantHeaders:     baseHeaders(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotHeaders http.Header
+			var gotPath, gotRawQuery, gotBody string
+			mockRPC := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotHeaders = r.Header.Clone()
+				gotPath = r.URL.Path
+				gotRawQuery = r.URL.RawQuery
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				gotBody = string(body)
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, err = w.Write([]byte(`{"jsonrpc":"2.0","result":{"status":"healthy"},"id":1}`))
+				require.NoError(t, err)
+			}))
+			defer mockRPC.Close()
+
+			handler := RPCProxyHandler{
+				RPCUrl:             mockRPC.URL + tc.rpcPathAndQuery,
+				RPCAuthHeaderKey:   tc.rpcAuthHeaderKey,
+				RPCAuthHeaderValue: tc.rpcAuthHeaderValue,
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/rpc/user?debug=1&apikey=caller-key", strings.NewReader(requestBody))
+			req.Header.Set("Authorization", "Bearer caller-session-jwt")
+			req.Header.Set("SDP-Tenant-Name", "caller-tenant")
+			req.Header.Set("Cookie", "session=caller-cookie")
+			req.Header.Set("X-Forwarded-For", "203.0.113.77")
+			req.Header.Set("Forwarded", "for=203.0.113.77")
+			req.Header.Set("X-Real-IP", "203.0.113.77")
+			req.Header.Set("Origin", "https://caller-tenant.sdp.example.org")
+			req.Header.Set("Referer", "https://caller-tenant.sdp.example.org/receivers/123")
+			req.Header.Set("User-Agent", "Mozilla/5.0 (caller browser)")
+			req.Header.Set("Accept-Encoding", "br")
+			req.Header.Set("Accept-Language", "el-GR")
+			req.Header.Set("Content-Type", "text/plain")
+			req.Header.Set("X-Client-Name", "js-stellar-sdk")
+			req.Header.Set("X-API-Key", "caller-supplied-key")
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, http.StatusOK, rr.Code)
+			assert.Contains(t, rr.Body.String(), "healthy")
+			assert.Equal(t, tc.wantHeaders, gotHeaders)
+			assert.Equal(t, tc.wantPath, gotPath)
+			assert.Equal(t, tc.wantRawQuery, gotRawQuery)
+			assert.Equal(t, requestBody, gotBody)
 		})
 	}
 }
