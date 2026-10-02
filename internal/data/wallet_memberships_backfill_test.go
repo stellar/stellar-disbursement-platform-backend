@@ -78,6 +78,11 @@ func Test_WalletMemberships_backfill(t *testing.T) {
 	_, err = dbConnectionPool.ExecContext(ctx, `
 		INSERT INTO wallet_memberships (user_id, wallet_id, role) VALUES ($1, $2, 'developer')`, businessID, secondaryWalletID)
 	require.NoError(t, err)
+	// A tenant-wide user's rows go whatever their role: a developer's, and an owner's from before they were promoted.
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		INSERT INTO wallet_memberships (user_id, wallet_id, role) VALUES ($1, $3, 'financial_controller'), ($2, $3, 'business')`,
+		developerID, ownerID, secondaryWalletID)
+	require.NoError(t, err)
 
 	// 3. The upgrade: apply the remaining sdp migrations (the backfill runs now).
 	_, err = db.Migrate(dbt.DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
