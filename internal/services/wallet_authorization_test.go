@@ -57,10 +57,13 @@ func Test_WalletScopedAuthorization(t *testing.T) {
 			data.InitiatorUserRole)
 		require.ErrorIs(t, gErr, ErrWalletActionForbidden)
 
-		// Owner bypasses everywhere with zero membership rows.
-		for _, w := range []string{walletA.ID, walletBID} {
-			require.NoError(t, EnsureUserCanActOnWallet(ctx, dbConnectionPool, models.WalletMemberships, owner, w,
-				data.ApproverUserRole))
+		// Owners and developers bypass everywhere with zero membership rows.
+		developer := &auth.User{ID: "user-developer", Roles: []string{string(data.DeveloperUserRole)}}
+		for _, tenantWide := range []*auth.User{owner, developer} {
+			for _, w := range []string{walletA.ID, walletBID} {
+				require.NoError(t, EnsureUserCanActOnWallet(ctx, dbConnectionPool, models.WalletMemberships, tenantWide, w,
+					data.ApproverUserRole))
+			}
 		}
 	})
 }
@@ -98,12 +101,14 @@ func Test_ResolveWalletReadScope(t *testing.T) {
 		assert.Nil(t, scope)
 	})
 
-	t.Run("owner via role → nil scope", func(t *testing.T) {
-		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
-			&auth.User{ID: "owner-role", Roles: []string{string(data.OwnerUserRole)}})
-		require.NoError(t, sErr)
-		assert.Nil(t, scope)
-	})
+	for _, role := range []data.UserRole{data.OwnerUserRole, data.DeveloperUserRole} {
+		t.Run(role.String()+" via role → nil scope", func(t *testing.T) {
+			scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
+				&auth.User{ID: role.String() + "-role", Roles: []string{string(role)}})
+			require.NoError(t, sErr)
+			assert.Nil(t, scope)
+		})
+	}
 
 	t.Run("member sees exactly the wallets they hold membership on", func(t *testing.T) {
 		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships, member)

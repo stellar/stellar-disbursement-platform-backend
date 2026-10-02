@@ -302,7 +302,7 @@ func Test_DistributionWalletManagementService_ArchiveAndPromote(t *testing.T) {
 		w, iErr = models.DistributionWallets.Activate(ctx, dbConnectionPool, w.ID)
 		require.NoError(t, iErr)
 
-		promoted, pErr := svc.PromoteToDefault(ctx, w.ID)
+		promoted, pErr := svc.PromoteToDefault(ctx, w.ID, nil)
 		require.NoError(t, pErr)
 		assert.True(t, promoted.IsDefault)
 

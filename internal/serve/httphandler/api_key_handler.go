@@ -95,7 +95,7 @@ func (h APIKeyHandler) grantableWallets(ctx context.Context, alreadyHeld []strin
 		return nil, httpErr
 	}
 	if scope == nil {
-		// Owners hold no membership rows, so their reach is the active set itself.
+		// Tenant-wide callers (owners, developers) hold no membership rows, so their reach is the active set.
 		return withinReach(activeIDs), nil
 	}
 	return withinReach(scope), nil

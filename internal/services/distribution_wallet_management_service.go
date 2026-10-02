@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -39,13 +40,13 @@ var (
 )
 
 // DistributionWalletManagementServiceInterface manages the lifecycle of a tenant's
-// distribution wallets (the sending accounts), Owner-only at the API layer.
+// distribution wallets (the sending accounts); the API layer gates JWTs on Owner and API keys on scope.
 type DistributionWalletManagementServiceInterface interface {
 	CreateWallet(ctx context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error)
 	GetWallet(ctx context.Context, id string) (*data.DistributionWallet, error)
 	ListWallets(ctx context.Context, includeArchived bool) ([]data.DistributionWallet, error)
 	ArchiveWallet(ctx context.Context, id string) (*data.DistributionWallet, error)
-	PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error)
+	PromoteToDefault(ctx context.Context, id string, scope []string) (*data.DistributionWallet, error)
 	ListMemberships(ctx context.Context, walletID string) ([]data.WalletMembership, error)
 	ListMembershipAudit(ctx context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error)
 	GrantMembership(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error)
@@ -277,12 +278,23 @@ func (s *DistributionWalletManagementService) ArchiveWallet(ctx context.Context,
 // default-bound association — the tenant's distribution-account fields in the admin schema,
 // which legacy single-wallet resolution reads. All-or-nothing: any failure rolls back both
 // the default pointer and the association reassignment.
-func (s *DistributionWalletManagementService) PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error) {
+func (s *DistributionWalletManagementService) PromoteToDefault(ctx context.Context, id string, scope []string) (*data.DistributionWallet, error) {
 	promoted, err := db.RunInTransactionWithResult(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.DistributionWallet, error) {
 		// Serialize lifecycle mutations so concurrent promotes can't race the single-default
 		// invariant (the DB constraint is the backstop).
 		if lockErr := acquireTenantWalletLock(ctx, dbTx); lockErr != nil {
 			return nil, lockErr
+		}
+
+		// The default can only be read reliably under the lock; a nil scope is tenant-wide.
+		if scope != nil {
+			current, getErr := s.Models.DistributionWallets.GetDefault(ctx, dbTx)
+			if getErr != nil && !errors.Is(getErr, data.ErrRecordNotFound) {
+				return nil, fmt.Errorf("loading the current default wallet: %w", getErr)
+			}
+			if current != nil && !slices.Contains(scope, current.ID) {
+				return nil, fmt.Errorf("demoting wallet %q is outside the caller's scope: %w", current.ID, ErrWalletActionForbidden)
+			}
 		}
 
 		wallet, txErr := s.Models.DistributionWallets.PromoteToDefault(ctx, dbTx, id)
@@ -507,5 +519,32 @@ func (s *DistributionWalletManagementService) addTrustlines(ctx context.Context,
 		return fmt.Errorf("submitting change trust transaction: %w", err)
 	}
 
+	return nil
+}
+
+// RevokeAllWalletMemberships revokes every membership a user holds, as one transaction with one revoke
+// event each — used when the user becomes tenant-wide and the rows would only linger in rosters.
+func RevokeAllWalletMemberships(ctx context.Context, models *data.Models, userID, revokedBy string) error {
+	err := db.RunInTransaction(ctx, models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		memberships, txErr := models.WalletMemberships.ListByUser(ctx, dbTx, userID)
+		if txErr != nil {
+			return fmt.Errorf("listing memberships of user %q: %w", userID, txErr)
+		}
+		for _, membership := range memberships {
+			if txErr = models.WalletMemberships.Delete(ctx, dbTx, membership.ID); txErr != nil {
+				return fmt.Errorf("revoking membership %q: %w", membership.ID, txErr)
+			}
+			if txErr = events.Write(ctx, dbTx, events.WalletMembershipRevoked, membership.WalletID, map[string]any{
+				"membership_id": membership.ID, "wallet_id": membership.WalletID, "user_id": membership.UserID,
+				"role": string(membership.Role), "actor_user_id": revokedBy,
+			}); txErr != nil {
+				return fmt.Errorf("writing wallet.membership_revoked event: %w", txErr)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("revoking all memberships of user %q: %w", userID, err)
+	}
 	return nil
 }

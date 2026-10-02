@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -21,8 +22,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-// DistributionWalletsHandler exposes Owner-only CRUD for the tenant's distribution wallets
-// (the sending accounts — not the recipient wallet providers served by WalletsHandler).
+// DistributionWalletsHandler exposes CRUD for the tenant's distribution wallets (the sending accounts —
+// not the recipient wallet providers served by WalletsHandler): Owner-only for JWTs, scope-bound for API keys.
 type DistributionWalletsHandler struct {
 	Service                     services.DistributionWalletManagementServiceInterface
 	AuthManager                 auth.AuthManager
@@ -73,8 +74,8 @@ func (h DistributionWalletsHandler) GetDistributionWalletBalance(rw http.Respons
 }
 
 // GetDistributionWalletsTotalBalance returns the balance aggregate, scoped per the read
-// taxonomy exactly like /statistics: Owners sum every wallet (the tenant-wide view stays
-// Owner-only); members sum only the wallets they hold memberships on. No caller ever sees a
+// taxonomy exactly like /statistics: owners and developers sum every wallet (the tenant-wide
+// view); members sum only the wallets they hold memberships on. No caller ever sees a
 // balance outside their scope.
 func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
@@ -93,7 +94,7 @@ func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.R
 
 	totals := map[string]string{}
 	for i := range wallets {
-		// walletInReadScope returns true for a nil (owner/tenant-wide) scope, so no extra guard.
+		// walletInReadScope returns true for a nil (tenant-wide) scope, so no extra guard.
 		if !walletInReadScope(scope, wallets[i].ID) {
 			continue
 		}
@@ -182,75 +183,12 @@ func (h DistributionWalletsHandler) ensureWalletInReadScope(ctx context.Context,
 	return nil
 }
 
-// ensureCallerIsOwner enforces the Owner-only requirement of the distribution-wallet write
-// surface and of its Owner-only admin reads, inside the handler, where it holds on every
-// authentication path.
-//
-// The route gate cannot carry it alone: middleware.RequirePermission short-circuits straight to
-// the handler as soon as an API key carries the route's permission (or the matching read:all /
-// write:all wildcard) and never invokes the AnyRoleMiddleware(OwnerUserRole) it was handed.
-// Without this check any such key could create, archive, promote, grant and revoke — an
-// escalation on owner-only operations, and an existence oracle whose every probe mutates.
-//
-// "The acting user must be an Owner" is the rule, mirroring what the route gate intended, rather
-// than a per-wallet scope check: these operations are tenant-wide (create, promote-to-default) or
-// hand out authority itself, and Owner is deliberately not grantable per wallet
-// (PostDistributionWalletMembership rejects it), so no membership can stand in for it.
-//
-// On the API key path the acting identity is the key's creator — the middleware sets
-// SetUserIDInContext(apiKey.CreatedBy) — so a key minted by a non-owner is denied here.
-//
-// This is the one place a key still resolves its creator. Ownership is not expressible on a key:
-// its permissions and wallet scope say what it may touch, never that it speaks for the tenant. The
-// alternative to asking the creator is refusing keys outright, which would take a capability
-// owner-minted keys have today. Note the consequence — deactivating or deleting the creator
-// withdraws their keys from tenant administration, while leaving every other endpoint working.
-//
-// It fails closed: an acting user that cannot be resolved (missing from the context, deleted
-// since the key was created) is rejected, never passed through.
-func (h DistributionWalletsHandler) ensureCallerIsOwner(ctx context.Context) (*auth.User, *httperror.HTTPError) {
-	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
-	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, httperror.Unauthorized("", err, nil)
-		}
-		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
-	}
-
-	if !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
-		// Same empty-message 403 as the route gate: no wallet or role detail is disclosed.
-		return nil, httperror.Forbidden("", nil, nil)
-	}
-
-	return user, nil
-}
-
-// GetDistributionWalletMemberships lists a wallet's memberships (admin/audit surface —
-// archived wallets remain queryable).
-//
-// This and its two siblings (GetDistributionWalletAudit, GetDistributionWallet) are the
-// "Owner-only reads (admin views)" group in serve.go, and they carry two gates here, in this
-// order, because the route gate carries neither on the API-key path — RequirePermission
-// short-circuits past AnyRoleMiddleware once a key holds read:distribution_wallets:
-//
-//  1. ensureCallerIsOwner. These are the operator's views. A scope check alone is not
-//     sufficient: it admits any NON-OWNER holding a membership on the wallet, who would then
-//     read the wallet's membership roster and its grant/revoke history — who else has authority
-//     here, and who handed it to them. That is administration, not membership.
-//  2. ensureWalletInReadScope. Kept as well: an Owner's scope is tenant-wide so it never rejects
-//     one, but the two gates answer different questions and keeping both leaves the failure
-//     modes distinct rather than collapsing "not an admin" into "not visible to you".
-//
-// Denial discloses nothing: the owner check runs before the wallet is touched, so every
-// non-owner gets the same empty-bodied 403 whether or not the id exists.
+// GetDistributionWalletMemberships lists a wallet's memberships (admin/audit surface — archived wallets
+// remain queryable). JWTs are Owner-gated at the route; API keys are bound to their scope here.
 func (h DistributionWalletsHandler) GetDistributionWalletMemberships(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	walletID := chi.URLParam(req, "id")
 
-	if _, httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
-		httpErr.Render(rw)
-		return
-	}
 	if httpErr := h.ensureWalletInReadScope(ctx, walletID); httpErr != nil {
 		httpErr.Render(rw)
 		return
@@ -269,18 +207,12 @@ func (h DistributionWalletsHandler) GetDistributionWalletMemberships(rw http.Res
 	httpjson.Render(rw, memberships, httpjson.JSON)
 }
 
-// GetDistributionWalletAudit returns a wallet's membership-change history (grants and
-// revokes) from the append-only audit table, newest first (admin/audit surface — archived
-// wallets remain queryable). Owner-gated then scope-gated for the reasons set out on
-// GetDistributionWalletMemberships.
+// GetDistributionWalletAudit returns a wallet's grant/revoke history from the append-only audit table, newest first.
+// Archived wallets remain queryable; gated as GetDistributionWalletMemberships.
 func (h DistributionWalletsHandler) GetDistributionWalletAudit(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	walletID := chi.URLParam(req, "id")
 
-	if _, httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
-		httpErr.Render(rw)
-		return
-	}
 	if httpErr := h.ensureWalletInReadScope(ctx, walletID); httpErr != nil {
 		httpErr.Render(rw)
 		return
@@ -305,24 +237,26 @@ func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.Res
 	ctx := req.Context()
 	walletID := chi.URLParam(req, "id")
 
-	// The caller is established first: an unauthenticated or deleted caller must be told so
-	// before the request body's user_id is looked up, or the grantee checks below become a
-	// user-existence and role oracle for a caller who has no identity at all.
-	grantor, httpErr := h.ensureCallerIsOwner(ctx)
-	if httpErr != nil {
+	// Scope first, so an out-of-scope id cannot be probed through the body or grantee checks below.
+	if httpErr := h.ensureWalletInReadScope(ctx, walletID); httpErr != nil {
 		httpErr.Render(rw)
+		return
+	}
+	grantorID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "User identification error", err, nil).Render(rw)
 		return
 	}
 
 	var reqBody WalletMembershipRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(rw)
 		return
 	}
 
 	// Validate the role up front: an unknown role would otherwise pass the service checks, hit
-	// the wallet_memberships CHECK constraint, and surface to the operator as a 500. Owner is
-	// tenant-wide and cannot be granted per wallet.
+	// the wallet_memberships CHECK constraint, and surface to the operator as a 500. Owner and
+	// developer are tenant-wide and cannot be granted per wallet.
 	role, roleErr := parseWalletScopableRole(reqBody.Role)
 	if roleErr != nil {
 		roleErr.Render(rw)
@@ -351,7 +285,7 @@ func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.Res
 		}
 	}
 
-	membership, err := h.Service.GrantMembership(ctx, walletID, reqBody.UserID, role, grantor.ID)
+	membership, err := h.Service.GrantMembership(ctx, walletID, reqBody.UserID, role, grantorID)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrWalletArchivedForMembership):
@@ -371,22 +305,15 @@ func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.Res
 	httpjson.RenderStatus(rw, http.StatusCreated, membership, httpjson.JSON)
 }
 
-// parseWalletScopableRole validates a role that is about to be scoped to a wallet — either
-// granted (PostDistributionWalletMembership) or asked about hypothetically
-// (GetDistributionWalletCapabilities). Owner is tenant-wide and is deliberately not scopable, so
-// it is rejected alongside unknown values, and the message names the roles that are.
+// parseWalletScopableRole validates a role about to be granted on a wallet, or asked about hypothetically.
+// Owner and developer are tenant-wide, so they are rejected alongside unknown values.
 func parseWalletScopableRole(raw string) (data.UserRole, *httperror.HTTPError) {
 	role := data.UserRole(raw)
-	if role.IsValid() && role != data.OwnerUserRole {
+	scopableRoles := data.GetWalletScopableRoles()
+	if slices.Contains(scopableRoles, role) {
 		return role, nil
 	}
 
-	scopableRoles := make([]data.UserRole, 0)
-	for _, r := range data.GetAllRoles() {
-		if r != data.OwnerUserRole {
-			scopableRoles = append(scopableRoles, r)
-		}
-	}
 	return "", httperror.BadRequest(
 		fmt.Sprintf("unexpected value for role=%q. Expect one of these values: %s", raw, scopableRoles),
 		nil, nil,
@@ -406,8 +333,12 @@ func (h DistributionWalletsHandler) ensureGrantIsNotInert(ctx context.Context, g
 		return httperror.InternalError(ctx, "Cannot get the grantee", err, nil)
 	}
 
-	if walletGrantIsInert(grantee, role) {
-		return httperror.BadRequest(inertGrantReason(role), nil, nil)
+	if walletGrantIsInert(grantee) {
+		granteeRole := data.OwnerUserRole
+		if !grantee.IsOwner && len(grantee.Roles) > 0 {
+			granteeRole = data.UserRole(grantee.Roles[0])
+		}
+		return httperror.BadRequest(inertGrantReason(role, granteeRole), nil, nil)
 	}
 	return nil
 }
@@ -427,18 +358,11 @@ func (h DistributionWalletsHandler) ensureGrantIsNotInert(ctx context.Context, g
 //	                    grant picker asks is what THIS grant would yield, and a pre-existing row
 //	                    would otherwise make an inert role look productive.
 //
-// The two parameterized readings disclose a third party's authority, so both are Owner-only:
-// they are the grant picker's data source and only Owners can grant. They fail closed — the
-// owner check runs before the role is parsed, the wallet is loaded or the subject is looked up,
+// The two parameterized readings disclose a third party's authority, so for JWTs they are Owner-only
+// (the grant picker's data source); API keys reach them through read:distribution_wallets and scope.
+// The owner check runs before the role is parsed, the wallet is loaded or the subject is looked up,
 // so a non-owner turns none of those into an oracle. `role` without `user_id` has no subject to
 // be hypothetical about and is a 400 rather than a silent fallback to the caller.
-//
-// A hypothetical is what lets the client annotate the grant picker and disable the roles that
-// yield nothing. It also makes the decorative-dropdown case legible: a grantee whose global role
-// clears no capability's global gate — a developer, say — gets the identical all-false set for
-// financial_controller, approver, initiator and business alike, because for them only the
-// existence of the membership row does anything (it confers read visibility, which is not a
-// write capability and so appears nowhere in this matrix).
 func (h DistributionWalletsHandler) GetDistributionWalletCapabilities(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	walletID := chi.URLParam(req, "id")
@@ -461,7 +385,7 @@ func (h DistributionWalletsHandler) GetDistributionWalletCapabilities(rw http.Re
 		}
 		subject = user
 	} else {
-		if _, ownerErr := h.ensureCallerIsOwner(ctx); ownerErr != nil {
+		if ownerErr := h.ensureJWTCallerIsOwner(ctx); ownerErr != nil {
 			ownerErr.Render(rw)
 			return
 		}
@@ -501,8 +425,8 @@ func (h DistributionWalletsHandler) GetDistributionWalletCapabilities(rw http.Re
 	}
 
 	// The subject is looked up only after the wallet has been shown to exist, mirroring the
-	// grant handler's order: a request-supplied user_id must not be answered on a route whose
-	// permission does not imply read:users, and never before the path's wallet is established.
+	// grant handler's order: a request-supplied user_id is answered only to Owners or keys holding
+	// read:distribution_wallets, and never before the path's wallet is established.
 	if subjectID != "" {
 		grantee, granteeErr := h.AuthManager.GetUserByID(ctx, subjectID)
 		if granteeErr != nil {
@@ -516,14 +440,11 @@ func (h DistributionWalletsHandler) GetDistributionWalletCapabilities(rw http.Re
 		subject = grantee
 	}
 
-	// Owners are tenant-wide: they hold no membership rows and the membership gate never applies
-	// to them, so there is nothing to look up. A hypothetical does not read the real rows either,
-	// by construction — it reports what the single proposed role would yield.
-	subjectIsOwner := subject.IsOwner || slices.Contains(subject.Roles, string(data.OwnerUserRole))
+	// Tenant-wide users hold no membership rows, and a hypothetical reports only the proposed role.
 	var membershipRoles []data.UserRole
 	if hypotheticalRole != "" {
 		membershipRoles = []data.UserRole{hypotheticalRole}
-	} else if !subjectIsOwner {
+	} else if !services.IsTenantWideUser(subject) {
 		roles, rolesErr := h.walletMembershipRoles(ctx, subject.ID, walletID)
 		if rolesErr != nil {
 			rolesErr.Render(rw)
@@ -556,6 +477,26 @@ func (h DistributionWalletsHandler) walletMembershipRoles(ctx context.Context, u
 	return roles, nil
 }
 
+// ensureJWTCallerIsOwner mirrors an Owner route gate for a reading that shares an any-role route.
+// API keys pass: RequirePermission has already checked them.
+func (h DistributionWalletsHandler) ensureJWTCallerIsOwner(ctx context.Context) *httperror.HTTPError {
+	if _, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		return nil
+	}
+
+	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
+	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return httperror.Unauthorized("", err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+	}
+	if !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+		return httperror.Forbidden("", nil, nil)
+	}
+	return nil
+}
+
 // WalletCapabilitiesResponse is one subject's computed capability set on one account. The keys of
 // Capabilities are the walletCapabilityMatrix entries; a missing key means the capability does
 // not exist in this build, not that it is denied.
@@ -577,13 +518,17 @@ func (h DistributionWalletsHandler) DeleteDistributionWalletMembership(rw http.R
 	walletID := chi.URLParam(req, "id")
 	membershipID := chi.URLParam(req, "membershipID")
 
-	revoker, httpErr := h.ensureCallerIsOwner(ctx)
-	if httpErr != nil {
+	if httpErr := h.ensureWalletInReadScope(ctx, walletID); httpErr != nil {
 		httpErr.Render(rw)
 		return
 	}
+	revokerID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "User identification error", err, nil).Render(rw)
+		return
+	}
 
-	if err := h.Service.RevokeMembership(ctx, walletID, membershipID, revoker.ID); err != nil {
+	if err = h.Service.RevokeMembership(ctx, walletID, membershipID, revokerID); err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("membership not found", err, nil).Render(rw)
 			return
@@ -606,11 +551,6 @@ type DistributionWalletRequest struct {
 // independently funded and its secret material is isolated from sibling wallets.
 func (h DistributionWalletsHandler) PostDistributionWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-
-	if _, httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
-		httpErr.Render(rw)
-		return
-	}
 
 	var reqBody DistributionWalletRequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
@@ -650,7 +590,7 @@ func (h DistributionWalletsHandler) GetDistributionWallets(rw http.ResponseWrite
 
 	includeArchived := req.URL.Query().Get("include_archived") == "true"
 
-	// Membership-filtered visibility (read taxonomy): Owners list every wallet; members list
+	// Membership-filtered visibility (read taxonomy): owners and developers list every wallet; members list
 	// only wallets they hold a membership on (the wallet picker's data source).
 	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
 	if scopeErr != nil {
@@ -684,7 +624,7 @@ func (h DistributionWalletsHandler) PostArchiveDistributionWallet(rw http.Respon
 	ctx := req.Context()
 	id := chi.URLParam(req, "id")
 
-	if _, httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
+	if httpErr := h.ensureWalletInReadScope(ctx, id); httpErr != nil {
 		httpErr.Render(rw)
 		return
 	}
@@ -707,21 +647,27 @@ func (h DistributionWalletsHandler) PostArchiveDistributionWallet(rw http.Respon
 	httpjson.Render(rw, wallet, httpjson.JSON)
 }
 
-// PostPromoteDistributionWalletToDefault atomically promotes an active wallet to default:
-// demotes the old default, promotes the new one, and reassigns default-bound associations —
-// all-or-nothing.
+// PostPromoteDistributionWalletToDefault atomically demotes the old default, promotes this wallet and reassigns default-bound associations.
+// A scoped caller also needs the demoted wallet in scope (403 otherwise).
 func (h DistributionWalletsHandler) PostPromoteDistributionWalletToDefault(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	id := chi.URLParam(req, "id")
 
-	if _, httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
-		httpErr.Render(rw)
+	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
+	if scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+	if !walletInReadScope(scope, id) {
+		httperror.NotFound("distribution wallet not found", nil, nil).Render(rw)
 		return
 	}
 
-	wallet, err := h.Service.PromoteToDefault(ctx, id)
+	wallet, err := h.Service.PromoteToDefault(ctx, id, scope)
 	if err != nil {
 		switch {
+		case errors.Is(err, services.ErrWalletActionForbidden):
+			httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil).Render(rw)
 		case errors.Is(err, services.ErrCannotPromoteWallet):
 			httperror.BadRequest(services.ErrCannotPromoteWallet.Error(), err, nil).Render(rw)
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -735,18 +681,12 @@ func (h DistributionWalletsHandler) PostPromoteDistributionWalletToDefault(rw ht
 	httpjson.Render(rw, wallet, httpjson.JSON)
 }
 
-// GetDistributionWallet returns one distribution wallet by id (the admin detail view).
-// Owner-gated then scope-gated for the reasons set out on GetDistributionWalletMemberships.
-// Members reach their own accounts through GetDistributionWallets and /{id}/balance, which are
-// membership-scoped by design.
+// GetDistributionWallet returns one distribution wallet by id (the admin detail view), gated as
+// GetDistributionWalletMemberships.
 func (h DistributionWalletsHandler) GetDistributionWallet(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	id := chi.URLParam(req, "id")
 
-	if _, httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
-		httpErr.Render(rw)
-		return
-	}
 	if httpErr := h.ensureWalletInReadScope(ctx, id); httpErr != nil {
 		httpErr.Render(rw)
 		return

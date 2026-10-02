@@ -25,8 +25,8 @@ type StatisticsHandler struct {
 
 // GetStatistics returns tenant statistics, wallet-aware per the read taxonomy:
 //   - X-Wallet-Id narrows to one wallet (404 outside the caller's scope — no disclosure)
-//   - non-Owners without the header get their membership set aggregated
-//   - Owners without the header get the tenant-wide aggregate (the "all wallets" view)
+//   - scoped users without the header get their membership set aggregated
+//   - owners and developers without the header get the tenant-wide aggregate (the "all wallets" view)
 func (s StatisticsHandler) GetStatistics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -36,7 +36,7 @@ func (s StatisticsHandler) GetStatistics(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	walletIDs := scope // nil for Owners (tenant-wide), membership set otherwise
+	walletIDs := scope // nil for owners and developers (tenant-wide), membership set otherwise
 	if headerWalletID := r.Header.Get(XWalletIDHeader); headerWalletID != "" {
 		if scope != nil && !slices.Contains(scope, headerWalletID) {
 			// Per the read-leakage rules, existence is never disclosed.
