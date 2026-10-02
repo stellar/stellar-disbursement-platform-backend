@@ -1602,14 +1602,14 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
-			Once().
+			Twice().
 			On("GetUserFromToken", mock.Anything, token).
 			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Once()
 
 		authenticatorMock.
-			On("GetUser", mock.Anything, "user-id").
-			Return(nil, errors.New("not found")).
+			On("GetAllUsers", mock.Anything).
+			Return([]auth.User{{ID: "someone-else"}}, nil).
 			Once()
 
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
@@ -1642,7 +1642,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
-			Once().
+			Twice().
 			On("GetUserFromToken", mock.Anything, token).
 			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Once().
@@ -1654,8 +1654,8 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		authenticatorMock.
-			On("GetUser", mock.Anything, "user-id").
-			Return(&auth.User{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}, nil).
+			On("GetAllUsers", mock.Anything).
+			Return([]auth.User{{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}}, nil).
 			Once()
 
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
@@ -1689,7 +1689,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
-			Twice().
+			Times(3).
 			On("GetUserFromToken", mock.Anything, token).
 			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Once()
@@ -1700,8 +1700,8 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Once()
 
 		authenticatorMock.
-			On("GetUser", mock.Anything, "user-id").
-			Return(&auth.User{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}, nil).
+			On("GetAllUsers", mock.Anything).
+			Return([]auth.User{{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}}, nil).
 			Once()
 
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
@@ -2173,7 +2173,7 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 		t.Helper()
 		authManagerMock := &auth.AuthManagerMock{}
 		authManagerMock.On("GetUserID", mock.Anything, token).Return(actorID, nil)
-		authManagerMock.On("GetUserByID", mock.Anything, subject.ID).Return(subject, nil)
+		authManagerMock.On("GetAllUsers", mock.Anything, token).Return([]auth.User{*subject}, nil)
 		if expectUpdate {
 			authManagerMock.On("UpdateUserRoles", mock.Anything, token, subject.ID, []string{newRole.String()}).Return(nil).Once()
 		}
@@ -2241,7 +2241,7 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 		owner := &auth.User{ID: "last-owner", IsOwner: true, Roles: []string{data.OwnerUserRole.String()}}
 		authManagerMock := &auth.AuthManagerMock{}
 		authManagerMock.On("GetUserID", mock.Anything, token).Return(owner.ID, nil)
-		authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+		authManagerMock.On("GetAllUsers", mock.Anything, token).Return([]auth.User{*owner}, nil)
 		authManagerMock.On("UpdateUserRoles", mock.Anything, token, owner.ID, []string{data.BusinessUserRole.String()}).
 			Return(auth.ErrLastOwner).Once()
 		defer authManagerMock.AssertExpectations(t)
@@ -2255,6 +2255,19 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.JSONEq(t, `{"error": "a tenant must keep at least one active owner"}`, rr.Body.String())
 		assert.Empty(t, rolesOf(t, owner.ID))
+	})
+
+	t.Run("a deactivated user's role can still change", func(t *testing.T) {
+		inactive := &auth.User{ID: "inactive-business", IsActive: false, Roles: []string{data.BusinessUserRole.String()}}
+		rr := patch(t, inactive, data.ApproverUserRole, true)
+		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	})
+
+	t.Run("a deactivated developer leaving the role still gets the default wallet", func(t *testing.T) {
+		inactive := &auth.User{ID: "inactive-developer", IsActive: false, Roles: []string{data.DeveloperUserRole.String()}}
+		rr := patch(t, inactive, data.ApproverUserRole, true)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.Equal(t, map[string]data.UserRole{defaultWallet.ID: data.ApproverUserRole}, rolesOf(t, inactive.ID))
 	})
 
 	t.Run("a scoped role change leaves memberships alone", func(t *testing.T) {

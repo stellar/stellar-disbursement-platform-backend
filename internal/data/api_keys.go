@@ -179,7 +179,7 @@ type APIKey struct {
 }
 
 // WalletScope returns the wallets this key may act on, never nil: the shared read-scope helpers
-// read a nil scope as "owner, show everything".
+// read a nil scope as "tenant-wide, show everything".
 func (a *APIKey) WalletScope() []string {
 	if a.DistributionWalletIDs == nil {
 		return []string{}

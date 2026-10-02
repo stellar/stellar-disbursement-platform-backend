@@ -674,9 +674,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 				// Membership-scoped reads (the dashboard picker + Total Balance tile): any
 				// business role at the route; the handlers filter to the caller's read scope
-				// (Owners: everything; members: their wallets; 404 outside per-wallet scope).
+				// (owners and developers: everything; members: their wallets; 404 outside per-wallet scope).
 				// /{id}/capabilities also serves the grant picker via ?user_id=/?role=, which
-				// reports a THIRD party's capabilities and is Owner-gated inside the handler.
+				// reports a THIRD party's capabilities and is Owner-gated for JWTs inside the handler.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),

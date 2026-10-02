@@ -77,10 +77,10 @@ func walletInReadScope(scope []string, walletID string) bool {
 // resolveWalletListScope computes the scope for the membership-filtered LIST/aggregate endpoints
 // (disbursements, payments, receivers, statistics, exports), layering the active account
 // selection on top of read visibility so the per-account view is consistent for everyone:
-//   - no X-Wallet-Id ("All accounts"): full visibility — Owner sees tenant-wide (nil), a member
-//     sees their membership set.
+//   - no X-Wallet-Id ("All accounts"): full visibility — owners and developers see tenant-wide
+//     (nil), a member sees their membership set.
 //   - explicit X-Wallet-Id: narrow to that one account, but never beyond what the caller may
-//     see. Owners can select any account; a member selecting an account they hold no membership
+//     see. Owners and developers can select any account; a member selecting an account they hold no membership
 //     on gets an empty scope (sees nothing) rather than a leak.
 //
 // This is intentionally separate from resolveWalletReadScope, which stays a pure visibility
@@ -101,7 +101,7 @@ func narrowScopeToSelectedWallet(visibility []string, req *http.Request) []strin
 		return visibility
 	}
 
-	// visibility == nil means Owner (may see every account); otherwise the wallet must be in the
+	// visibility == nil means tenant-wide (owner or developer, may see every account); otherwise the wallet must be in the
 	// member's set.
 	if visibility == nil || slices.Contains(visibility, headerWalletID) {
 		return []string{headerWalletID}
@@ -110,7 +110,7 @@ func narrowScopeToSelectedWallet(visibility []string, req *http.Request) []strin
 }
 
 // ensureWalletActionAllowed gates a state transition on the caller's wallet membership
-// Owners pass; everyone else needs a qualifying role on the wallet. Returns a 403
+// Owners and developers pass; everyone else needs a qualifying role on the wallet. Returns a 403
 // that discloses no wallet details.
 //
 // For an API key the wallet dimension is its own scope and the role dimension is its permission
@@ -261,13 +261,13 @@ const XWalletIDHeader = "X-Wallet-Id"
 //     tenants) legitimately fall back to it per the spec's narrow default semantics; tenants
 //     with multiple wallets get 400 — no silent routing fallbacks
 //   - 403 carries no wallet existence/details (unknown wallet and unentitled wallet are
-//     indistinguishable to non-owners); Owners get an honest 404 for unknown ids
+//     indistinguishable to scoped users); owners and developers get an honest 404 for unknown ids
 //   - archived wallets accept no new disbursements or payments → 400 (only after the caller
 //     proves entitlement, so archived-ness is not leaked)
 //
 // An API key resolves against its own scope throughout: it never loads a user, a key naming exactly
 // one wallet keeps working without the header, and an unknown id is always a 403 (a key has no
-// owner identity to earn the honest 404). The header only selects — it never grants.
+// tenant-wide identity to earn the honest 404). The header only selects — it never grants.
 func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models, requiredRoles ...data.UserRole) (*data.DistributionWallet, *httperror.HTTPError) {
 	apiKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx)
 	viaAPIKey := keyErr == nil

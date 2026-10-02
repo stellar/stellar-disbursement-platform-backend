@@ -74,8 +74,8 @@ func (h DistributionWalletsHandler) GetDistributionWalletBalance(rw http.Respons
 }
 
 // GetDistributionWalletsTotalBalance returns the balance aggregate, scoped per the read
-// taxonomy exactly like /statistics: Owners sum every wallet (the tenant-wide view stays
-// Owner-only); members sum only the wallets they hold memberships on. No caller ever sees a
+// taxonomy exactly like /statistics: owners and developers sum every wallet (the tenant-wide
+// view); members sum only the wallets they hold memberships on. No caller ever sees a
 // balance outside their scope.
 func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
@@ -94,7 +94,7 @@ func (h DistributionWalletsHandler) GetDistributionWalletsTotalBalance(rw http.R
 
 	totals := map[string]string{}
 	for i := range wallets {
-		// walletInReadScope returns true for a nil (owner/tenant-wide) scope, so no extra guard.
+		// walletInReadScope returns true for a nil (tenant-wide) scope, so no extra guard.
 		if !walletInReadScope(scope, wallets[i].ID) {
 			continue
 		}
@@ -255,8 +255,8 @@ func (h DistributionWalletsHandler) PostDistributionWalletMembership(rw http.Res
 	}
 
 	// Validate the role up front: an unknown role would otherwise pass the service checks, hit
-	// the wallet_memberships CHECK constraint, and surface to the operator as a 500. Owner is
-	// tenant-wide and cannot be granted per wallet.
+	// the wallet_memberships CHECK constraint, and surface to the operator as a 500. Owner and
+	// developer are tenant-wide and cannot be granted per wallet.
 	role, roleErr := parseWalletScopableRole(reqBody.Role)
 	if roleErr != nil {
 		roleErr.Render(rw)
@@ -425,8 +425,8 @@ func (h DistributionWalletsHandler) GetDistributionWalletCapabilities(rw http.Re
 	}
 
 	// The subject is looked up only after the wallet has been shown to exist, mirroring the
-	// grant handler's order: a request-supplied user_id must not be answered on a route whose
-	// permission does not imply read:users, and never before the path's wallet is established.
+	// grant handler's order: a request-supplied user_id is answered only to Owners or keys holding
+	// read:distribution_wallets, and never before the path's wallet is established.
 	if subjectID != "" {
 		grantee, granteeErr := h.AuthManager.GetUserByID(ctx, subjectID)
 		if granteeErr != nil {
@@ -590,7 +590,7 @@ func (h DistributionWalletsHandler) GetDistributionWallets(rw http.ResponseWrite
 
 	includeArchived := req.URL.Query().Get("include_archived") == "true"
 
-	// Membership-filtered visibility (read taxonomy): Owners list every wallet; members list
+	// Membership-filtered visibility (read taxonomy): owners and developers list every wallet; members list
 	// only wallets they hold a membership on (the wallet picker's data source).
 	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
 	if scopeErr != nil {

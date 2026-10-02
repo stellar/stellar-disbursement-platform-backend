@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -286,7 +287,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	httpjson.RenderStatus(rw, http.StatusCreated, u, httpjson.JSON)
 }
 
-// resolveMembershipWallet picks the distribution wallet a new non-owner user is scoped to: the
+// resolveMembershipWallet picks the distribution wallet a new scoped user is scoped to: the
 // one the request named, or the tenant default when it named none. It deliberately runs before
 // the user is created, so an unusable wallet rejects the whole request instead of leaving a
 // user behind that no membership could be attached to.
@@ -344,15 +345,22 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	subject, err := h.AuthManager.GetUserByID(ctx, reqBody.UserID)
+	// Includes deactivated users, whose role can still be changed.
+	users, err := h.AuthManager.GetAllUsers(ctx, token)
 	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			httperror.BadRequest("", err, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
+		if errors.Is(err, auth.ErrInvalidToken) {
+			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
-		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(rw)
+		httperror.InternalError(ctx, "Cannot get users", err, nil).Render(rw)
 		return
 	}
+	subjectIdx := slices.IndexFunc(users, func(u auth.User) bool { return u.ID == reqBody.UserID })
+	if subjectIdx < 0 {
+		httperror.BadRequest("", nil, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
+		return
+	}
+	subject := &users[subjectIdx]
 
 	// Leaving a tenant-wide role lands the user on the default wallet, as an invite does; resolved
 	// before the role changes so an unusable wallet rejects the whole request.
