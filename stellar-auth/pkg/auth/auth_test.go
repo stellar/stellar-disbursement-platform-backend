@@ -1586,6 +1586,35 @@ func Test_AuthManager_GetUserID(t *testing.T) {
 	roleManagerMock.AssertExpectations(t)
 }
 
+func Test_AuthManager_tokenWithoutUser(t *testing.T) {
+	ctx := context.Background()
+	authManager := NewAuthManager(WithDefaultJWTManagerOption(testPublicKey, testPrivateKey))
+	token := newTokenWithoutUser(t, time.Now().Add(time.Minute))
+
+	t.Run("GetUserID returns ErrInvalidToken", func(t *testing.T) {
+		userID, err := authManager.GetUserID(ctx, token)
+		require.ErrorIs(t, err, ErrInvalidToken)
+		assert.Empty(t, userID)
+	})
+
+	t.Run("GetTenantID returns ErrInvalidToken", func(t *testing.T) {
+		tenantID, err := authManager.GetTenantID(ctx, token)
+		require.ErrorIs(t, err, ErrInvalidToken)
+		assert.Empty(t, tenantID)
+	})
+
+	t.Run("AnyRolesInTokenUser returns ErrInvalidToken", func(t *testing.T) {
+		hasAnyRoles, err := authManager.AnyRolesInTokenUser(ctx, token, []string{"owner"})
+		require.ErrorIs(t, err, ErrInvalidToken)
+		assert.False(t, hasAnyRoles)
+	})
+
+	t.Run("UpdateUser returns ErrInvalidToken", func(t *testing.T) {
+		err := authManager.UpdateUser(ctx, token, "First", "Last", "", "")
+		require.ErrorIs(t, err, ErrInvalidToken)
+	})
+}
+
 func Test_AuthManager_AuthenticateMFA(t *testing.T) {
 	ctx := context.Background()
 	deviceID, code := "device-id", "123456"
