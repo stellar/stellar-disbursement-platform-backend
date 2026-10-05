@@ -181,7 +181,7 @@ func (c AssetsHandler) resolveTrustlineAccountForWrite(req *http.Request, noFund
 	}
 
 	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, req, c.AuthManager, c.Models,
-		data.FinancialControllerUserRole, data.DeveloperUserRole)
+		data.FinancialControllerUserRole)
 	if walletErr != nil {
 		return schema.TransactionAccount{}, walletErr
 	}
@@ -193,7 +193,7 @@ func (c AssetsHandler) resolveTrustlineAccountForWrite(req *http.Request, noFund
 // report which account the enabled/balance columns describe.
 //
 // The gate here is read visibility, not the write gate above: this endpoint is open to every
-// tenant role, so demanding a financial_controller/developer membership would 403 the account
+// tenant role, so demanding a financial_controller membership would 403 the account
 // switcher for exactly the users it exists for. Outside the caller's scope → 404, per the read
 // taxonomy — existence is never disclosed. Wallet selection is opt-in through the header, so a
 // caller that sends none still gets the tenant-wide default view and the endpoint stays in its

@@ -126,7 +126,7 @@ func Test_DistributionWallet_lifecycle(t *testing.T) {
 	})
 
 	t.Run("promotion is atomic: success path moves the default pointer", func(t *testing.T) {
-		promoted, pErr := svc.PromoteToDefault(ctx, walletC.ID)
+		promoted, pErr := svc.PromoteToDefault(ctx, walletC.ID, nil)
 		require.NoError(t, pErr)
 		assert.True(t, promoted.IsDefault)
 
@@ -148,7 +148,7 @@ func Test_DistributionWallet_lifecycle(t *testing.T) {
 	t.Run("promotion partial failure rolls back the demotion", func(t *testing.T) {
 		// walletB is ARCHIVED: promoting it must fail AND leave walletC as default —
 		// proving the demote step inside the transaction rolled back.
-		_, pErr := svc.PromoteToDefault(ctx, walletB.ID)
+		_, pErr := svc.PromoteToDefault(ctx, walletB.ID, nil)
 		require.ErrorIs(t, pErr, ErrCannotPromoteWallet)
 
 		gotDefault, dErr := models.DistributionWallets.GetDefault(ctx, dbConnectionPool)
@@ -163,12 +163,12 @@ func Test_DistributionWallet_lifecycle(t *testing.T) {
 		require.ErrorIs(t, aErr, ErrCannotArchiveDefaultWallet, "last active is the default → default rule fires")
 
 		// Re-promote an archived wallet to free C for archival? Promotion of archived is blocked.
-		_, pErr := svc.PromoteToDefault(ctx, walletB.ID)
+		_, pErr := svc.PromoteToDefault(ctx, walletB.ID, nil)
 		require.ErrorIs(t, pErr, ErrCannotPromoteWallet)
 
 		// Add a fresh wallet, promote it, archive C, then try to drain to zero.
 		walletD := insertWallet("wallet-d")
-		_, pErr = svc.PromoteToDefault(ctx, walletD.ID)
+		_, pErr = svc.PromoteToDefault(ctx, walletD.ID, nil)
 		require.NoError(t, pErr)
 		_, aErr = svc.ArchiveWallet(ctx, walletC.ID)
 		require.NoError(t, aErr)
@@ -263,7 +263,7 @@ func Test_DistributionWallet_promotion_reassigns_tenant_account(t *testing.T) {
 	t.Run("promotion reassigns the tenant's distribution-account fields", func(t *testing.T) {
 		require.Equal(t, originalAddr, readTenantAccount())
 
-		promoted, pErr := svc.PromoteToDefault(ctx, candidate.ID)
+		promoted, pErr := svc.PromoteToDefault(ctx, candidate.ID, nil)
 		require.NoError(t, pErr)
 		assert.True(t, promoted.IsDefault)
 
@@ -279,7 +279,7 @@ func Test_DistributionWallet_promotion_reassigns_tenant_account(t *testing.T) {
 		archived, aErr := models.DistributionWallets.Archive(ctx, tenantPool, oldDefault.ID)
 		require.NoError(t, aErr)
 
-		_, pErr := svc.PromoteToDefault(ctx, archived.ID)
+		_, pErr := svc.PromoteToDefault(ctx, archived.ID, nil)
 		require.ErrorIs(t, pErr, ErrCannotPromoteWallet)
 
 		// Default pointer unchanged…
@@ -288,5 +288,60 @@ func Test_DistributionWallet_promotion_reassigns_tenant_account(t *testing.T) {
 		assert.Equal(t, candidate.ID, gotDefault.ID)
 		// …and the association untouched.
 		assert.Equal(t, candidateAddr, readTenantAccount())
+	})
+}
+
+// Test_DistributionWallet_promoteScope pins that a scoped caller may only promote when the
+// account being demoted is in their scope too.
+func Test_DistributionWallet_promoteScope(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	walletKeyService, err := tssSvc.NewDistributionWalletKeyService(dbConnectionPool, keypair.MustRandom().Seed())
+	require.NoError(t, err)
+	svc, err := NewDistributionWalletManagementService(models, engine.SubmitterEngine{}, walletKeyService, 5)
+	require.NoError(t, err)
+
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	walletA, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
+		Name:        "wallet-a",
+		AccountType: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+	})
+	require.NoError(t, err)
+	_, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, walletA.ID, keypair.MustRandom().Address())
+	require.NoError(t, err)
+	_, err = models.DistributionWallets.Activate(ctx, dbConnectionPool, walletA.ID)
+	require.NoError(t, err)
+
+	assertDefault := func(t *testing.T, want string) {
+		t.Helper()
+		got, gErr := models.DistributionWallets.GetDefault(ctx, dbConnectionPool)
+		require.NoError(t, gErr)
+		assert.Equal(t, want, got.ID)
+	}
+
+	t.Run("the demoted account outside the scope is forbidden and nothing changes", func(t *testing.T) {
+		_, pErr := svc.PromoteToDefault(ctx, walletA.ID, []string{walletA.ID})
+		require.ErrorIs(t, pErr, ErrWalletActionForbidden)
+		assertDefault(t, defaultWallet.ID)
+	})
+
+	t.Run("promoting the current default demotes nothing", func(t *testing.T) {
+		_, pErr := svc.PromoteToDefault(ctx, defaultWallet.ID, []string{defaultWallet.ID})
+		require.NoError(t, pErr)
+		assertDefault(t, defaultWallet.ID)
+	})
+
+	t.Run("both accounts in scope promotes", func(t *testing.T) {
+		_, pErr := svc.PromoteToDefault(ctx, walletA.ID, []string{walletA.ID, defaultWallet.ID})
+		require.NoError(t, pErr)
+		assertDefault(t, walletA.ID)
 	})
 }

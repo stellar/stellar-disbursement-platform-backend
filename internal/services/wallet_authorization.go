@@ -16,15 +16,24 @@ import (
 // the public error message must not disclose wallet existence or details.
 var ErrWalletActionForbidden = errors.New("user is not authorized to act on this wallet")
 
-// ResolveWalletReadScope returns the caller's read-visibility scope for membership-filtered
-// endpoints (taxonomy): nil for Owners (tenant-wide — no filter applied), otherwise the
-// exact set of wallet IDs the user holds membership on. An empty non-nil slice means the user
-// sees no per-wallet rows.
+// IsTenantWideUser reports whether the user spans every wallet (owners and developers), so
+// membership never scopes them.
+func IsTenantWideUser(user *auth.User) bool {
+	if user.IsOwner {
+		return true
+	}
+	return slices.ContainsFunc(user.Roles, func(role string) bool {
+		return data.IsTenantWideRole(data.UserRole(role))
+	})
+}
+
+// ResolveWalletReadScope returns the caller's read scope: nil for tenant-wide users (no filter), otherwise the wallet IDs they hold membership on.
+// An empty non-nil slice means the user sees no per-wallet rows.
 func ResolveWalletReadScope(ctx context.Context, sqlExec db.SQLExecuter, memberships *data.WalletMembershipModel, user *auth.User) ([]string, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user is required to resolve wallet read scope")
 	}
-	if user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+	if IsTenantWideUser(user) {
 		return nil, nil
 	}
 
@@ -35,10 +44,8 @@ func ResolveWalletReadScope(ctx context.Context, sqlExec db.SQLExecuter, members
 	return walletIDs, nil
 }
 
-// EnsureUserCanActOnWallet enforces wallet-scoped action authorization:
-// Owners are always tenant-wide; every other caller must hold at least one of requiredRoles
-// ON the target wallet via wallet_memberships. Role semantics are unchanged — this adds the
-// wallet dimension on top of the route-level tenant-role checks.
+// EnsureUserCanActOnWallet passes tenant-wide users; anyone else needs one of requiredRoles on the wallet via wallet_memberships.
+// It adds the wallet dimension on top of the route-level role checks without changing role semantics.
 func EnsureUserCanActOnWallet(ctx context.Context, sqlExec db.SQLExecuter, memberships *data.WalletMembershipModel, user *auth.User, walletID string, requiredRoles ...data.UserRole) error {
 	if user == nil {
 		return fmt.Errorf("user is required for wallet authorization")
@@ -46,7 +53,7 @@ func EnsureUserCanActOnWallet(ctx context.Context, sqlExec db.SQLExecuter, membe
 	if walletID == "" {
 		return fmt.Errorf("wallet ID is required for wallet authorization")
 	}
-	if user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole)) {
+	if IsTenantWideUser(user) {
 		return nil
 	}
 

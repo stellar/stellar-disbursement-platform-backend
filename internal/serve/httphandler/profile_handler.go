@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
-	"slices"
 	"sort"
 	"strings"
 
@@ -19,7 +18,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
-	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -82,28 +80,12 @@ type PatchUserPasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-func (h ProfileHandler) ensureCallerIsOwner(ctx context.Context) (*auth.User, *httperror.HTTPError) {
-	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
-	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, httperror.Unauthorized("", err, nil)
-		}
-		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
-	}
-
-	if !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
-		return nil, httperror.Forbidden("", nil, nil)
-	}
-
-	return user, nil
-}
-
 func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	user, httpErr := h.ensureCallerIsOwner(ctx)
-	if httpErr != nil {
-		httpErr.Render(rw)
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "User identification error", err, nil).Render(rw)
 		return
 	}
 
@@ -111,7 +93,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	req.Body = http.MaxBytesReader(rw, req.Body, h.MaxMemoryAllocation)
 
 	// limiting the amount of memory allocated in the server to handle the request
-	if err := req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
+	if err = req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
 		err = fmt.Errorf("parsing multipart form: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
@@ -159,16 +141,6 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		httperror.BadRequest("request is invalid", nil, map[string]interface{}{
 			"details": "data or logo is required",
 		}).Render(rw)
-		return
-	}
-
-	// This route admits Financial Controllers as well as Owners (serve.go), but the webhook URL is
-	// where every payment and disbursement event in the tenant gets delivered. Left ungated, a
-	// non-owner could point the whole event stream at an endpoint they control. Circle config is
-	// already owner-only for the same reason; this field is at least as sensitive, so gate it
-	// rather than widening who may call the route.
-	if reqBody.WebhookURL != nil && !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
-		httperror.Forbidden("only owners can change the webhook URL", nil, nil).Render(rw)
 		return
 	}
 
@@ -242,7 +214,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 	sort.Strings(nonEmptyChanges)
 
-	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", user.ID, strings.Join(nonEmptyChanges, ", "))
+	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", userID, strings.Join(nonEmptyChanges, ", "))
 	err = h.Models.Organizations.Update(ctx, &organizationUpdate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)

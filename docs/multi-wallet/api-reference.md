@@ -8,17 +8,17 @@ and are reachable with a JWT or an API key.
 Two new API-key permissions were added: `read:distribution_wallets` and `write:distribution_wallets`
 (note the underscore; the URL path is hyphenated). `read:all` and `write:all` also grant them.
 
-Most of these endpoints are Owner-only. That check binds both authentication paths, but it means
-something different for each:
+Most of these endpoints are Owner-only. That applies to the signed-in user of a JWT. An API key is
+authorized by its permissions and its account scope instead, whoever created it:
 
 - **JWT**: the signed-in user must be an Owner.
-- **API key**: the *user who created the key* must be an Owner. A key minted by a Developer is
-  rejected even when it carries `write:distribution_wallets`. Deactivating or deleting a key's
-  creator withdraws that key from these endpoints.
+- **API key**: the key needs the permission, and the account in the path must be in the key's scope,
+  or the request returns `404`. Creating an account has no account to scope, so the permission is
+  enough, and the new account is not added to the creating key's scope.
 
-Reads that are not Owner-only are scoped instead: Owners see every account, everyone else sees only
-the accounts they have been granted access to. An account outside that scope returns `404`, never
-`403`, so existence is never disclosed.
+Reads that are not Owner-only are scoped instead: Owners and Developers see every account, everyone
+else sees only the accounts they have been granted access to. An account outside that scope returns
+`404`, never `403`, so existence is never disclosed.
 
 ## Endpoints
 
@@ -29,7 +29,7 @@ the accounts they have been granted access to. An account outside that scope ret
 | `GET` | `/distribution-wallets/balance` | Any role, scoped |
 | `GET` | `/distribution-wallets/{id}` | Owner |
 | `GET` | `/distribution-wallets/{id}/balance` | Any role, scoped |
-| `GET` | `/distribution-wallets/{id}/capabilities` | Any role, scoped |
+| `GET` | `/distribution-wallets/{id}/capabilities` | Any role, scoped; `?user_id=` is Owner |
 | `GET` | `/distribution-wallets/{id}/memberships` | Owner |
 | `POST` | `/distribution-wallets/{id}/memberships` | Owner |
 | `DELETE` | `/distribution-wallets/{id}/memberships/{membershipID}` | Owner |
@@ -72,7 +72,8 @@ included so historical records stay resolvable.
 
 ### Create an account
 
-`POST /distribution-wallets` — Owner only. Returns `201` with the new account.
+`POST /distribution-wallets` — Owner only (API keys: `write:distribution_wallets`). Returns `201` with
+the new account.
 
 ```json
 { "name": "payroll", "description": "Monthly payroll runs" }
@@ -123,7 +124,7 @@ apply, which is why this is a capability set rather than a single effective role
 }
 ```
 
-Owners can ask what a third party could do by passing `?user_id=`, optionally with `?role=` to test
+Owners, and API keys with `read:distribution_wallets`, can ask what a third party could do by passing `?user_id=`, optionally with `?role=` to test
 a role the user does not hold yet. `role` on its own is rejected with `400` — it always needs a
 `user_id` alongside it. The response echoes whichever was supplied. This backs the dashboard's
 access-granting picker, which warns when a grant would be inert because the user's tenant-wide role
@@ -139,10 +140,11 @@ already excludes the action.
 { "user_id": "…", "role": "financial_controller" }
 ```
 
-- `400` — `user_id` missing, or the role is not wallet-scopable
+- `400` — `user_id` missing, the role is not wallet-scopable, or the user is an Owner or Developer
 - `409` — the user already holds that role, or the account is archived
 
-The `owner` role cannot be granted here: Owner is always tenant-wide.
+The `owner` and `developer` roles cannot be granted here, and neither can access be granted to an
+Owner or Developer: both are always tenant-wide.
 
 `DELETE /distribution-wallets/{id}/memberships/{membershipID}` revokes access and returns `204`. The
 grant history is preserved in the audit trail.
@@ -164,6 +166,7 @@ disbursements but keep serving reads.
 the previous one atomically.
 
 - `400` — the account is not active
+- `403` — API key only: the current default, which would be demoted, is outside the key's scope
 - `404` — not found
 
 ## The `X-Wallet-Id` header
@@ -184,5 +187,5 @@ unaffected, and an API key scoped to exactly one account may omit it.
 
 `distribution_wallet_ids` was added to the API key endpoints (`POST /api-keys`, `PATCH /api-keys/{id}`,
 and the key responses). Omitting it on creation inherits the accounts its creator can reach at that
-moment; the resolved IDs are stored on the key, so accounts added afterwards are not included. An
-empty array grants no account access at all.
+moment; the resolved IDs are stored on the key, so accounts added afterwards are not included. For an
+Owner or Developer that is every active account. An empty array grants no account access at all.

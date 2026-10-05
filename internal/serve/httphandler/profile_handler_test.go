@@ -137,7 +137,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 	require.NoError(t, err)
 
 	url := "/profile/organization"
-	user := &auth.User{ID: "user-id", IsOwner: true}
 	testCases := []struct {
 		name              string
 		token             string
@@ -153,68 +152,25 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 				return httptest.NewRequest(http.MethodPatch, url, nil).WithContext(ctx)
 			},
 			wantStatusCode: http.StatusInternalServerError,
-			wantRespBody:   `{"error": "Cannot get user from context"}`,
+			wantRespBody:   `{"error": "User identification error"}`,
 		},
 		{
-			// The whole endpoint is Owner-only now, enforced in the handler so it holds on the API
-			// key path too — a non-owner no longer reaches the webhook URL's own check.
-			name:  "returns Forbidden when a non-owner tries to set the webhook URL",
+			// The route is Owner-only for JWTs; the handler has no role gate of its own, so the webhook
+			// URL reaches validation (http:// fails the scheme check).
+			name:  "the webhook URL has no handler-level role gate",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(&auth.User{
-						ID:    "fc-user-id",
-						Roles: []string{data.FinancialControllerUserRole.String()},
-					}, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
-				// Fresh buffer: the shared pngImgBuf is drained by whichever case reads it first.
-				buf := new(bytes.Buffer)
-				require.NoError(t, png.Encode(buf, data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)))
-				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png",
-					`{"webhook_url": "https://attacker.example.com/hook"}`, buf)
-			},
-			wantStatusCode: http.StatusForbidden,
-			wantRespBody:   `{"error": "You don't have permission to perform this action."}`,
-		},
-		{
-			// Same request shape, owner instead — must get past the gate. It fails later on the
-			// empty-organization-name path, which is enough to prove the gate is role-based and
-			// not simply rejecting every webhook_url write.
-			name:  "lets an owner past the webhook URL gate",
-			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(&auth.User{
-						ID:      "owner-user-id",
-						IsOwner: true,
-						Roles:   []string{data.OwnerUserRole.String()},
-					}, nil).
-					Once()
-			},
-			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
-				// Fresh buffer: the shared pngImgBuf is drained by whichever case reads it first.
 				buf := new(bytes.Buffer)
 				require.NoError(t, png.Encode(buf, data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)))
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png",
 					`{"webhook_url": "http://insecure.example.com/hook"}`, buf)
 			},
-			// http:// is rejected by the scheme validator that runs after the gate.
 			wantStatusCode: http.StatusBadRequest,
 			wantRespBody:   `{"error": "The request was invalid in some way.", "extras": {"webhook_url": "invalid URL scheme is not part of [https]"}}`,
 		},
 		{
 			name:  "returns BadRequest when the request is not valid (invalid JSON)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `invalid`, pngImgBuf)
 			},
@@ -224,12 +180,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the request is not valid (invalid file format)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.csv", `{}`, csvBuf)
 			},
@@ -244,12 +194,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the logo declares oversized dimensions (decompression bomb)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				bomb := bytes.NewBuffer(utils.CreatePNGHeaderWithDimensions(t, 22000, 22000))
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, bomb)
@@ -265,12 +209,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the logo has a valid header but a truncated payload",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				// Within the dimension cap but with no pixel data: only the full decode can catch it.
 				truncated := bytes.NewBuffer(utils.CreatePNGHeaderWithDimensions(t, 100, 100))
@@ -287,12 +225,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the request is not valid (both file and data are empty)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "invalidParameterName", "logo.csv", `{}`, pngImgBuf)
 			},
@@ -307,12 +239,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest error when the request size is too large",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, imgTooBigBuf)
 			},
@@ -327,12 +253,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the privacy_policy_link is invalid",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"privacy_policy_link": "example.com/privacy-policy"
@@ -350,12 +270,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the privacy_policy_link scheme is invalid",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"privacy_policy_link": "ftp://example.com/privacy-policy"
@@ -373,12 +287,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when the privacy_policy_link scheme is invalid (pubnet)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"privacy_policy_link": "http://example.com/privacy-policy"
@@ -397,12 +305,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when receiver_registration_message_template contains HTML",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"receiver_registration_message_template": "<a href='evil.com'>Redeem money</a>"
@@ -421,12 +323,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when receiver_registration_message_template contains JS",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"receiver_registration_message_template": "javascript:alert(localStorage.getItem('sdp_session'))"
@@ -445,12 +341,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when otp_message_template contains HTML",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"otp_message_template": "<a href='evil.com'>Your code</a>"
@@ -469,12 +359,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when otp_message_template contains an unbounded range construct",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"otp_message_template": "{{range 9223372036854775807}}{{end}}{{.OTP}}"
@@ -493,12 +377,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when receiver_registration_message_template contains an unbounded range construct",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"receiver_registration_message_template": "{{range 1000}}{{range 1000}}A{{end}}{{end}}"
@@ -517,12 +395,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when organization_name contains HTML",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"organization_name": "<b>Evil</b> Corp"
@@ -541,12 +413,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when receiver_registration_message_template exceeds 255 characters",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"receiver_registration_message_template": "This is a very long test string designed to reach exactly two hundred and fifty six characters in length, which is one more than the common maximum of two hundred and fifty five, so it can be used to test proper validation, truncation, or error handling logic correctly."
@@ -565,12 +431,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		{
 			name:  "returns BadRequest when organization_name exceeds 64 characters",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"organization_name": "This organization name is way too long and exceeds the maximum length of 64 characters"
@@ -659,7 +519,6 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 	require.NoError(t, err)
 
 	url := "/profile/organization"
-	user := &auth.User{ID: "user-id", IsOwner: true}
 	testCases := []struct {
 		name                     string
 		token                    string
@@ -672,46 +531,28 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 		{
 			name:  "🎉 successfully updates the organization's logo (PNG)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, newPNGImgBuf())
 			},
 			resultingFieldsToCompare: map[string]interface{}{
 				"Logo": newPNGImgBuf().Bytes(),
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo='...']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID test-user-id will update the organization fields [Logo='...']"},
 		},
 		{
 			name:  "🎉 successfully updates the organization's logo (JPEG)",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.jpeg", `{}`, jpegImgBuf)
 			},
 			resultingFieldsToCompare: map[string]interface{}{
 				"Logo": jpegImgBuf.Bytes(),
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo='...']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID test-user-id will update the organization fields [Logo='...']"},
 		},
 		{
 			name:  "🎉 successfully updates ALL the organization fields",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
 				reqBody := `{
 					"is_approval_required": true,
@@ -742,17 +583,11 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"IsLinkShortenerEnabled":               true,
 				"PrivacyPolicyLink":                    "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverInvitationsDisabled='true', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID test-user-id will update the organization fields [IsApprovalRequired='true', IsLinkShortenerEnabled='true', IsMemoTracingEnabled='false', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', ReceiverInvitationResendIntervalDays='2', ReceiverInvitationsDisabled='true', ReceiverRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
 			token: "token",
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUserByID", mock.Anything, mock.Anything).
-					Return(user, nil).
-					Once()
-			},
 			updateOrgInitialValuesFn: func(t *testing.T, ctx context.Context, models *data.Models) {
 				otpMessageTemplate := "custom OTPMessageTemplate"
 				receiverRegistrationMessageTemplate := "custom ReceiverRegistrationMessageTemplate"
@@ -789,7 +624,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"IsMemoTracingEnabled":                 true,
 				"IsLinkShortenerEnabled":               false,
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsLinkShortenerEnabled='false', IsMemoTracingEnabled='true', OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendIntervalDays='0', ReceiverRegistrationMessageTemplate='']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID test-user-id will update the organization fields [IsLinkShortenerEnabled='false', IsMemoTracingEnabled='true', OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', ReceiverInvitationResendIntervalDays='0', ReceiverRegistrationMessageTemplate='']"},
 		},
 	}
 

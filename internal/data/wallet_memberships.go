@@ -12,9 +12,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
-// WalletMembership grants one user one role on one distribution wallet. Owner is always
-// tenant-wide and never holds membership rows; every other role is wallet-scoped. Role
-// semantics are unchanged by membership — it is an additional scoping dimension.
+// WalletMembership grants one user one role on one distribution wallet; owner and developer are tenant-wide and hold none.
+// Membership doesn't change role semantics, it only adds a wallet scope.
 type WalletMembership struct {
 	ID        string    `json:"id" db:"id"`
 	UserID    string    `json:"user_id" db:"user_id"`
@@ -41,8 +40,8 @@ func (m *WalletMembershipModel) Insert(ctx context.Context, sqlExec db.SQLExecut
 	if userID == "" || walletID == "" || role == "" {
 		return nil, fmt.Errorf("user ID, wallet ID, and role are required: %w", ErrMissingInput)
 	}
-	if role == OwnerUserRole {
-		return nil, fmt.Errorf("the owner role is always tenant-wide and cannot be wallet-scoped: %w", ErrMissingInput)
+	if IsTenantWideRole(role) {
+		return nil, fmt.Errorf("the %s role is tenant-wide and cannot be wallet-scoped: %w", role, ErrMissingInput)
 	}
 
 	query := fmt.Sprintf(`

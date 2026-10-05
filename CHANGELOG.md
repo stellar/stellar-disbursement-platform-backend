@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
+- Restore tenant-wide access for Developer role: developers are excluded from the distribution account membership system, and developer-minted API keys carry the same privileges as Owner-minted. [#1223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1223)
 
 ### Fixed
 
@@ -26,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bound Prometheus `method` metric label to an allowlist to prevent memory-exhaustion from unbounded label cardinality. [#1221](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1221)
 - Keep Owner flag in sync with Owner role. [#1222](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1222)
 - Strip caller headers and query string from RPC proxy requests. [#1224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1224)
+- Reject tokens without a user claim on staff endpoints. [#1225](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1225)
 
 ### Security and Dependencies
 

@@ -115,3 +115,18 @@ func Test_FromUserRoleArrayToStringArray(t *testing.T) {
 	result := FromUserRoleArrayToStringArray(roles)
 	assert.Equal(t, expected, result)
 }
+
+func Test_IsTenantWideRole(t *testing.T) {
+	for _, role := range GetAllRoles() {
+		want := role == OwnerUserRole || role == DeveloperUserRole
+		assert.Equalf(t, want, IsTenantWideRole(role), "role=%s", role)
+	}
+}
+
+func Test_GetWalletScopableRoles(t *testing.T) {
+	scopable := GetWalletScopableRoles()
+	assert.ElementsMatch(t, []UserRole{FinancialControllerUserRole, BusinessUserRole, InitiatorUserRole, ApproverUserRole}, scopable)
+	for _, role := range scopable {
+		assert.Falsef(t, IsTenantWideRole(role), "role=%s", role)
+	}
+}

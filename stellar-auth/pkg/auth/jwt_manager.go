@@ -60,6 +60,10 @@ func (m *defaultJWTManager) parseToken(tokenString string) (*jwtgo.Token, *claim
 		return nil, nil, ErrInvalidToken
 	}
 
+	if c.User == nil {
+		return nil, nil, ErrInvalidToken
+	}
+
 	return token, c, nil
 }
 

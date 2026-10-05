@@ -650,7 +650,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
-		// Distribution wallets (the tenant's sending accounts) — Owner-only per the spec.
+		// Distribution wallets (the tenant's sending accounts): Owner-only for JWTs; API keys are
+		// authorized by permission here and bound to their wallet scope in the handlers.
 		if o.distributionWalletService != nil {
 			r.Route("/distribution-wallets", func(r chi.Router) {
 				distributionWalletsHandler := httphandler.DistributionWalletsHandler{
@@ -661,9 +662,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				}
 
-				// Owner-only reads (admin views). As with the write group below, the Owner
-				// requirement here only binds the JWT path, so each handler re-checks it via
-				// ensureCallerIsOwner and then applies its read scope.
+				// Owner-only reads (admin views); API keys get the wallet's scope check in the handler.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
@@ -675,9 +674,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 				// Membership-scoped reads (the dashboard picker + Total Balance tile): any
 				// business role at the route; the handlers filter to the caller's read scope
-				// (Owners: everything; members: their wallets; 404 outside per-wallet scope).
+				// (owners and developers: everything; members: their wallets; 404 outside per-wallet scope).
 				// /{id}/capabilities also serves the grant picker via ?user_id=/?role=, which
-				// reports a THIRD party's capabilities and is Owner-gated inside the handler.
+				// reports a THIRD party's capabilities and is Owner-gated for JWTs inside the handler.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
@@ -688,10 +687,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Get("/{id}/capabilities", distributionWalletsHandler.GetDistributionWalletCapabilities)
 				})
 
-				// Write operations. The Owner requirement below only binds the JWT path —
-				// RequirePermission short-circuits to the handler on the API-key path and never
-				// invokes AnyRoleMiddleware — so every handler in this group re-checks it via
-				// ensureCallerIsOwner, which is what actually holds for API keys.
+				// Write operations. Owner-only for JWTs; API keys need the wallet in scope (promote also
+				// needs the demoted default in scope). Create has no wallet to scope.
 				r.With(middleware.RequirePermission(
 					data.WriteDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),

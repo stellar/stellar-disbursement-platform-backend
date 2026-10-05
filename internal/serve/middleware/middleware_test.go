@@ -2,7 +2,12 @@ package middleware
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
@@ -23,6 +29,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -472,6 +479,52 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
+}
+
+func Test_AuthenticateMiddleware_rejectsEmbeddedWalletToken(t *testing.T) {
+	// Staff and embedded wallet tokens are signed with the same key.
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	privateKey := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))
+	publicKey, err := utils.GetEC256PublicKeyFromPrivateKey(privateKey)
+	require.NoError(t, err)
+
+	authManager := auth.NewAuthManager(auth.WithDefaultJWTManagerOption(publicKey, privateKey))
+	walletJWTManager, err := wallet.NewWalletJWTManager(privateKey)
+	require.NoError(t, err)
+	walletToken, err := walletJWTManager.GenerateToken(
+		context.Background(),
+		"test_tenant_id",
+		"credential-id",
+		"CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX",
+		time.Now().Add(time.Minute),
+	)
+	require.NoError(t, err)
+
+	mTenantManager := &tenant.TenantManagerMock{}
+	defer mTenantManager.AssertExpectations(t)
+
+	r := chi.NewRouter()
+	r.With(AuthenticateMiddleware(authManager, mTenantManager)).
+		Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+	req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+walletToken)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	resp := w.Result()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 }
 
 func Test_AnyRoleMiddleware(t *testing.T) {
