@@ -15,6 +15,9 @@ import (
 // MaxRPCRequestBodySize is the maximum allowed size for RPC proxy request bodies (512 KB).
 const MaxRPCRequestBodySize = 512 * 1024
 
+// rpcProxyUserAgent is the User-Agent sent to the RPC instance in place of the caller's.
+const rpcProxyUserAgent = "stellar-disbursement-platform"
+
 // RPCProxyHandler proxies JSON-RPC requests to the underlying Stellar RPC instance, allowing embedded
 // wallets and the SDP frontends to interact with the Stellar network.
 type RPCProxyHandler struct {
@@ -64,22 +67,27 @@ func (h RPCProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy := &httputil.ReverseProxy{
+		// Only the request body is taken from the caller. The URL and headers are built from the RPC configuration.
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			outURL := *target
+			pr.Out.URL = &outURL
+			pr.Out.Host = target.Host
 
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		req.Host = target.Host
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-		req.URL.Path = target.Path
+			header := http.Header{}
+			header.Set("Content-Type", "application/json")
+			header.Set("Accept", "application/json")
+			header.Set("User-Agent", rpcProxyUserAgent)
+			if h.RPCAuthHeaderKey != "" && h.RPCAuthHeaderValue != "" {
+				header.Set(h.RPCAuthHeaderKey, h.RPCAuthHeaderValue)
+			}
+			pr.Out.Header = header
 
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
-
-		if h.RPCAuthHeaderKey != "" && h.RPCAuthHeaderValue != "" {
-			req.Header.Set(h.RPCAuthHeaderKey, h.RPCAuthHeaderValue)
-		}
+			// Send the body with its exact length, dropping the caller's transfer encoding and trailers.
+			pr.Out.ContentLength = int64(len(body))
+			pr.Out.TransferEncoding = nil
+			pr.Out.Trailer = nil
+		},
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
