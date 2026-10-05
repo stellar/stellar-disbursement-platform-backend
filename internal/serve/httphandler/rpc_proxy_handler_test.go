@@ -261,3 +261,46 @@ func Test_RPCProxyHandler_ServeHTTP_forwardsOnlyAllowListedRequestData(t *testin
 		})
 	}
 }
+
+func Test_RPCProxyHandler_ServeHTTP_dropsRequestTrailersAndTransferEncoding(t *testing.T) {
+	const requestBody = `{"jsonrpc":"2.0","method":"getHealth","id":1}`
+
+	var gotTrailer http.Header
+	var gotTransferEncoding []string
+	var gotContentLength int64
+	var gotBody string
+	mockRPC := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Trailers are only available once the body has been read.
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		gotBody = string(body)
+		gotTrailer = r.Trailer
+		gotTransferEncoding = r.TransferEncoding
+		gotContentLength = r.ContentLength
+
+		w.Header().Set("Content-Type", "application/json")
+		_, err = w.Write([]byte(`{"jsonrpc":"2.0","result":{"status":"healthy"},"id":1}`))
+		require.NoError(t, err)
+	}))
+	defer mockRPC.Close()
+
+	proxy := httptest.NewServer(RPCProxyHandler{RPCUrl: mockRPC.URL})
+	defer proxy.Close()
+
+	// A body of unknown length is sent chunked, which is what allows request trailers.
+	req, err := http.NewRequest(http.MethodPost, proxy.URL, io.MultiReader(strings.NewReader(requestBody)))
+	require.NoError(t, err)
+	req.Trailer = http.Header{}
+	req.Trailer.Set("Authorization", "Bearer caller-session-jwt")
+	req.Trailer.Set("X-Caller-Trailer", "caller-supplied")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, gotTrailer)
+	assert.Empty(t, gotTransferEncoding)
+	assert.Equal(t, int64(len(requestBody)), gotContentLength)
+	assert.Equal(t, requestBody, gotBody)
+}

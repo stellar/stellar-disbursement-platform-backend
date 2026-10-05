@@ -82,6 +82,11 @@ func (h RPCProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				header.Set(h.RPCAuthHeaderKey, h.RPCAuthHeaderValue)
 			}
 			pr.Out.Header = header
+
+			// Send the body with its exact length, dropping the caller's transfer encoding and trailers.
+			pr.Out.ContentLength = int64(len(body))
+			pr.Out.TransferEncoding = nil
+			pr.Out.Trailer = nil
 		},
 	}
 
