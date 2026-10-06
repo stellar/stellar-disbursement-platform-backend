@@ -117,7 +117,7 @@ func Test_PaymentsModelGet(t *testing.T) {
 	})
 }
 
-func Test_PaymentModel_GetByStellarTransactionID(t *testing.T) {
+func Test_PaymentModel_GetSuccessfulByStellarTransaction(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -129,8 +129,9 @@ func Test_PaymentModel_GetByStellarTransactionID(t *testing.T) {
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
-	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{ExternalID: "RCV-1"})
 	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
+	sourceWallet := EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	disbursementModel := DisbursementModel{dbConnectionPool: dbConnectionPool}
 	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &Disbursement{
@@ -141,69 +142,51 @@ func Test_PaymentModel_GetByStellarTransactionID(t *testing.T) {
 	})
 
 	paymentModel := PaymentModel{dbConnectionPool: dbConnectionPool}
-
-	t.Run("returns ErrRecordNotFound when stellarTransactionID is empty", func(t *testing.T) {
-		_, err := paymentModel.GetByStellarTransactionID(ctx, dbConnectionPool, "")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrRecordNotFound)
-	})
-
-	t.Run("returns ErrRecordNotFound when no payment exists with stellar transaction ID", func(t *testing.T) {
-		_, err := paymentModel.GetByStellarTransactionID(ctx, dbConnectionPool, "non-existent-tx-id")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrRecordNotFound)
-	})
-
-	t.Run("returns ErrRecordNotFound when payment exists but status is not Success", func(t *testing.T) {
-		stellarTransactionID, err := utils.RandomString(64)
-		require.NoError(t, err)
-		stellarOperationID, err := utils.RandomString(32)
-		require.NoError(t, err)
-
-		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
-			Amount:               "50",
-			StellarTransactionID: stellarTransactionID,
-			StellarOperationID:   stellarOperationID,
-			Status:               DraftPaymentStatus,
-			StatusHistory: []PaymentStatusHistoryEntry{
-				{Status: DraftPaymentStatus, StatusMessage: "", Timestamp: time.Now()},
-			},
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: receiverWallet,
-		})
-
-		_, err = paymentModel.GetByStellarTransactionID(ctx, dbConnectionPool, stellarTransactionID)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrRecordNotFound)
-	})
-
-	t.Run("returns payment successfully when status is Success", func(t *testing.T) {
-		stellarTransactionID, err := utils.RandomString(64)
-		require.NoError(t, err)
-		stellarOperationID, err := utils.RandomString(32)
-		require.NoError(t, err)
-
-		expected := CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
+	newPayment := func(txHash, opID string, status PaymentStatus) *Payment {
+		return CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
 			Amount:               "100",
-			StellarTransactionID: stellarTransactionID,
-			StellarOperationID:   stellarOperationID,
-			Status:               SuccessPaymentStatus,
-			StatusHistory: []PaymentStatusHistoryEntry{
-				{Status: SuccessPaymentStatus, StatusMessage: "", Timestamp: time.Now()},
-			},
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: receiverWallet,
+			StellarTransactionID: txHash,
+			StellarOperationID:   opID,
+			Status:               status,
+			StatusHistory:        []PaymentStatusHistoryEntry{{Status: status, Timestamp: time.Now()}},
+			Disbursement:         disbursement,
+			Asset:                *asset,
+			ReceiverWallet:       receiverWallet,
 		})
+	}
 
-		actual, err := paymentModel.GetByStellarTransactionID(ctx, dbConnectionPool, stellarTransactionID)
+	t.Run("returns ErrRecordNotFound for empty ids, unknown transactions and non-success payments", func(t *testing.T) {
+		draft := newPayment("tx-draft", "op-1", DraftPaymentStatus)
+		for _, args := range [][3]string{
+			{"", "tx-draft", "op-1"},
+			{sourceWallet.ID, "", "op-1"},
+			{sourceWallet.ID, "tx-unknown", "op-1"},
+			{sourceWallet.ID, draft.StellarTransactionID, "op-1"},
+		} {
+			_, err := paymentModel.GetSuccessfulByStellarTransaction(ctx, dbConnectionPool, args[0], args[1], args[2])
+			assert.ErrorIs(t, err, ErrRecordNotFound, "%v", args)
+		}
+	})
+
+	t.Run("returns the wallet's successful payment with the receiver's external id", func(t *testing.T) {
+		expected := newPayment("tx-ok", "op-1", SuccessPaymentStatus)
+
+		actual, err := paymentModel.GetSuccessfulByStellarTransaction(ctx, dbConnectionPool, sourceWallet.ID, "tx-ok", "op-1")
 		require.NoError(t, err)
-		require.NotNil(t, actual)
 		assert.Equal(t, expected.ID, actual.ID)
-		assert.Equal(t, expected.StellarTransactionID, actual.StellarTransactionID)
 		assert.Equal(t, SuccessPaymentStatus, actual.Status)
-		assert.Equal(t, expected.Amount, actual.Amount)
+		assert.Equal(t, "RCV-1", actual.ReceiverWallet.Receiver.ExternalID)
+
+		// The operation id only ranks candidates: an unknown one still finds the transaction's payment.
+		actual, err = paymentModel.GetSuccessfulByStellarTransaction(ctx, dbConnectionPool, sourceWallet.ID, "tx-ok", "op-other")
+		require.NoError(t, err)
+		assert.Equal(t, expected.ID, actual.ID)
+	})
+
+	t.Run("does not return another wallet's payment", func(t *testing.T) {
+		newPayment("tx-mine", "op-1", SuccessPaymentStatus)
+		_, err := paymentModel.GetSuccessfulByStellarTransaction(ctx, dbConnectionPool, "other-wallet-id", "tx-mine", "op-1")
+		assert.ErrorIs(t, err, ErrRecordNotFound)
 	})
 }
 

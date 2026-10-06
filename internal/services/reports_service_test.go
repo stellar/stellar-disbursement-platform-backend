@@ -53,7 +53,7 @@ func TestReportsServiceGetStatement(t *testing.T) {
 			Type:    schema.DistributionAccountCircleDBVault,
 		}
 
-		result, err := service.GetStatement(ctx, &nonStellarAccount, "", fromDate, toDate)
+		result, err := service.GetStatement(ctx, &nonStellarAccount, "wallet-1", "", fromDate, toDate)
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -69,7 +69,7 @@ func TestReportsServiceGetStatement(t *testing.T) {
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
-		result, err := service.GetStatement(ctx, &stellarAccount, "NONEXISTENT", fromDate, toDate)
+		result, err := service.GetStatement(ctx, &stellarAccount, "wallet-1", "NONEXISTENT", fromDate, toDate)
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -97,7 +97,7 @@ func TestReportsServiceGetStatement(t *testing.T) {
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
-		result, err := service.GetStatement(ctx, &stellarAccount, "XLM", fromDate, toDate)
+		result, err := service.GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -133,7 +133,7 @@ func TestReportsServiceGetStatement(t *testing.T) {
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
-		result, err := service.GetStatement(ctx, &stellarAccount, "", fromDate, toDate)
+		result, err := service.GetStatement(ctx, &stellarAccount, "wallet-1", "", fromDate, toDate)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -394,7 +394,7 @@ func TestReportsService_GetStatement_ErrorCases(t *testing.T) {
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
-		result, err := service.GetStatement(ctx, &stellarAccount, "", fromDate, toDate)
+		result, err := service.GetStatement(ctx, &stellarAccount, "wallet-1", "", fromDate, toDate)
 
 		require.Error(t, err)
 		assert.Nil(t, result)
@@ -420,7 +420,7 @@ func TestReportsService_GetStatement_ErrorCases(t *testing.T) {
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
-		result, err := service.GetStatement(ctx, &stellarAccount, "", fromDate, toDate)
+		result, err := service.GetStatement(ctx, &stellarAccount, "wallet-1", "", fromDate, toDate)
 
 		require.NoError(t, err)
 		require.NotNil(t, result)

@@ -265,76 +265,42 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 	return &payments[0], nil
 }
 
-func (p *PaymentModel) GetByStellarTransactionID(ctx context.Context, sqlExec db.SQLExecuter, stellarTransactionID string) (*Payment, error) {
-	if stellarTransactionID == "" {
+// GetSuccessfulByStellarTransaction returns the SUCCESS payment walletID sent in the given Stellar
+// transaction, preferring the operation that matches operationID when the transaction carried
+// several. The receiver's external_id rides along for statement labelling.
+func (p *PaymentModel) GetSuccessfulByStellarTransaction(ctx context.Context, sqlExec db.SQLExecuter, walletID, txHash, operationID string) (*Payment, error) {
+	if walletID == "" || txHash == "" {
 		return nil, ErrRecordNotFound
 	}
 	query := `
 		SELECT
-    	` + PaymentColumnNames("p", "") + `,
-    	` + DisbursementColumnNames("d", "disbursement") + `,
-    	` + AssetColumnNames("a", "asset", false) + `,
-    	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-    	r.external_id AS "receiver_wallet.receiver.external_id",
-    	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
+			` + PaymentColumnNames("p", "") + `,
+			` + DisbursementColumnNames("d", "disbursement") + `,
+			` + AssetColumnNames("a", "asset", false) + `,
+			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+			r.external_id AS "receiver_wallet.receiver.external_id",
+			` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
 		FROM
-    	payments p
-    	LEFT JOIN disbursements d ON p.disbursement_id = d.id
-    	JOIN assets a ON p.asset_id = a.id
-    	JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
-    	JOIN receivers r ON rw.receiver_id = r.id
-    	JOIN wallets w ON w.id = rw.wallet_id
+			payments p
+			LEFT JOIN disbursements d ON p.disbursement_id = d.id
+			JOIN assets a ON p.asset_id = a.id
+			JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+			JOIN receivers r ON rw.receiver_id = r.id
+			JOIN wallets w ON w.id = rw.wallet_id
 		WHERE
-    	p.stellar_transaction_id = $1
-    	AND p.status = $2
+			p.source_wallet_id = $1
+			AND p.stellar_transaction_id = $2
+			AND p.status = $3
+		ORDER BY (p.stellar_operation_id = $4) DESC NULLS LAST, p.created_at
 		LIMIT 1
 	`
 	var payment Payment
-	err := sqlExec.GetContext(ctx, &payment, query, stellarTransactionID, SuccessPaymentStatus)
+	err := sqlExec.GetContext(ctx, &payment, query, walletID, txHash, SuccessPaymentStatus, operationID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("getting payment by stellar_transaction_id %s: %w", stellarTransactionID, err)
-	}
-	if payment.Type == PaymentTypeDirect {
-		payment.Disbursement = nil
-	}
-	return &payment, nil
-}
-
-func (p *PaymentModel) GetByStellarTransactionIDAndOperationID(ctx context.Context, sqlExec db.SQLExecuter, stellarTransactionID, stellarOperationID string) (*Payment, error) {
-	if stellarTransactionID == "" || stellarOperationID == "" {
-		return nil, ErrRecordNotFound
-	}
-	query := `
-		SELECT
-    	` + PaymentColumnNames("p", "") + `,
-    	` + DisbursementColumnNames("d", "disbursement") + `,
-    	` + AssetColumnNames("a", "asset", false) + `,
-    	` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
-    	r.external_id AS "receiver_wallet.receiver.external_id",
-    	` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
-		FROM
-    	payments p
-    	LEFT JOIN disbursements d ON p.disbursement_id = d.id
-    	JOIN assets a ON p.asset_id = a.id
-    	JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
-    	JOIN receivers r ON rw.receiver_id = r.id
-    	JOIN wallets w ON w.id = rw.wallet_id
-		WHERE
-    	p.stellar_transaction_id = $1
-    	AND p.stellar_operation_id = $2
-    	AND p.status = $3
-		LIMIT 1
-	`
-	var payment Payment
-	err := sqlExec.GetContext(ctx, &payment, query, stellarTransactionID, stellarOperationID, SuccessPaymentStatus)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		}
-		return nil, fmt.Errorf("getting payment by stellar_transaction_id %s and stellar_operation_id %s: %w", stellarTransactionID, stellarOperationID, err)
+		return nil, fmt.Errorf("getting successful payment for stellar transaction %s: %w", txHash, err)
 	}
 	if payment.Type == PaymentTypeDirect {
 		payment.Disbursement = nil

@@ -10,12 +10,16 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/transaction"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
@@ -32,8 +36,8 @@ type mockReportsService struct {
 	mock.Mock
 }
 
-func (m *mockReportsService) GetStatement(ctx context.Context, account *schema.TransactionAccount, assetCode string, fromDate, toDate time.Time) (*services.StatementResult, error) {
-	args := m.Called(ctx, account, assetCode, fromDate, toDate)
+func (m *mockReportsService) GetStatement(ctx context.Context, account *schema.TransactionAccount, walletID, assetCode string, fromDate, toDate time.Time) (*services.StatementResult, error) {
+	args := m.Called(ctx, account, walletID, assetCode, fromDate, toDate)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -41,175 +45,175 @@ func (m *mockReportsService) GetStatement(ctx context.Context, account *schema.T
 }
 
 func TestReportsHandlerGetStatementExport(t *testing.T) {
-	stellarAccount := schema.TransactionAccount{
-		Address: "GDNRRK5EXMZ4STV7UTO3CW4LSVNY5KYWTM3J7BM5SQNA7KE2RYX55IYV",
-		Type:    schema.DistributionAccountStellarEnv,
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// Three DB_VAULT accounts: the default (provisioned), a second live one, and an archived one.
+	// A fourth is still PENDING, so it has no address to read.
+	addrA, addrB, addrOld := keypair.MustRandom().Address(), keypair.MustRandom().Address(), keypair.MustRandom().Address()
+	walletA := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = dbConnectionPool.ExecContext(ctx, `UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2`, addrA, walletA.ID)
+	require.NoError(t, err)
+	insertWallet := func(name, addr, status string) string {
+		var id string
+		require.NoError(t, dbConnectionPool.GetContext(ctx, &id, `
+			INSERT INTO distribution_wallets (name, distribution_account_type, distribution_account_address, status, archived_at)
+			VALUES ($1, 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', NULLIF($2, ''), $3::text, CASE WHEN $3::text = 'ARCHIVED' THEN NOW() END)
+			RETURNING id`, name, addr, status))
+		return id
 	}
-	successResult := &services.StatementResult{
-		Summary: services.StatementSummary{
-			Account: "stellar:GDNRRK5EXMZ4STV7UTO3CW4LSVNY5KYWTM3J7BM5SQNA7KE2RYX55IYV",
-			Assets: []services.StatementAssetSummary{
-				{
-					Code:             "XLM",
-					BeginningBalance: emptyBalance,
-					TotalCredits:     emptyBalance,
-					TotalDebits:      emptyBalance,
-					EndingBalance:    "9.7998900",
-					Transactions:     []services.StatementTransaction{},
-				},
-			},
-		},
+	walletBID := insertWallet("Field office B", addrB, "ACTIVE")
+	walletOldID := insertWallet("Old account", addrOld, "ARCHIVED")
+	walletPendingID := insertWallet("Not yet funded", "", "PENDING")
+
+	memberA := &auth.User{ID: "stmt-member-a", Email: "a@stmt.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+	owner := &auth.User{ID: "stmt-owner", Email: "o@stmt.test", IsOwner: true, Roles: []string{string(data.OwnerUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, memberA.ID, walletA.ID, data.FinancialControllerUserRole, nil)
+	require.NoError(t, err)
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, memberA.ID).Return(memberA, nil)
+	authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+
+	const query = "/reports/statement?from_date=2026-01-01&to_date=2026-01-31"
+	statementFor := func(addr string) *services.StatementResult {
+		return &services.StatementResult{Summary: services.StatementSummary{
+			Account: "stellar:" + addr,
+			Assets:  []services.StatementAssetSummary{{Code: "XLM", BeginningBalance: emptyBalance, TotalCredits: emptyBalance, TotalDebits: emptyBalance, EndingBalance: emptyBalance}},
+		}}
+	}
+	accountWith := func(addr string) interface{} {
+		return mock.MatchedBy(func(a *schema.TransactionAccount) bool { return a.Address == addr })
 	}
 
+	type call struct {
+		userID, walletHeader, query string
+	}
+	do := func(svc *mockReportsService, c call) *httptest.ResponseRecorder {
+		h := ReportsHandler{ReportsService: svc, Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
+		r := chi.NewRouter()
+		r.Get("/reports/statement", h.GetStatementExport)
+		req := httptest.NewRequest(http.MethodGet, c.query, nil).WithContext(sdpcontext.SetUserIDInContext(ctx, c.userID))
+		if c.walletHeader != "" {
+			req.Header.Set(XWalletIDHeader, c.walletHeader)
+		}
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr
+	}
+
+	t.Run("validates the date range before touching any account", func(t *testing.T) {
+		for _, tc := range []struct{ query, missing string }{
+			{"/reports/statement?to_date=2026-01-31", "from_date"},
+			{"/reports/statement?from_date=2026-01-01", "to_date"},
+		} {
+			rr := do(&mockReportsService{}, call{userID: owner.ID, query: tc.query})
+			assert.Equal(t, http.StatusBadRequest, rr.Code)
+			assert.Contains(t, rr.Body.String(), tc.missing)
+		}
+	})
+
+	t.Run("owner: statement for the account named by X-Wallet-Id", func(t *testing.T) {
+		svc := &mockReportsService{}
+		svc.On("GetStatement", mock.Anything, accountWith(addrB), walletBID, "", mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time")).
+			Return(statementFor(addrB), nil).Once()
+
+		rr := do(svc, call{userID: owner.ID, walletHeader: walletBID, query: query})
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.Equal(t, "application/pdf", rr.Header().Get("Content-Type"))
+		assert.Equal(t, "attachment; filename=statement_field-office-b_20260101-20260131.pdf", rr.Header().Get("Content-Disposition"))
+		svc.AssertExpectations(t)
+	})
+
+	t.Run("owner: several visible accounts and no header is a 400, never a silent default", func(t *testing.T) {
+		rr := do(&mockReportsService{}, call{userID: owner.ID, query: query})
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "X-Wallet-Id")
+	})
+
+	t.Run("owner: archived accounts stay reportable and are marked as such", func(t *testing.T) {
+		svc := &mockReportsService{}
+		result := statementFor(addrOld)
+		svc.On("GetStatement", mock.Anything, accountWith(addrOld), walletOldID, "", mock.Anything, mock.Anything).Return(result, nil).Once()
+
+		rr := do(svc, call{userID: owner.ID, walletHeader: walletOldID, query: query})
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.Equal(t, "Old account (archived)", result.Summary.AccountName)
+	})
+
+	t.Run("owner: a pending account has nothing to read yet", func(t *testing.T) {
+		rr := do(&mockReportsService{}, call{userID: owner.ID, walletHeader: walletPendingID, query: query})
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "not been provisioned")
+	})
+
+	t.Run("owner: unknown account id is a 404", func(t *testing.T) {
+		rr := do(&mockReportsService{}, call{userID: owner.ID, walletHeader: "no-such-wallet", query: query})
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("member: only accounts they hold a membership on, 404 elsewhere", func(t *testing.T) {
+		rr := do(&mockReportsService{}, call{userID: memberA.ID, walletHeader: walletBID, query: query})
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+
+		svc := &mockReportsService{}
+		svc.On("GetStatement", mock.Anything, accountWith(addrA), walletA.ID, "", mock.Anything, mock.Anything).Return(statementFor(addrA), nil).Once()
+		rr = do(svc, call{userID: memberA.ID, walletHeader: walletA.ID, query: query})
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	})
+
+	t.Run("member: a single visible account needs no header", func(t *testing.T) {
+		svc := &mockReportsService{}
+		svc.On("GetStatement", mock.Anything, accountWith(addrA), walletA.ID, "", mock.Anything, mock.Anything).Return(statementFor(addrA), nil).Once()
+		rr := do(svc, call{userID: memberA.ID, query: query})
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		svc.AssertExpectations(t)
+	})
+
+	t.Run("service errors map to 404 for a missing asset and 500 otherwise", func(t *testing.T) {
+		for _, tc := range []struct {
+			err    error
+			status int
+		}{
+			{services.ErrStatementAssetNotFound, http.StatusNotFound},
+			{errors.New("horizon down"), http.StatusInternalServerError},
+		} {
+			svc := &mockReportsService{}
+			svc.On("GetStatement", mock.Anything, mock.Anything, walletBID, "", mock.Anything, mock.Anything).Return(nil, tc.err).Once()
+			rr := do(svc, call{userID: owner.ID, walletHeader: walletBID, query: query})
+			assert.Equal(t, tc.status, rr.Code)
+		}
+	})
+}
+
+func Test_statementAccount(t *testing.T) {
+	addr := keypair.MustRandom().Address()
 	testCases := []struct {
-		name               string
-		query              string
-		prepareMocks       func(*mockReportsService, *sigMocks.MockDistributionAccountResolver)
-		expectedStatus     int
-		expectedContains   string
-		expectPDFOnSuccess bool
+		name        string
+		wallet      data.DistributionWallet
+		expectedErr string
 	}{
-		{
-			name:  "returns 200 and PDF when asset_code is omitted (all assets)",
-			query: "?from_date=2026-01-01&to_date=2026-01-31",
-			prepareMocks: func(mSvc *mockReportsService, mResolver *sigMocks.MockDistributionAccountResolver) {
-				mResolver.On("DistributionAccountFromContext", mock.Anything).
-					Return(stellarAccount, nil).
-					Once()
-				mSvc.On("GetStatement", mock.Anything, mock.MatchedBy(func(a *schema.TransactionAccount) bool {
-					return a != nil && a.Address == stellarAccount.Address && a.Type == stellarAccount.Type
-				}), "",
-					time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-					time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)).
-					Return(successResult, nil).
-					Once()
-			},
-			expectedStatus:     http.StatusOK,
-			expectedContains:   "",
-			expectPDFOnSuccess: true,
-		},
-		{
-			name:             "returns 400 when from_date is missing",
-			query:            "?asset_code=XLM&to_date=2026-01-31",
-			prepareMocks:     func(_ *mockReportsService, _ *sigMocks.MockDistributionAccountResolver) {},
-			expectedStatus:   http.StatusBadRequest,
-			expectedContains: "from_date",
-		},
-		{
-			name:             "returns 400 when to_date is missing",
-			query:            "?asset_code=XLM&from_date=2026-01-01",
-			prepareMocks:     func(_ *mockReportsService, _ *sigMocks.MockDistributionAccountResolver) {},
-			expectedStatus:   http.StatusBadRequest,
-			expectedContains: "to_date",
-		},
-		{
-			name:  "returns 500 when distribution account resolver fails",
-			query: testQueryParams,
-			prepareMocks: func(_ *mockReportsService, mResolver *sigMocks.MockDistributionAccountResolver) {
-				mResolver.On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{}, errors.New("resolver error")).
-					Once()
-			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedContains: "Cannot retrieve distribution account",
-		},
-		{
-			name:  "returns 400 when account is not Stellar",
-			query: testQueryParams,
-			prepareMocks: func(_ *mockReportsService, mResolver *sigMocks.MockDistributionAccountResolver) {
-				mResolver.On("DistributionAccountFromContext", mock.Anything).
-					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
-					Once()
-			},
-			expectedStatus:   http.StatusBadRequest,
-			expectedContains: "only supported for Stellar",
-		},
-		{
-			name:  "returns 404 when asset not found for account",
-			query: testQueryParams,
-			prepareMocks: func(mSvc *mockReportsService, mResolver *sigMocks.MockDistributionAccountResolver) {
-				mResolver.On("DistributionAccountFromContext", mock.Anything).
-					Return(stellarAccount, nil).
-					Once()
-				mSvc.On("GetStatement", mock.Anything, mock.MatchedBy(func(a *schema.TransactionAccount) bool {
-					return a != nil && a.Address == stellarAccount.Address && a.Type == stellarAccount.Type
-				}), "XLM",
-					time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-					time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)).
-					Return(nil, services.ErrStatementAssetNotFound).
-					Once()
-			},
-			expectedStatus:   http.StatusNotFound,
-			expectedContains: "asset not found",
-		},
-		{
-			name:  "returns 500 when reports service fails with unexpected error",
-			query: testQueryParams,
-			prepareMocks: func(mSvc *mockReportsService, mResolver *sigMocks.MockDistributionAccountResolver) {
-				mResolver.On("DistributionAccountFromContext", mock.Anything).
-					Return(stellarAccount, nil).
-					Once()
-				mSvc.On("GetStatement", mock.Anything, mock.MatchedBy(func(a *schema.TransactionAccount) bool {
-					return a != nil && a.Address == stellarAccount.Address && a.Type == stellarAccount.Type
-				}), "XLM",
-					time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-					time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)).
-					Return(nil, errors.New("horizon error")).
-					Once()
-			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedContains: "Cannot retrieve statement",
-		},
-		{
-			name:  "returns 200 and PDF on success",
-			query: testQueryParams,
-			prepareMocks: func(mSvc *mockReportsService, mResolver *sigMocks.MockDistributionAccountResolver) {
-				mResolver.On("DistributionAccountFromContext", mock.Anything).
-					Return(stellarAccount, nil).
-					Once()
-				mSvc.On("GetStatement", mock.Anything, mock.MatchedBy(func(a *schema.TransactionAccount) bool {
-					return a != nil && a.Address == stellarAccount.Address && a.Type == stellarAccount.Type
-				}), "XLM",
-					time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-					time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)).
-					Return(successResult, nil).
-					Once()
-			},
-			expectedStatus:     http.StatusOK,
-			expectedContains:   "",
-			expectPDFOnSuccess: true,
-		},
+		{"shared host account", data.DistributionWallet{AccountType: schema.DistributionAccountStellarEnv, Address: &addr}, errStatementNotForSharedAccount},
+		{"circle account", data.DistributionWallet{AccountType: schema.DistributionAccountCircleDBVault}, errStatementOnlySupportedForStellar},
+		{"pending account", data.DistributionWallet{AccountType: schema.DistributionAccountStellarDBVault}, errStatementAccountNotProvisioned},
+		{"provisioned DB vault account", data.DistributionWallet{AccountType: schema.DistributionAccountStellarDBVault, Address: &addr, AccountStatus: schema.AccountStatusActive}, ""},
 	}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mSvc := &mockReportsService{}
-			mResolver := sigMocks.NewMockDistributionAccountResolver(t)
-			tc.prepareMocks(mSvc, mResolver)
-
-			h := ReportsHandler{
-				DistributionAccountResolver: mResolver,
-				ReportsService:              mSvc,
+			account, httpErr := statementAccount(&tc.wallet)
+			if tc.expectedErr != "" {
+				require.NotNil(t, httpErr)
+				assert.Equal(t, http.StatusBadRequest, httpErr.StatusCode)
+				assert.Equal(t, tc.expectedErr, httpErr.Message)
+				return
 			}
-
-			rr := httptest.NewRecorder()
-			req, err := http.NewRequest(http.MethodGet, "/reports/statement"+tc.query, nil)
-			require.NoError(t, err)
-			http.HandlerFunc(h.GetStatementExport).ServeHTTP(rr, req)
-			resp := rr.Result()
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-
-			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
-			if tc.expectedContains != "" {
-				assert.Contains(t, string(body), tc.expectedContains)
-			}
-			if tc.expectPDFOnSuccess && tc.expectedStatus == http.StatusOK {
-				assert.Equal(t, "application/pdf", resp.Header.Get("Content-Type"))
-				assert.Contains(t, resp.Header.Get("Content-Disposition"), "attachment")
-				assert.NotEmpty(t, body)
-			}
+			require.Nil(t, httpErr)
+			assert.Equal(t, schema.TransactionAccount{Address: addr, Type: schema.DistributionAccountStellarDBVault, Status: schema.AccountStatusActive}, account)
 		})
 	}
 }

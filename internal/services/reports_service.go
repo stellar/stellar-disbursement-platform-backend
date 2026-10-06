@@ -30,7 +30,7 @@ var (
 
 // ReportsServiceInterface defines the interface for generating account statements (used by reports handler).
 type ReportsServiceInterface interface {
-	GetStatement(ctx context.Context, account *schema.TransactionAccount, assetCode string, fromDate, toDate time.Time) (*StatementResult, error)
+	GetStatement(ctx context.Context, account *schema.TransactionAccount, walletID, assetCode string, fromDate, toDate time.Time) (*StatementResult, error)
 }
 
 // StatementResult is the full statement response.
@@ -40,8 +40,9 @@ type StatementResult struct {
 
 // StatementSummary holds the statement summary section.
 type StatementSummary struct {
-	Account string                  `json:"account"`
-	Assets  []StatementAssetSummary `json:"assets"`
+	Account     string                  `json:"account"`
+	AccountName string                  `json:"account_name,omitempty"`
+	Assets      []StatementAssetSummary `json:"assets"`
 }
 
 // StatementAssetSummary holds per-asset summary and transactions.
@@ -100,8 +101,9 @@ func NewReportsService(
 
 var _ ReportsServiceInterface = (*ReportsService)(nil)
 
-// GetStatement returns the statement for the given account, asset (optional), and date range.
-func (s *ReportsService) GetStatement(ctx context.Context, account *schema.TransactionAccount, assetCode string, fromDate, toDate time.Time) (*StatementResult, error) {
+// GetStatement returns the statement for one distribution account: account is its on-chain identity
+// (ledger reads), walletID its SDP identity (matching the payments it sent). assetCode is optional.
+func (s *ReportsService) GetStatement(ctx context.Context, account *schema.TransactionAccount, walletID, assetCode string, fromDate, toDate time.Time) (*StatementResult, error) {
 	if !account.IsStellar() {
 		return nil, ErrStatementAccountNotStellar
 	}
@@ -141,14 +143,14 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 			return nil, fmt.Errorf("getting balance: %w", err)
 		}
 
-		transactions, totalCredits, totalDebits, err := s.fetchPaymentsInRange(ctx, account.Address, asset, fromStart, toEnd)
+		transactions, totalCredits, totalDebits, err := s.fetchPaymentsInRange(ctx, account.Address, walletID, asset, fromStart, toEnd)
 		if err != nil {
 			return nil, err
 		}
 
 		var creditsAfter, debitsAfter decimal.Decimal
 		if !afterPeriodStart.After(afterPeriodEnd) {
-			creditsAfter, debitsAfter, err = s.fetchTotalsInRange(ctx, account.Address, asset, afterPeriodStart, afterPeriodEnd)
+			creditsAfter, debitsAfter, err = s.fetchTotalsInRange(ctx, account.Address, walletID, asset, afterPeriodStart, afterPeriodEnd)
 			if err != nil {
 				return nil, err
 			}
@@ -217,7 +219,7 @@ type transactionAccumulator struct {
 
 func (s *ReportsService) fetchPaymentsInRange(
 	ctx context.Context,
-	accountAddress string,
+	accountAddress, walletID string,
 	asset *data.Asset,
 	fromStart, toEnd time.Time,
 ) ([]StatementTransaction, decimal.Decimal, decimal.Decimal, error) {
@@ -235,7 +237,7 @@ func (s *ReportsService) fetchPaymentsInRange(
 			return nil, decimal.Zero, decimal.Zero, fmt.Errorf("fetching payments: %w", err)
 		}
 
-		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, asset, fromStart, toEnd, &accumulator)
+		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, walletID, asset, fromStart, toEnd, &accumulator)
 		if err != nil {
 			return nil, decimal.Zero, decimal.Zero, err
 		}
@@ -265,7 +267,7 @@ func (s *ReportsService) fetchPaymentsInRange(
 // fetchTotalsInRange returns total credits and debits in the given range without building the transaction list.
 func (s *ReportsService) fetchTotalsInRange(
 	ctx context.Context,
-	accountAddress string,
+	accountAddress, walletID string,
 	asset *data.Asset,
 	fromStart, toEnd time.Time,
 ) (totalCredits, totalDebits decimal.Decimal, err error) {
@@ -283,7 +285,7 @@ func (s *ReportsService) fetchTotalsInRange(
 			return decimal.Zero, decimal.Zero, fmt.Errorf("fetching payments: %w", err)
 		}
 
-		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, asset, fromStart, toEnd, &accumulator)
+		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, walletID, asset, fromStart, toEnd, &accumulator)
 		if err != nil {
 			return decimal.Zero, decimal.Zero, err
 		}
@@ -308,7 +310,7 @@ func (s *ReportsService) fetchTotalsInRange(
 func (s *ReportsService) processPaymentPage(
 	ctx context.Context,
 	page operations.OperationsPage,
-	accountAddress string,
+	accountAddress, walletID string,
 	asset *data.Asset,
 	fromStart, toEnd time.Time,
 	accumulator *transactionAccumulator,
@@ -325,7 +327,7 @@ func (s *ReportsService) processPaymentPage(
 			return true, nil
 		}
 
-		line, credits, debits, err := s.processPaymentOperation(ctx, op, accountAddress, asset)
+		line, credits, debits, err := s.processPaymentOperation(ctx, op, accountAddress, walletID, asset)
 		if err != nil {
 			return false, err
 		}
@@ -361,7 +363,7 @@ func getNextPaymentsPageCursor(page operations.OperationsPage) string {
 func (s *ReportsService) processPaymentOperation(
 	ctx context.Context,
 	op operations.Operation,
-	accountAddress string,
+	accountAddress, walletID string,
 	asset *data.Asset,
 ) (*StatementTransaction, decimal.Decimal, decimal.Decimal, error) {
 	from, to, amountStr, paymentAsset, opID, ok := extractPaymentOperation(op)
@@ -383,11 +385,7 @@ func (s *ReportsService) processPaymentOperation(
 	txHash := op.GetTransactionHash()
 	createdAtStr := op.GetBase().LedgerCloseTime.UTC().Format(time.RFC3339)
 
-	var dbPayment *data.Payment
-	dbPayment, err = s.Models.Payment.GetByStellarTransactionIDAndOperationID(ctx, s.Models.DBConnectionPool, txHash, opID)
-	if err != nil && errors.Is(err, data.ErrRecordNotFound) {
-		dbPayment, err = s.Models.Payment.GetByStellarTransactionID(ctx, s.Models.DBConnectionPool, txHash)
-	}
+	dbPayment, err := s.Models.Payment.GetSuccessfulByStellarTransaction(ctx, s.Models.DBConnectionPool, walletID, txHash, opID)
 	if err != nil {
 		dbPayment = nil
 	}

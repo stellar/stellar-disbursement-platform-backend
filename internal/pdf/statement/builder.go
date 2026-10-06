@@ -58,6 +58,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		StatementPeriod:  &shared.StatementPeriod{From: fromDate, To: toDate},
 		TitleSection: &shared.TitleSection{
 			Title:      "Wallet Statement",
+			Subtitle:   accountSubtitle(result.Summary.AccountName),
 			TitleLabel: "Wallet Address: ",
 			TitleValue: walletAddr,
 			TitleURL:   walletURL,
@@ -161,4 +162,11 @@ func statementHeaderLayout() *shared.HeaderLayout {
 		DefaultBorderColor:       defaultBorderColor,
 		HeaderSeparatorLineWidth: headerSeparatorLineWidth,
 	}
+}
+
+func accountSubtitle(accountName string) string {
+	if accountName == "" {
+		return ""
+	}
+	return "Distribution account: " + accountName
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -21,11 +22,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 const (
 	errStatementOnlySupportedForStellar = "Statement is only supported for Stellar distribution accounts"
+	errStatementNotForSharedAccount     = "Statements are not available for tenants on the shared host distribution account"
+	errStatementAccountNotProvisioned   = "The distribution account has not been provisioned yet"
 	internalNotesMaxLength              = 500
 	disbursementTimestampFormat         = "Jan 2, 2006 · 15:04:05 UTC"
 )
@@ -40,7 +44,9 @@ type ReportsHandler struct {
 	AuthManager                 auth.AuthManager
 }
 
-// GetStatementExport returns the statement as a PDF for the authenticated tenant's distribution account.
+// GetStatementExport returns the statement PDF for one distribution account: the one named by
+// X-Wallet-Id, or the only account the caller can see. Reads follow the membership taxonomy, so an
+// account outside the caller's scope is a 404.
 func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -51,18 +57,18 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	distAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve distribution account", err, nil).Render(w)
+	wallet, httpErr := h.resolveStatementWallet(ctx, r)
+	if httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+	account, httpErr := statementAccount(wallet)
+	if httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
-	if !distAccount.IsStellar() {
-		httperror.BadRequest(errStatementOnlySupportedForStellar, nil, nil).Render(w)
-		return
-	}
-
-	result, err := h.ReportsService.GetStatement(ctx, &distAccount, params.AssetCode, params.FromDate, params.ToDate)
+	result, err := h.ReportsService.GetStatement(ctx, &account, wallet.ID, params.AssetCode, params.FromDate, params.ToDate)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrStatementAccountNotStellar):
@@ -76,14 +82,16 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
+	result.Summary.AccountName = wallet.Name
+	if wallet.Status == data.ArchivedDistributionWalletStatus {
+		result.Summary.AccountName += " (archived)"
+	}
 
 	var orgName string
 	var orgLogo []byte
-	if h.Models != nil {
-		if org, err := h.Models.Organizations.Get(ctx); err == nil {
-			orgName = org.Name
-			orgLogo = org.Logo
-		}
+	if org, err := h.Models.Organizations.Get(ctx); err == nil {
+		orgName = org.Name
+		orgLogo = org.Logo
 	}
 
 	pdfBytes, err := statement.BuildPDF(result, params.FromDate, params.ToDate, orgName, orgLogo, params.OperatedByBaseURL)
@@ -92,7 +100,8 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	filename := fmt.Sprintf("statement_%s-%s.pdf",
+	filename := fmt.Sprintf("statement_%s_%s-%s.pdf",
+		filenameToken(wallet.Name),
 		params.FromDate.Format("20060102"),
 		params.ToDate.Format("20060102"))
 	w.Header().Set("Content-Type", "application/pdf")
@@ -102,6 +111,69 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 		log.Ctx(ctx).Errorf("writing statement PDF response: %v", err)
 		return
 	}
+}
+
+// resolveStatementWallet picks the account a statement is for. X-Wallet-Id selects within the
+// caller's read scope (404 outside it, like every other read); without the header the only visible
+// account is used, so single-account tenants and single-account API keys need no header.
+func (h ReportsHandler) resolveStatementWallet(ctx context.Context, r *http.Request) (*data.DistributionWallet, *httperror.HTTPError) {
+	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+
+	walletID := r.Header.Get(XWalletIDHeader)
+	if walletID == "" {
+		visible := scope
+		if visible == nil { // tenant-wide caller: every account, archived ones included
+			wallets, err := h.Models.DistributionWallets.GetAll(ctx, h.DBConnectionPool, true)
+			if err != nil {
+				return nil, httperror.InternalError(ctx, "Cannot list distribution wallets", err, nil)
+			}
+			for _, w := range wallets {
+				visible = append(visible, w.ID)
+			}
+		}
+		if len(visible) != 1 {
+			return nil, httperror.BadRequest("select a distribution account with the X-Wallet-Id header", nil, nil)
+		}
+		walletID = visible[0]
+	} else if !walletInReadScope(scope, walletID) {
+		return nil, httperror.NotFound("distribution wallet not found", nil, nil)
+	}
+
+	wallet, err := h.Models.DistributionWallets.Get(ctx, h.DBConnectionPool, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return nil, httperror.NotFound("distribution wallet not found", nil, nil)
+		}
+		return nil, httperror.InternalError(ctx, "Cannot load distribution wallet", err, nil)
+	}
+	return wallet, nil
+}
+
+// filenameToken reduces an account name to [a-z0-9-] so it can sit in a Content-Disposition filename.
+func filenameToken(name string) string {
+	token := strings.ToLower(strings.TrimSpace(name))
+	token = nonFilenameChars.ReplaceAllString(token, "-")
+	return strings.Trim(token, "-")
+}
+
+var nonFilenameChars = regexp.MustCompile(`[^a-z0-9]+`)
+
+// statementAccount is the on-chain identity a statement is read for. Only accounts the SDP holds
+// on the Stellar network qualify: a Circle account has no ledger history, and the shared host
+// account's history is not this tenant's.
+func statementAccount(wallet *data.DistributionWallet) (schema.TransactionAccount, *httperror.HTTPError) {
+	switch {
+	case wallet.AccountType == schema.DistributionAccountStellarEnv:
+		return schema.TransactionAccount{}, httperror.BadRequest(errStatementNotForSharedAccount, nil, nil)
+	case wallet.AccountType != schema.DistributionAccountStellarDBVault:
+		return schema.TransactionAccount{}, httperror.BadRequest(errStatementOnlySupportedForStellar, nil, nil)
+	case wallet.Address == nil || *wallet.Address == "":
+		return schema.TransactionAccount{}, httperror.BadRequest(errStatementAccountNotProvisioned, nil, nil)
+	}
+	return schema.TransactionAccount{Address: *wallet.Address, Type: wallet.AccountType, Status: wallet.AccountStatus}, nil
 }
 
 // GetPaymentExport returns the Transaction Notice PDF for a single payment.

@@ -49,6 +49,7 @@ type StatementPeriod struct {
 // TitleSection holds the title block below the top header.
 type TitleSection struct {
 	Title      string
+	Subtitle   string // optional line between the title and the label/value line
 	TitleLabel string
 	TitleValue string
 	TitleURL   string
@@ -194,6 +195,11 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 		pdf.SetFont("Inter", "B", layout.TitleFontSize)
 		pdf.SetTextColor(layout.HighlightColor[0], layout.HighlightColor[1], layout.HighlightColor[2])
 		pdf.CellFormat(0, layout.TitleSectionLine2Height, ts.Title, "", 1, "L", false, 0, "")
+		if ts.Subtitle != "" {
+			pdf.SetFont("Inter", "", layout.OrganizationNameFontSize)
+			pdf.SetTextColor(layout.DefaultCellColor[0], layout.DefaultCellColor[1], layout.DefaultCellColor[2])
+			pdf.CellFormat(0, layout.TitleSectionLine3Height, ts.Subtitle, "", 1, "L", false, 0, "")
+		}
 
 		yTitleLine := pdf.GetY()
 		pdf.SetFont("Inter", "", layout.OrganizationNameFontSize)
