@@ -83,6 +83,9 @@ func drawSummaryTable(pdf *gofpdf.Fpdf, result *services.StatementResult) {
 			switch i {
 			case 0:
 				text = utils.FormatAmountTo2Decimals(asset.BeginningBalance)
+				if !asset.Reconciled {
+					text = "not reconciled"
+				}
 			case 1:
 				text = utils.FormatAmountTo2Decimals(asset.TotalCredits)
 			case 2:

@@ -8,10 +8,9 @@ import (
 
 // StatementQueryParams holds validated query parameters for GET /reports/statement.
 type StatementQueryParams struct {
-	AssetCode         string
-	FromDate          time.Time
-	ToDate            time.Time
-	OperatedByBaseURL string // optional
+	AssetCode string
+	FromDate  time.Time
+	ToDate    time.Time
 }
 
 // StatementQueryValidator validates query parameters for GET /reports/statement.
@@ -53,12 +52,9 @@ func (v *StatementQueryValidator) ValidateAndGetStatementParams(r *http.Request)
 		v.Check(!fromDate.After(toDate), "from_date", "from_date must be before or equal to to_date")
 	}
 
-	operatedByBaseURL := strings.TrimSpace(query.Get("base_url"))
-
 	return StatementQueryParams{
-		AssetCode:         assetCode,
-		FromDate:          fromDate,
-		ToDate:            toDate,
-		OperatedByBaseURL: operatedByBaseURL,
+		AssetCode: assetCode,
+		FromDate:  fromDate,
+		ToDate:    toDate,
 	}
 }

@@ -15,7 +15,9 @@ import (
 )
 
 // BuildPDF generates a multi-page PDF from a StatementResult and returns the bytes.
-func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte, operatedByBaseURL string) ([]byte, error) {
+// BuildPDF renders the statement. stellarExpertBaseURL (with trailing slash) is where account and
+// transaction links point.
+func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte, operatedByBaseURL, stellarExpertBaseURL string) ([]byte, error) {
 	pdfDoc := gofpdf.New("P", "mm", "A4", "")
 
 	pdfDoc.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
@@ -42,6 +44,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		DefaultBorderColor:        defaultBorderColor,
 		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
 		OperatedByBaseURL:         operatedByBaseURL,
+		DisclaimerNote:            disclaimerNote(result),
 	}
 	shared.SetupFooter(pdfDoc, footerConfig)
 	pdfDoc.AddPage()
@@ -106,7 +109,7 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 				}
 				drawTxTableHeader(pdfDoc)
 			}
-			runningBalance = drawTxRow(pdfDoc, &transactions[i], asset.Code, runningBalance)
+			runningBalance = drawTxRow(pdfDoc, &transactions[i], asset.Code, runningBalance, stellarExpertBaseURL)
 		}
 		if pdfDoc.GetY()+txDataRowHeight > pageBottom {
 			pdfDoc.AddPage()
@@ -169,4 +172,18 @@ func accountSubtitle(accountName string) string {
 		return ""
 	}
 	return "Distribution account: " + accountName
+}
+
+const (
+	balancesNote   = "Balances are derived from the payments shown; other ledger activity is not included."
+	truncationNote = " Older ledger history was not read, so totals may be incomplete."
+)
+
+func disclaimerNote(result *services.StatementResult) string {
+	for _, asset := range result.Summary.Assets {
+		if asset.Truncated {
+			return balancesNote + truncationNote
+		}
+	}
+	return balancesNote
 }

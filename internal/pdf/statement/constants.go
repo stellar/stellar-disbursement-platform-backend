@@ -1,10 +1,5 @@
 package statement
 
-import (
-	"os"
-	"strings"
-)
-
 // Page dimensions and margins (statement-specific copy for package isolation)
 const (
 	mmPerPage    = 210.0
@@ -90,22 +85,6 @@ const (
 const (
 	maxCounterpartyTextLength = 35
 )
-
-// Stellar Expert Explorer URL
-// Gets the base URL from STELLAR_EXPERT_URL environment variable; defaults to testnet if not set.
-// Ensures the URL ends with a trailing slash for proper concatenation.
-const stellarExpertTestnetDefault = "https://stellar.expert/explorer/testnet/"
-
-var stellarExpertBaseURL = func() string {
-	url := os.Getenv("STELLAR_EXPERT_URL")
-	if url == "" {
-		return stellarExpertTestnetDefault
-	}
-	if !strings.HasSuffix(url, "/") {
-		url += "/"
-	}
-	return url
-}()
 
 const tableWidth = mmPerPage - 2*marginLR
 

@@ -58,7 +58,7 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 	pdf.SetFont("Inter", "", bodyFontSize)
 }
 
-func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode string, runningBalance decimal.Decimal) decimal.Decimal {
+func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode string, runningBalance decimal.Decimal, stellarExpertBaseURL string) decimal.Decimal {
 	var dateLine1, dateLine2 string
 	dateStr := tx.UpdatedAt
 	if dateStr == "" {

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -139,6 +140,66 @@ func TestReportsServiceGetStatement(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, "stellar:"+accountAddress, result.Summary.Account)
 		assert.Len(t, result.Summary.Assets, 1)
+	})
+}
+
+func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
+	ctx := context.Background()
+	accountAddress := keypair.MustRandom().Address()
+	stellarAccount := schema.NewStellarEnvTransactionAccount(accountAddress)
+	fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
+	xlmAsset := data.Asset{Code: assets.XLMAssetCode, Issuer: ""}
+	dbPool := testutils.GetDBConnectionPool(t)
+	models, err := data.NewModels(dbPool)
+	require.NoError(t, err)
+
+	creditOp := func(id, amount string) operations.Payment {
+		op := operations.Payment{From: "GSOMEONE", To: accountAddress, Amount: amount, Asset: base.Asset{Type: "native"}}
+		op.Base.ID = id
+		op.Base.PT = id
+		op.Base.LedgerCloseTime = time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+		return op
+	}
+	pageOf := func(ops ...operations.Operation) operations.OperationsPage {
+		var page operations.OperationsPage
+		page.Embedded.Records = ops
+		return page
+	}
+
+	t.Run("a credit larger than today's balance cannot be reconciled", func(t *testing.T) {
+		horizonClient := &horizonclient.MockClient{}
+		distSvc := mocks.NewMockDistributionAccountService(t)
+		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("100"), nil).Once()
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(creditOp("1", "500")), nil).Once()
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(), nil).Once()
+
+		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
+		require.NoError(t, err)
+		summary := result.Summary.Assets[0]
+		assert.False(t, summary.Reconciled)
+		assert.Equal(t, "0.0000000", summary.BeginningBalance)
+		assert.Equal(t, "500.0000000", summary.TotalCredits)
+		assert.False(t, summary.Truncated)
+	})
+
+	t.Run("hitting the page cap inside the period marks the statement truncated", func(t *testing.T) {
+		horizonClient := &horizonclient.MockClient{}
+		distSvc := mocks.NewMockDistributionAccountService(t)
+		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("1000000"), nil).Once()
+		fullPage := make([]operations.Operation, 0, StatementPaymentsPageLimit)
+		for i := 0; i < StatementPaymentsPageLimit; i++ {
+			fullPage = append(fullPage, creditOp(fmt.Sprintf("op-%d", i), "1"))
+		}
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(fullPage...), nil).Times(MaxStatementPaymentsPages)
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(), nil).Once()
+
+		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
+		require.NoError(t, err)
+		summary := result.Summary.Assets[0]
+		assert.True(t, summary.Truncated)
+		assert.True(t, summary.Reconciled)
+		assert.Len(t, summary.Transactions, StatementPaymentsPageLimit*MaxStatementPaymentsPages)
 	})
 }
 

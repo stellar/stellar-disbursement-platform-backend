@@ -23,6 +23,7 @@ type FooterConfig struct {
 	DefaultBorderColor        []int
 	HeaderSeparatorLineWidth  float64
 	OperatedByBaseURL         string // optional
+	DisclaimerNote            string // optional third line of the disclaimer
 }
 
 // SetupFooter sets the PDF footer function.
@@ -58,6 +59,10 @@ func SetupFooter(pdf *gofpdf.Fpdf, cfg FooterConfig) {
 		pdf.CellFormat(0, cfg.FooterLineHeight, disclaimerTextLine1, "", 1, "L", false, 0, "")
 		pdf.SetXY(xTextStart, pdf.GetY())
 		pdf.CellFormat(0, cfg.FooterLineHeight, disclaimerTextLine2, "", 1, "L", false, 0, "")
+		if cfg.DisclaimerNote != "" {
+			pdf.SetXY(xTextStart, pdf.GetY())
+			pdf.CellFormat(0, cfg.FooterLineHeight, cfg.DisclaimerNote, "", 1, "L", false, 0, "")
+		}
 		pdf.Ln(cfg.FooterDisclaimerToPageGap * 0.5)
 		pdf.CellFormat(0, cfg.FooterLineHeight, fmt.Sprintf("Page %d of %d", pdf.PageNo(), pdf.PageCount()), "", 0, "R", false, 0, "")
 		pdf.SetTextColor(0, 0, 0)

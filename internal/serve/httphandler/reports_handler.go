@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/statement"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/transaction"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -40,6 +42,8 @@ type ReportsHandler struct {
 	DBConnectionPool db.DBConnectionPool
 	HorizonClient    horizonclient.ClientInterface
 	AuthManager      auth.AuthManager
+	// StellarExpertBaseURL is the explorer the PDFs link to, with a trailing slash.
+	StellarExpertBaseURL string
 }
 
 // GetStatementExport returns the statement PDF for one distribution account: the one named by
@@ -92,7 +96,7 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 		orgLogo = org.Logo
 	}
 
-	pdfBytes, err := statement.BuildPDF(result, params.FromDate, params.ToDate, orgName, orgLogo, params.OperatedByBaseURL)
+	pdfBytes, err := statement.BuildPDF(result, params.FromDate, params.ToDate, orgName, orgLogo, operatedBy(ctx), h.StellarExpertBaseURL)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot generate statement PDF", err, nil).Render(w)
 		return
@@ -148,6 +152,20 @@ func (h ReportsHandler) resolveStatementWallet(ctx context.Context, r *http.Requ
 		return nil, httperror.InternalError(ctx, "Cannot load distribution wallet", err, nil)
 	}
 	return wallet, nil
+}
+
+// operatedBy names the deployment on the PDFs: the host of the tenant's dashboard URL, or nothing
+// when the tenant has none configured. It is never taken from the request.
+func operatedBy(ctx context.Context) string {
+	tnt, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil || tnt.SDPUIBaseURL == nil {
+		return ""
+	}
+	u, err := url.Parse(*tnt.SDPUIBaseURL)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 // filenameToken reduces an account name to [a-z0-9-] so it can sit in a Content-Disposition filename.
@@ -218,8 +236,6 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		internalNotesPtr = &internalNotes
 	}
 
-	operatedByBaseURL := strings.TrimSpace(r.URL.Query().Get("base_url"))
-
 	var orgName string
 	var orgLogo []byte
 	if h.Models != nil {
@@ -269,13 +285,13 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		SenderWalletAddress:  senderWalletAddress,
 		FeeCharged:           feeCharged,
 		MemoText:             memoText,
-		StellarExpertBaseURL: transaction.GetStellarExpertBaseURL(),
+		StellarExpertBaseURL: h.StellarExpertBaseURL,
 	}
 	if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil && len(payment.Disbursement.StatusHistory) > 0 {
 		populateDisbursementCreatedApprovedBy(ctx, h.AuthManager, payment.Disbursement.StatusHistory, enrichment)
 	}
 
-	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotesPtr, operatedByBaseURL)
+	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotesPtr, operatedBy(ctx))
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot generate transaction notice PDF", err, nil).Render(w)
 		return

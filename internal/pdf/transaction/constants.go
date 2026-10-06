@@ -1,10 +1,5 @@
 package transaction
 
-import (
-	"os"
-	"strings"
-)
-
 // Page dimensions and margins
 const (
 	mmPerPage    = 210.0
@@ -86,26 +81,6 @@ const (
 	internalNotesMarginBottom  = 3.0
 	internalNotesSmallFontSize = 7.0
 )
-
-// Stellar Expert Explorer URL
-// Gets the base URL from STELLAR_EXPERT_URL environment variable; defaults to testnet if not set.
-const stellarExpertTestnetDefault = "https://stellar.expert/explorer/testnet/"
-
-var stellarExpertBaseURL = func() string {
-	url := os.Getenv("STELLAR_EXPERT_URL")
-	if url == "" {
-		return stellarExpertTestnetDefault
-	}
-	if !strings.HasSuffix(url, "/") {
-		url += "/"
-	}
-	return url
-}()
-
-// GetStellarExpertBaseURL returns the base URL for Stellar Expert (used by the handler to set Enrichment).
-func GetStellarExpertBaseURL() string {
-	return stellarExpertBaseURL
-}
 
 const tableWidth = mmPerPage - 2*marginLR
 

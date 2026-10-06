@@ -75,7 +75,7 @@ func TestBuildPDF(t *testing.T) {
 			SenderName:           "Sender Org",
 			SenderWalletAddress:  "GSENDER1234567890ABCDEF1234567890ABCDEF12",
 			FeeCharged:           "0.00001 XLM",
-			StellarExpertBaseURL: GetStellarExpertBaseURL(),
+			StellarExpertBaseURL: "https://stellar.expert/explorer/testnet/",
 		}
 
 		pdfBytes, err := BuildPDF(payment, orgName, orgLogo, enrichment, nil, operatedByBaseURL)

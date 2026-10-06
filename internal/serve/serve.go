@@ -69,6 +69,7 @@ type ServeOptions struct {
 	Port                           int
 	Version                        string
 	InstanceName                   string
+	StellarExpertURL               string
 	MonitorService                 monitor.MonitorServiceInterface
 	MtnDBConnectionPool            db.DBConnectionPool
 	AdminDBConnectionPool          db.DBConnectionPool
@@ -793,11 +794,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			o.Models,
 		)
 		reportsHandler := httphandler.ReportsHandler{
-			ReportsService:   reportsService,
-			Models:           o.Models,
-			DBConnectionPool: o.MtnDBConnectionPool,
-			HorizonClient:    o.SubmitterEngine.HorizonClient,
-			AuthManager:      authManager,
+			ReportsService:       reportsService,
+			Models:               o.Models,
+			DBConnectionPool:     o.MtnDBConnectionPool,
+			HorizonClient:        o.SubmitterEngine.HorizonClient,
+			AuthManager:          authManager,
+			StellarExpertBaseURL: o.stellarExpertBaseURL(),
 		}
 		// Reports follow the payment read rules: business roles at the route, membership scope in the
 		// handlers, and nothing at all while the organization has reporting switched off.
@@ -1091,4 +1093,17 @@ func staticFileServer(r chi.Router, fileSystem fs.FS) {
 		fs := http.StripPrefix(pathPrefix, http.FileServer(http.FS(fileSystem)))
 		fs.ServeHTTP(w, r)
 	})
+}
+
+// stellarExpertBaseURL is the explorer the report PDFs link to: the configured one, else the
+// network's own. Always with a trailing slash, which is how the PDF code joins paths onto it.
+func (opts ServeOptions) stellarExpertBaseURL() string {
+	u := strings.TrimRight(opts.StellarExpertURL, "/")
+	if u == "" {
+		u = "https://stellar.expert/explorer/testnet"
+		if opts.NetworkType == utils.PubnetNetworkType {
+			u = "https://stellar.expert/explorer/public"
+		}
+	}
+	return u + "/"
 }

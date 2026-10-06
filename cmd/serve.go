@@ -172,6 +172,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		},
 		{
+			Name:      "stellar-expert-url",
+			Usage:     "Base URL of the Stellar Expert explorer that report PDFs link to. Defaults to the explorer for the configured network.",
+			OptType:   types.String,
+			ConfigKey: &serveOpts.StellarExpertURL,
+			Required:  false,
+		},
+		{
 			Name:      "instance-name",
 			Usage:     `Name of the SDP instance. Example: "SDP Testnet".`,
 			OptType:   types.String,

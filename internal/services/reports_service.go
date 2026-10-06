@@ -47,12 +47,18 @@ type StatementSummary struct {
 
 // StatementAssetSummary holds per-asset summary and transactions.
 type StatementAssetSummary struct {
-	Code             string                 `json:"code"`
-	BeginningBalance string                 `json:"beginning_balance"`
-	TotalCredits     string                 `json:"total_credits"`
-	TotalDebits      string                 `json:"total_debits"`
-	EndingBalance    string                 `json:"ending_balance"`
-	Transactions     []StatementTransaction `json:"transactions"`
+	Code             string `json:"code"`
+	BeginningBalance string `json:"beginning_balance"`
+	TotalCredits     string `json:"total_credits"`
+	TotalDebits      string `json:"total_debits"`
+	EndingBalance    string `json:"ending_balance"`
+	// Reconciled is false when the counted payments cannot explain the current balance (the
+	// derived beginning balance went negative), which means uncounted ledger activity exists.
+	Reconciled bool `json:"reconciled"`
+	// Truncated is true when the ledger scan hit MaxStatementPaymentsPages before reaching the
+	// period start, so older payments are missing from the totals.
+	Truncated    bool                   `json:"truncated"`
+	Transactions []StatementTransaction `json:"transactions"`
 }
 
 // AssetRef is a minimal asset reference for JSON.
@@ -143,7 +149,7 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 			return nil, fmt.Errorf("getting balance: %w", err)
 		}
 
-		transactions, totalCredits, totalDebits, err := s.fetchPaymentsInRange(ctx, account.Address, walletID, asset, fromStart, toEnd)
+		transactions, totalCredits, totalDebits, truncated, err := s.fetchPaymentsInRange(ctx, account.Address, walletID, asset, fromStart, toEnd)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +164,8 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 
 		endingBalance := currentBalance.Sub(creditsAfter).Add(debitsAfter)
 		beginningBalance := endingBalance.Sub(totalCredits).Add(totalDebits)
-		if beginningBalance.LessThan(decimal.Zero) {
+		reconciled := !beginningBalance.LessThan(decimal.Zero)
+		if !reconciled {
 			beginningBalance = decimal.Zero
 		}
 
@@ -173,6 +180,8 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 			TotalCredits:     formatStellarAmount(totalCredits),
 			TotalDebits:      formatStellarAmount(totalDebits),
 			EndingBalance:    formatStellarAmount(endingBalance),
+			Reconciled:       reconciled,
+			Truncated:        truncated,
 			Transactions:     transactions,
 		})
 	}
@@ -222,7 +231,7 @@ func (s *ReportsService) fetchPaymentsInRange(
 	accountAddress, walletID string,
 	asset *data.Asset,
 	fromStart, toEnd time.Time,
-) ([]StatementTransaction, decimal.Decimal, decimal.Decimal, error) {
+) (transactions []StatementTransaction, totalCredits, totalDebits decimal.Decimal, truncated bool, err error) {
 	accumulator := transactionAccumulator{collectTransactions: true}
 
 	req := horizonclient.OperationRequest{
@@ -231,26 +240,25 @@ func (s *ReportsService) fetchPaymentsInRange(
 		Limit:      StatementPaymentsPageLimit,
 	}
 
+	truncated = true // cleared once the scan reaches the period start or the end of history
 	for pageCount := 0; pageCount < MaxStatementPaymentsPages; pageCount++ {
 		page, err := s.HorizonClient.Payments(req)
 		if err != nil {
-			return nil, decimal.Zero, decimal.Zero, fmt.Errorf("fetching payments: %w", err)
+			return nil, decimal.Zero, decimal.Zero, false, fmt.Errorf("fetching payments: %w", err)
 		}
 
 		shouldStop, err := s.processPaymentPage(ctx, page, accountAddress, walletID, asset, fromStart, toEnd, &accumulator)
 		if err != nil {
-			return nil, decimal.Zero, decimal.Zero, err
+			return nil, decimal.Zero, decimal.Zero, false, err
 		}
-		if shouldStop {
-			break
-		}
-
-		if !s.shouldContinuePaymentsPagination(page) {
+		if shouldStop || !s.shouldContinuePaymentsPagination(page) {
+			truncated = false
 			break
 		}
 
 		cursor := getNextPaymentsPageCursor(page)
 		if cursor == "" {
+			truncated = false
 			break
 		}
 		req.Cursor = cursor
@@ -261,7 +269,7 @@ func (s *ReportsService) fetchPaymentsInRange(
 		accumulator.transactions[i], accumulator.transactions[j] = accumulator.transactions[j], accumulator.transactions[i]
 	}
 
-	return accumulator.transactions, accumulator.totalCredits, accumulator.totalDebits, nil
+	return accumulator.transactions, accumulator.totalCredits, accumulator.totalDebits, truncated, nil
 }
 
 // fetchTotalsInRange returns total credits and debits in the given range without building the transaction list.

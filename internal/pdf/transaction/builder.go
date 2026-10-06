@@ -45,6 +45,10 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 	pdfDoc.AddPage()
 
 	headerLayout := transactionHeaderLayout()
+	stellarExpertBaseURL := ""
+	if enrichment != nil {
+		stellarExpertBaseURL = enrichment.StellarExpertBaseURL
+	}
 	titleURL := ""
 	if stellarExpertBaseURL != "" && payment.StellarTransactionID != "" {
 		titleURL = stellarExpertBaseURL + "tx/" + payment.StellarTransactionID

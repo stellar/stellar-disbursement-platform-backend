@@ -322,3 +322,14 @@ func Test_populateDisbursementCreatedApprovedBy(t *testing.T) {
 	assert.Equal(t, "Bob Starter", enrichment.DisbursementApprovedByUserName)
 	assert.Equal(t, "Jan 10, 2026 · 14:30:00 UTC", enrichment.DisbursementApprovedByTimestamp)
 }
+
+func Test_operatedBy(t *testing.T) {
+	ctx := context.Background()
+	assert.Empty(t, operatedBy(ctx), "no tenant in context")
+
+	withURL := func(u *string) context.Context {
+		return sdpcontext.SetTenantInContext(ctx, &schema.Tenant{ID: "t1", Name: "redcorp", SDPUIBaseURL: u})
+	}
+	assert.Empty(t, operatedBy(withURL(nil)), "tenant without a dashboard URL")
+	assert.Equal(t, "redcorp.stellar.local:3000", operatedBy(withURL(utils.Ptr("https://redcorp.stellar.local:3000/some/path"))))
+}
