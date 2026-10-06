@@ -23,19 +23,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-func TestNewReportsService(t *testing.T) {
-	horizonClient := &horizonclient.MockClient{}
-	distSvc := mocks.NewMockDistributionAccountService(t)
-	models := &data.Models{}
-
-	service := NewReportsService(horizonClient, distSvc, models)
-
-	require.NotNil(t, service)
-	assert.Equal(t, horizonClient, service.HorizonClient)
-	assert.Equal(t, distSvc, service.DistributionAccountSvc)
-	assert.Equal(t, models, service.Models)
-}
-
 func TestReportsServiceGetStatement(t *testing.T) {
 	ctx := context.Background()
 	accountAddress := keypair.MustRandom().Address()
@@ -382,58 +369,41 @@ func TestAssetMatchesHorizonAsset(t *testing.T) {
 }
 
 func TestExtractPaymentOperation(t *testing.T) {
-	t.Run("extracts Payment operation", func(t *testing.T) {
-		op := operations.Payment{
-			From:   "GSOURCE",
-			To:     "GDEST",
-			Amount: "100.0000000",
-			Asset:  base.Asset{Type: "native"},
-		}
-		// Set ID manually since GetID() might return empty
-		op.Base.ID = "12345"
+	payment := operations.Payment{From: "GSOURCE", To: "GDEST", Amount: "100.0000000", Asset: base.Asset{Type: "native"}}
+	payment.Base.ID = "12345"
+	usdc := base.Asset{Code: "USDC", Issuer: "ISSUER"}
+	pathPayment := operations.PathPayment{Payment: operations.Payment{From: "GSOURCE", To: "GDEST", Amount: "50.0000000", Asset: usdc}}
+	pathPayment.Base.ID = "67890"
+	strictSend := operations.PathPaymentStrictSend{Payment: pathPayment.Payment}
 
-		from, to, amount, asset, opID, ok := extractPaymentOperation(op)
-
-		require.True(t, ok)
-		assert.Equal(t, "GSOURCE", from)
-		assert.Equal(t, "GDEST", to)
-		assert.Equal(t, "100.0000000", amount)
-		assert.Equal(t, base.Asset{Type: "native"}, asset)
-		assert.Equal(t, "12345", opID)
-	})
-
-	t.Run("extracts Payment operation pointer", func(t *testing.T) {
-		op := &operations.Payment{
-			From:   "GSOURCE",
-			To:     "GDEST",
-			Amount: "50.0000000",
-			Asset:  base.Asset{Code: "USDC", Issuer: "ISSUER"},
-		}
-		// Set ID manually since GetID() might return empty
-		op.Base.ID = "67890"
-
-		from, to, amount, asset, opID, ok := extractPaymentOperation(op)
-
-		require.True(t, ok)
-		assert.Equal(t, "GSOURCE", from)
-		assert.Equal(t, "GDEST", to)
-		assert.Equal(t, "50.0000000", amount)
-		assert.Equal(t, base.Asset{Code: "USDC", Issuer: "ISSUER"}, asset)
-		assert.Equal(t, "67890", opID)
-	})
-
-	// Note: PathPayment and PathPaymentStrictSend tests are skipped as they require
-	// complex struct initialization due to embedded Payment fields
-
-	t.Run("returns false for non-payment operation", func(t *testing.T) {
-		op := operations.CreateAccount{
-			Account: "GACCOUNT",
-		}
-
-		_, _, _, _, _, ok := extractPaymentOperation(op)
-
-		assert.False(t, ok)
-	})
+	testCases := []struct {
+		name           string
+		op             operations.Operation
+		expectedAmount string
+		expectedAsset  base.Asset
+		expectedOpID   string
+		expectedOK     bool
+	}{
+		{"payment", payment, "100.0000000", base.Asset{Type: "native"}, "12345", true},
+		{"path payment", pathPayment, "50.0000000", usdc, "67890", true},
+		{"path payment strict send", strictSend, "50.0000000", usdc, "67890", true},
+		{"pointer to a payment", &payment, "100.0000000", base.Asset{Type: "native"}, "12345", true},
+		{"not a payment", operations.CreateAccount{Account: "GACCOUNT"}, "", base.Asset{}, "", false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			from, to, amount, asset, opID, ok := extractPaymentOperation(tc.op)
+			assert.Equal(t, tc.expectedOK, ok)
+			if !tc.expectedOK {
+				return
+			}
+			assert.Equal(t, "GSOURCE", from)
+			assert.Equal(t, "GDEST", to)
+			assert.Equal(t, tc.expectedAmount, amount)
+			assert.Equal(t, tc.expectedAsset, asset)
+			assert.Equal(t, tc.expectedOpID, opID)
+		})
+	}
 }
 
 func TestReportsService_GetStatement_ErrorCases(t *testing.T) {

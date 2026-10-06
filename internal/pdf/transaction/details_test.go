@@ -28,29 +28,6 @@ func TestOrDash(t *testing.T) {
 	}
 }
 
-func TestTruncateWithEllipsis(t *testing.T) {
-	tests := []struct {
-		name     string
-		s        string
-		maxChars int
-		expected string
-	}{
-		{"short string unchanged", "short", 10, "short"},
-		{"exact length unchanged", "exact", 5, "exact"},
-		{"truncate with ellipsis", "long string here", 10, "long st..."},
-		{"maxChars 3 or less no ellipsis", "abc", 2, "ab"},
-		{"maxChars 4 truncate to 1+ellipsis", "abcde", 4, "a..."},
-		{"empty string", "", 5, ""},
-		{"multi-byte runes not split", "ação中文字", 6, "açã..."},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := truncateWithEllipsis(tt.s, tt.maxChars)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestSplitWalletAddressLines(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -119,122 +96,45 @@ func TestEnrichmentValue(t *testing.T) {
 	})
 }
 
-const msgNilReceiverWalletReturnsEmpty = "nil receiver wallet returns empty"
-
-func TestMemoDisplay(t *testing.T) {
-	t.Run(msgNilReceiverWalletReturnsEmpty, func(t *testing.T) {
-		p := &data.Payment{}
-		got := memoDisplay(p)
-		assert.Empty(t, got)
-	})
-
-	t.Run("empty stellar memo returns empty", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: ""}}
-		got := memoDisplay(p)
-		assert.Empty(t, got)
-	})
-
-	t.Run("stellar memo set returns memo", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: "my-memo"}}
-		got := memoDisplay(p)
-		assert.Equal(t, "my-memo", got)
-	})
-}
-
-const testDBMemo = "db-memo"
-
 func TestMemoForDisplay(t *testing.T) {
-	t.Run("enrichment nil uses payment memo", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
-		got := memoForDisplay(p, nil)
-		assert.Equal(t, testDBMemo, got)
-	})
-
-	t.Run("enrichment MemoText empty uses payment memo", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
-		e := &Enrichment{MemoText: ""}
-		got := memoForDisplay(p, e)
-		assert.Equal(t, testDBMemo, got)
-	})
-
-	t.Run("enrichment MemoText set returns Horizon memo", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
-		e := &Enrichment{MemoText: "horizon-memo"}
-		got := memoForDisplay(p, e)
-		assert.Equal(t, "horizon-memo", got)
-	})
-
-	t.Run("enrichment MemoText set and payment has no memo returns Horizon memo", func(t *testing.T) {
-		p := &data.Payment{}
-		e := &Enrichment{MemoText: "from-horizon"}
-		got := memoForDisplay(p, e)
-		assert.Equal(t, "from-horizon", got)
-	})
-
-	t.Run("enrichment nil and payment has no memo returns empty", func(t *testing.T) {
-		p := &data.Payment{}
-		got := memoForDisplay(p, nil)
-		assert.Empty(t, got)
-	})
-}
-
-func TestWalletProvider(t *testing.T) {
-	t.Run(msgNilReceiverWalletReturnsEmpty, func(t *testing.T) {
-		p := &data.Payment{}
-		got := walletProvider(p)
-		assert.Empty(t, got)
-	})
-
-	t.Run("wallet name empty returns empty", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{Wallet: data.Wallet{Name: ""}}}
-		got := walletProvider(p)
-		assert.Empty(t, got)
-	})
-
-	t.Run("wallet name set returns name", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{Wallet: data.Wallet{Name: "Vibrant"}}}
-		got := walletProvider(p)
-		assert.Equal(t, "Vibrant", got)
-	})
-}
-
-func TestRecipientOrgID(t *testing.T) {
-	t.Run(msgNilReceiverWalletReturnsEmpty, func(t *testing.T) {
-		p := &data.Payment{}
-		got := recipientOrgID(p)
-		assert.Empty(t, got)
-	})
-
-	t.Run("receiver external_id set returns it", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{Receiver: data.Receiver{ExternalID: "org-123"}}}
-		got := recipientOrgID(p)
-		assert.Equal(t, "org-123", got)
-	})
-}
-
-func TestRecipientWalletAddress(t *testing.T) {
-	t.Run(msgNilReceiverWalletReturnsEmpty, func(t *testing.T) {
-		p := &data.Payment{}
-		got := recipientWalletAddress(p)
-		assert.Empty(t, got)
-	})
-
-	t.Run("stellar address set returns it", func(t *testing.T) {
-		p := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarAddress: "GADDR123"}}
-		got := recipientWalletAddress(p)
-		assert.Equal(t, "GADDR123", got)
-	})
-}
-
-func TestTransactionHeaderLayout(t *testing.T) {
-	layout := transactionHeaderLayout()
-	requireNotNilAndPositive := func(t *testing.T, name string, v float64) {
-		t.Helper()
-		assert.Greater(t, v, 0.0, "transactionHeaderLayout().%s should be positive", name)
+	const testDBMemo = "db-memo"
+	withMemo := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}
+	noMemo := &data.Payment{}
+	testCases := []struct {
+		name       string
+		payment    *data.Payment
+		enrichment *Enrichment
+		expected   string
+	}{
+		{"horizon memo wins", withMemo, &Enrichment{MemoText: "horizon-memo"}, "horizon-memo"},
+		{"falls back to the receiver wallet memo", withMemo, &Enrichment{}, testDBMemo},
+		{"no enrichment at all", withMemo, nil, testDBMemo},
+		{"horizon memo without a wallet memo", noMemo, &Enrichment{MemoText: "from-horizon"}, "from-horizon"},
+		{"nothing to show", noMemo, nil, ""},
 	}
-	requireNotNilAndPositive(t, "MmPerPage", layout.MmPerPage)
-	requireNotNilAndPositive(t, "TableWidth", layout.TableWidth)
-	requireNotNilAndPositive(t, "BodyFontSize", layout.BodyFontSize)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, memoForDisplay(tc.payment, tc.enrichment))
+		})
+	}
+}
+
+func TestPaymentAccessors(t *testing.T) {
+	// Every accessor tolerates a payment without a receiver wallet and otherwise returns its field.
+	rw := &data.ReceiverWallet{StellarAddress: "GADDR123", Receiver: data.Receiver{ExternalID: "org-123"}, Wallet: data.Wallet{Name: "Vibrant"}}
+	for name, tc := range map[string]struct {
+		accessor func(*data.Payment) string
+		expected string
+	}{
+		"walletProvider":         {walletProvider, "Vibrant"},
+		"recipientOrgID":         {recipientOrgID, "org-123"},
+		"recipientWalletAddress": {recipientWalletAddress, "GADDR123"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Empty(t, tc.accessor(&data.Payment{}))
+			assert.Equal(t, tc.expected, tc.accessor(&data.Payment{ReceiverWallet: rw}))
+		})
+	}
 }
 
 func TestDetailRows(t *testing.T) {

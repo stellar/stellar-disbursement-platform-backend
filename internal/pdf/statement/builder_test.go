@@ -10,218 +10,43 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 )
 
-const (
-	testAccountAddress = "stellar:GDNRRK5EXMZ4STV7UTO3CW4LSVNY5KYWTM3J7BM5SQNA7KE2RYX55IYV"
-	testAmountZero     = "0.0000000"
-	testAmount100      = "100.0000000"
-	testAmount50       = "50.0000000"
-	testTimestamp1     = "2026-01-15T10:00:00Z"
-	testOrgName        = "Test Org"
-)
-
+// TestBuildPDF renders one statement per layout path and checks each builds; the numbers on the
+// page come straight from the service, whose tests pin them.
 func TestBuildPDF(t *testing.T) {
-	t.Run("successfully generates PDF with transactions", func(t *testing.T) {
-		result := &services.StatementResult{
-			Summary: services.StatementSummary{
-				Account: testAccountAddress,
-				Assets: []services.StatementAssetSummary{
-					{
-						Code:             "XLM",
-						BeginningBalance: testAmountZero,
-						TotalCredits:     testAmount100,
-						TotalDebits:      testAmount50,
-						EndingBalance:    testAmount50,
-						Transactions: []services.StatementTransaction{
-							{
-								ID:                  "tx1",
-								CreatedAt:           testTimestamp1,
-								Type:                "credit",
-								Amount:              testAmount100,
-								CounterpartyAddress: "GABCDEF123456789",
-								CounterpartyName:    "Test Counterparty",
-							},
-							{
-								ID:                  "tx2",
-								CreatedAt:           "2026-01-16T10:00:00Z",
-								Type:                "debit",
-								Amount:              testAmount50,
-								CounterpartyAddress: "GZYXWV987654321",
-							},
-						},
-					},
-				},
-			},
-		}
+	credit := services.StatementTransaction{ID: "tx1", CreatedAt: "2026-01-15T10:00:00Z", Type: "credit", Amount: "100.0000000", CounterpartyAddress: "GABCDEF123456789", CounterpartyName: "Test Counterparty"}
+	debit := services.StatementTransaction{ID: "tx2", CreatedAt: "2026-01-16T10:00:00Z", Type: "debit", Amount: "50.0000000", CounterpartyAddress: "GZYXWV987654321", ExternalPaymentID: "ext-1"}
+	xlm := func(beginning string, txs ...services.StatementTransaction) services.StatementAssetSummary {
+		return services.StatementAssetSummary{Code: "XLM", BeginningBalance: beginning, TotalCredits: "100.0000000", TotalDebits: "50.0000000", EndingBalance: "50.0000000", Reconciled: true, Transactions: txs}
+	}
+	usdc := services.StatementAssetSummary{Code: "USDC", BeginningBalance: "0.0000000", TotalCredits: "0.0000000", TotalDebits: "0.0000000", EndingBalance: "0.0000000", Reconciled: true}
+	statement := func(account string, assets ...services.StatementAssetSummary) *services.StatementResult {
+		return &services.StatementResult{Summary: services.StatementSummary{Account: account, AccountName: "Main account", Assets: assets}}
+	}
+	notReconciled := xlm("0.0000000", credit)
+	notReconciled.Reconciled = false
+	truncated := xlm("0.0000000", credit, debit)
+	truncated.Truncated = true
 
-		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
-		orgName := "Test Organization"
-		orgLogo := []byte{}
-
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, orgName, orgLogo, "", "https://stellar.expert/explorer/testnet/")
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, pdfBytes)
-		assert.Greater(t, len(pdfBytes), 1000, "PDF should be substantial size")
-	})
-
-	t.Run("handles empty transactions", func(t *testing.T) {
-		result := &services.StatementResult{
-			Summary: services.StatementSummary{
-				Account: testAccountAddress,
-				Assets: []services.StatementAssetSummary{
-					{
-						Code:             "XLM",
-						BeginningBalance: testAmountZero,
-						TotalCredits:     testAmountZero,
-						TotalDebits:      testAmountZero,
-						EndingBalance:    testAmountZero,
-						Transactions:     []services.StatementTransaction{},
-					},
-				},
-			},
-		}
-
-		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
-
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "", "https://stellar.expert/explorer/testnet/")
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, pdfBytes)
-	})
-
-	t.Run("handles multiple assets", func(t *testing.T) {
-		result := &services.StatementResult{
-			Summary: services.StatementSummary{
-				Account: testAccountAddress,
-				Assets: []services.StatementAssetSummary{
-					{
-						Code:             "XLM",
-						BeginningBalance: testAmountZero,
-						TotalCredits:     testAmount100,
-						TotalDebits:      testAmountZero,
-						EndingBalance:    testAmount100,
-						Transactions: []services.StatementTransaction{
-							{
-								ID:        "tx1",
-								CreatedAt: testTimestamp1,
-								Type:      "credit",
-								Amount:    testAmount100,
-							},
-						},
-					},
-					{
-						Code:             "USDC",
-						BeginningBalance: testAmountZero,
-						TotalCredits:     testAmount50,
-						TotalDebits:      testAmountZero,
-						EndingBalance:    testAmount50,
-						Transactions: []services.StatementTransaction{
-							{
-								ID:        "tx2",
-								CreatedAt: "2026-01-16T10:00:00Z",
-								Type:      "credit",
-								Amount:    testAmount50,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
-
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "", "https://stellar.expert/explorer/testnet/")
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, pdfBytes)
-	})
-
-	t.Run("handles wallet address with stellar: prefix", func(t *testing.T) {
-		result := &services.StatementResult{
-			Summary: services.StatementSummary{
-				Account: testAccountAddress,
-				Assets: []services.StatementAssetSummary{
-					{
-						Code:             "XLM",
-						BeginningBalance: testAmountZero,
-						TotalCredits:     testAmountZero,
-						TotalDebits:      testAmountZero,
-						EndingBalance:    testAmountZero,
-						Transactions:     []services.StatementTransaction{},
-					},
-				},
-			},
-		}
-
-		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
-
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "", "https://stellar.expert/explorer/testnet/")
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, pdfBytes)
-	})
-
-	t.Run("handles invalid beginning balance gracefully", func(t *testing.T) {
-		result := &services.StatementResult{
-			Summary: services.StatementSummary{
-				Account: testAccountAddress,
-				Assets: []services.StatementAssetSummary{
-					{
-						Code:             "XLM",
-						BeginningBalance: "invalid-balance",
-						TotalCredits:     testAmount100,
-						TotalDebits:      testAmountZero,
-						EndingBalance:    testAmount100,
-						Transactions: []services.StatementTransaction{
-							{
-								ID:        "tx1",
-								CreatedAt: testTimestamp1,
-								Type:      "credit",
-								Amount:    testAmount100,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
-
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, nil, "", "https://stellar.expert/explorer/testnet/")
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, pdfBytes)
-	})
-
-	t.Run("handles organization logo", func(t *testing.T) {
-		result := &services.StatementResult{
-			Summary: services.StatementSummary{
-				Account: testAccountAddress,
-				Assets: []services.StatementAssetSummary{
-					{
-						Code:             "XLM",
-						BeginningBalance: testAmountZero,
-						TotalCredits:     testAmountZero,
-						TotalDebits:      testAmountZero,
-						EndingBalance:    testAmountZero,
-						Transactions:     []services.StatementTransaction{},
-					},
-				},
-			},
-		}
-
-		fromDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		toDate := time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
-		orgLogo := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
-
-		pdfBytes, err := BuildPDF(result, fromDate, toDate, testOrgName, orgLogo, "", "https://stellar.expert/explorer/testnet/")
-
-		require.NoError(t, err)
-		assert.NotEmpty(t, pdfBytes)
-	})
+	testCases := []struct {
+		name   string
+		result *services.StatementResult
+		logo   []byte
+	}{
+		{name: "credit and debit rows", result: statement("GABC", xlm("0.0000000", credit, debit))},
+		{name: "no transactions", result: statement("GABC", xlm("0.0000000"))},
+		{name: "several assets", result: statement("GABC", xlm("0.0000000", credit), usdc)},
+		{name: "stellar: prefix on the account", result: statement("stellar:GABC", xlm("0.0000000", credit))},
+		{name: "unparseable beginning balance still renders", result: statement("GABC", xlm("invalid-balance", credit))},
+		{name: "not reconciled", result: statement("GABC", notReconciled)},
+		{name: "truncated history note", result: statement("GABC", truncated)},
+		{name: "organization logo", result: statement("GABC", xlm("0.0000000")), logo: []byte{0x89, 0x50, 0x4E, 0x47}},
+	}
+	from, to := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pdfBytes, err := BuildPDF(tc.result, from, to, "Test Organization", tc.logo, "example.com", "https://stellar.expert/explorer/testnet/")
+			require.NoError(t, err)
+			assert.Greater(t, len(pdfBytes), 1000)
+		})
+	}
 }

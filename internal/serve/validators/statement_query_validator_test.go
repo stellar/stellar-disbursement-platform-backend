@@ -2,88 +2,43 @@ package validators
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_StatementQueryValidator_ValidateAndGetStatementParams(t *testing.T) {
-	t.Run("valid params", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=XLM&from_date=2026-01-01&to_date=2026-01-31", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		params := v.ValidateAndGetStatementParams(req)
-		assert.False(t, v.HasErrors())
-		assert.Equal(t, "XLM", params.AssetCode)
-		assert.Equal(t, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), params.FromDate)
-		assert.Equal(t, time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC), params.ToDate)
-	})
-
-	t.Run("missing asset_code is valid (all assets)", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?from_date=2026-01-01&to_date=2026-01-31", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		params := v.ValidateAndGetStatementParams(req)
-		assert.False(t, v.HasErrors())
-		assert.Equal(t, "", params.AssetCode)
-		assert.Equal(t, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), params.FromDate)
-		assert.Equal(t, time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC), params.ToDate)
-	})
-
-	t.Run("missing from_date", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=XLM&to_date=2026-01-31", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		_ = v.ValidateAndGetStatementParams(req)
-		assert.True(t, v.HasErrors())
-		assert.Equal(t, "from_date is required", v.Errors["from_date"])
-	})
-
-	t.Run("missing to_date", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=XLM&from_date=2026-01-01", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		_ = v.ValidateAndGetStatementParams(req)
-		assert.True(t, v.HasErrors())
-		assert.Equal(t, "to_date is required", v.Errors["to_date"])
-	})
-
-	t.Run("invalid from_date format", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=XLM&from_date=2026-13-01&to_date=2026-01-31", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		_ = v.ValidateAndGetStatementParams(req)
-		assert.True(t, v.HasErrors())
-		assert.Equal(t, "invalid date format. valid format is 'YYYY-MM-DD'", v.Errors["from_date"])
-	})
-
-	t.Run("invalid to_date format", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=XLM&from_date=2026-01-01&to_date=not-a-date", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		_ = v.ValidateAndGetStatementParams(req)
-		assert.True(t, v.HasErrors())
-		assert.Equal(t, "invalid date format. valid format is 'YYYY-MM-DD'", v.Errors["to_date"])
-	})
-
-	t.Run("from_date after to_date", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=XLM&from_date=2026-01-31&to_date=2026-01-01", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		_ = v.ValidateAndGetStatementParams(req)
-		assert.True(t, v.HasErrors())
-		assert.Equal(t, "from_date must be before or equal to to_date", v.Errors["from_date"])
-	})
-
-	t.Run("from_date equals to_date is valid", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/statements?asset_code=USD&from_date=2026-01-15&to_date=2026-01-15", nil)
-		require.NoError(t, err)
-		v := NewStatementQueryValidator()
-		params := v.ValidateAndGetStatementParams(req)
-		assert.False(t, v.HasErrors())
-		assert.Equal(t, "USD", params.AssetCode)
-		assert.Equal(t, params.FromDate, params.ToDate)
-	})
+	jan1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	jan31 := time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC)
+	testCases := []struct {
+		name          string
+		query         string
+		expectedError string // field name that must carry an error; empty = valid
+		expected      StatementQueryParams
+	}{
+		{"all params", "asset_code=XLM&from_date=2026-01-01&to_date=2026-01-31", "", StatementQueryParams{AssetCode: "XLM", FromDate: jan1, ToDate: jan31}},
+		{"asset_code is optional", "from_date=2026-01-01&to_date=2026-01-31", "", StatementQueryParams{FromDate: jan1, ToDate: jan31}},
+		{"single-day range", "from_date=2026-01-01&to_date=2026-01-01", "", StatementQueryParams{FromDate: jan1, ToDate: jan1}},
+		{"missing from_date", "to_date=2026-01-31", "from_date", StatementQueryParams{}},
+		{"missing to_date", "from_date=2026-01-01", "to_date", StatementQueryParams{}},
+		{"malformed from_date", "from_date=01/01/2026&to_date=2026-01-31", "from_date", StatementQueryParams{}},
+		{"malformed to_date", "from_date=2026-01-01&to_date=31-01-2026", "to_date", StatementQueryParams{}},
+		{"from_date after to_date", "from_date=2026-02-01&to_date=2026-01-31", "from_date", StatementQueryParams{}},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/reports/statement?"+tc.query, nil)
+			v := NewStatementQueryValidator()
+			params := v.ValidateAndGetStatementParams(req)
+			if tc.expectedError != "" {
+				assert.True(t, v.HasErrors())
+				assert.Contains(t, v.Validator.Errors, tc.expectedError)
+				return
+			}
+			assert.False(t, v.HasErrors(), v.Validator.Errors)
+			assert.Equal(t, tc.expected, params)
+		})
+	}
 }

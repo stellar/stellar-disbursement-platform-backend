@@ -22,9 +22,7 @@ func FormatAmountTo2Decimals(s string) string {
 	if err != nil {
 		return s
 	}
-	// Truncate to 2 decimal places: multiply by 100, truncate, divide by 100
-	truncated := d.Mul(decimal.NewFromInt(100)).Truncate(0).Div(decimal.NewFromInt(100))
-	return formatWithCommas(truncated.StringFixed(2))
+	return FormatDecimal(d)
 }
 
 // formatWithCommas adds comma separators to a number string (e.g., "19950190.79" -> "19,950,190.79").

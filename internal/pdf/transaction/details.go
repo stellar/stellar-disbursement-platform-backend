@@ -1,11 +1,10 @@
 package transaction
 
 import (
-	"unicode/utf8"
-
 	"github.com/jung-kurt/gofpdf/v2"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -36,16 +35,6 @@ func orDash(s string) string {
 }
 
 // truncateWithEllipsis returns s truncated to maxChars runes with "..." appended if truncated.
-func truncateWithEllipsis(s string, maxChars int) string {
-	if utf8.RuneCountInString(s) <= maxChars {
-		return s
-	}
-	runes := []rune(s)
-	if maxChars <= 3 {
-		return string(runes[:maxChars])
-	}
-	return string(runes[:maxChars-3]) + "..."
-}
 
 // splitWalletAddressLines splits an address into lines of at most walletAddressBreakChars characters.
 func splitWalletAddressLines(addr string) []string {
@@ -98,7 +87,7 @@ func detailRows(payment *data.Payment, enrichment *Enrichment) (left, right []de
 		{"Sender Wallet Address", orDash(senderWalletAddr), true},
 	}
 	if memoValue := memoForDisplay(payment, enrichment); memoValue != "" {
-		left = append(left, detailRow{"MEMO (Text)", orDash(truncateWithEllipsis(memoValue, memoMaxChars)), false})
+		left = append(left, detailRow{"MEMO (Text)", orDash(utils.TruncateToMaxLength(memoValue, memoMaxChars)), false})
 	}
 	left = append(left, detailRow{"Fee Charged", orDash(feeCharged), false})
 	if payment.CircleTransactionID != nil {
