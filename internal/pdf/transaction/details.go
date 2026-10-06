@@ -17,6 +17,7 @@ const (
 // Stellar Expert base URL for wallet links, and optional disbursement Created by / Approved by.
 type Enrichment struct {
 	SenderName                      string
+	SenderAccountName               string
 	SenderWalletAddress             string
 	FeeCharged                      string
 	MemoText                        string
@@ -80,6 +81,45 @@ type detailRow struct {
 	isWalletAddress bool
 }
 
+// detailRows lays out the two columns of the Transaction Details section. Circle rows appear only
+// for payments that went through Circle.
+func detailRows(payment *data.Payment, enrichment *Enrichment) (left, right []detailRow) {
+	var senderName, senderAccountName, senderWalletAddr, feeCharged string
+	if enrichment != nil {
+		senderName = enrichment.SenderName
+		senderAccountName = enrichment.SenderAccountName
+		senderWalletAddr = enrichment.SenderWalletAddress
+		feeCharged = enrichment.FeeCharged
+	}
+
+	left = []detailRow{
+		{"Sender Name", orDash(senderName), false},
+		{"Distribution Account", orDash(senderAccountName), false},
+		{"Sender Wallet Address", orDash(senderWalletAddr), true},
+	}
+	if memoValue := memoForDisplay(payment, enrichment); memoValue != "" {
+		left = append(left, detailRow{"MEMO (Text)", orDash(truncateWithEllipsis(memoValue, memoMaxChars)), false})
+	}
+	left = append(left, detailRow{"Fee Charged", orDash(feeCharged), false})
+	if payment.CircleTransactionID != nil {
+		circleType := ""
+		if payment.CircleTransactionType != nil {
+			circleType = string(*payment.CircleTransactionType)
+		}
+		left = append(left,
+			detailRow{"Circle Transaction ID", orDash(*payment.CircleTransactionID), false},
+			detailRow{"Circle Transaction Type", orDash(circleType), false},
+		)
+	}
+
+	right = []detailRow{
+		{"Recipient Org ID", orDash(recipientOrgID(payment)), false},
+		{"Recipient Wallet Address", orDash(recipientWalletAddress(payment)), true},
+		{"Wallet Provider", orDash(walletProvider(payment)), false},
+	}
+	return left, right
+}
+
 // drawDetailsTable draws the Transaction Details section.
 func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enrichment, bottomMargin float64) {
 	pdf.SetFont("Inter", "B", sectionTitleSize)
@@ -91,28 +131,10 @@ func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enric
 	halfWidth := tableWidth / 2
 	labelWidth := 55.0
 	baseURL := ""
-	var senderName, senderWalletAddr, feeCharged string
 	if enrichment != nil {
 		baseURL = enrichment.StellarExpertBaseURL
-		senderName = enrichment.SenderName
-		senderWalletAddr = enrichment.SenderWalletAddress
-		feeCharged = enrichment.FeeCharged
 	}
-
-	memoValue := memoForDisplay(payment, enrichment)
-	leftRows := []detailRow{
-		{"Sender Name", orDash(senderName), false},
-		{"Sender Wallet Address", orDash(senderWalletAddr), true},
-	}
-	if memoValue != "" {
-		leftRows = append(leftRows, detailRow{"MEMO (Text)", orDash(truncateWithEllipsis(memoValue, memoMaxChars)), false})
-	}
-	leftRows = append(leftRows, detailRow{"Fee Charged", orDash(feeCharged), false})
-	rightRows := []detailRow{
-		{"Recipient Org ID", orDash(recipientOrgID(payment)), false},
-		{"Recipient Wallet Address", orDash(recipientWalletAddress(payment)), true},
-		{"Wallet Provider", orDash(walletProvider(payment)), false},
-	}
+	leftRows, rightRows := detailRows(payment, enrichment)
 
 	yStart := pdf.GetY()
 	xLeft := pdf.GetX()

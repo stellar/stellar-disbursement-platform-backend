@@ -3,7 +3,6 @@ package httphandler
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,7 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
-	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -223,69 +222,68 @@ func TestReportsHandlerGetPaymentExport(t *testing.T) {
 	dbPool := testutils.GetDBConnectionPool(t)
 	models, err := data.NewModels(dbPool)
 	require.NoError(t, err)
-	mResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
-	t.Run("returns 404 when payment not found", func(t *testing.T) {
-		h := ReportsHandler{
-			Models:                      models,
-			DBConnectionPool:            dbPool,
-			DistributionAccountResolver: mResolver,
-		}
+	// Two accounts; memberA may read only the first. Payments inherit their disbursement's account.
+	walletA := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbPool)
+	addrA := keypair.MustRandom().Address()
+	_, err = dbPool.ExecContext(ctx, `UPDATE distribution_wallets SET distribution_account_address = $1 WHERE id = $2`, addrA, walletA.ID)
+	require.NoError(t, err)
+	var walletBID string
+	require.NoError(t, dbPool.GetContext(ctx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type)
+		VALUES ('Field office B', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
+	memberA := &auth.User{ID: "notice-member-a", Email: "a@notice.test", Roles: []string{string(data.BusinessUserRole)}}
+	owner := &auth.User{ID: "notice-owner", Email: "o@notice.test", IsOwner: true, Roles: []string{string(data.OwnerUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbPool, memberA.ID, walletA.ID, data.BusinessUserRole, nil)
+	require.NoError(t, err)
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, memberA.ID).Return(memberA, nil)
+	authManagerMock.On("GetUserByID", mock.Anything, owner.ID).Return(owner, nil)
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{ExternalID: "RCV-77"})
+	wallet := data.CreateWalletFixture(t, ctx, dbPool, "w", "https://w.com", "w.com", "w://")
+	rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	paymentFrom := func(walletID, name string) *data.Payment {
+		d := data.CreateDisbursementFixture(t, ctx, dbPool, models.Disbursements, &data.Disbursement{Name: name, SourceWalletID: walletID})
+		return data.CreatePaymentFixture(t, ctx, dbPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: d, Asset: *d.Asset, Amount: "100.0000000", Status: data.DraftPaymentStatus,
+		})
+	}
+	paymentA := paymentFrom(walletA.ID, "notice-disb-a")
+	paymentB := paymentFrom(walletBID, "notice-disb-b")
+
+	h := ReportsHandler{Models: models, DBConnectionPool: dbPool, AuthManager: authManagerMock}
+	r := chi.NewRouter()
+	r.Get("/reports/payment/{id}", h.GetPaymentExport)
+	doAs := func(userID, paymentID string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/reports/payment/"+paymentID, nil).WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/reports/payment/nonexistent-id", nil)
-		require.NoError(t, err)
-		r := chi.NewRouter()
-		r.Get("/reports/payment/{id}", h.GetPaymentExport)
 		r.ServeHTTP(rr, req)
-		resp := rr.Result()
-		defer resp.Body.Close()
+		return rr
+	}
 
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	t.Run("unknown payment is a 404", func(t *testing.T) {
+		assert.Equal(t, http.StatusNotFound, doAs(owner.ID, "nonexistent-id").Code)
 	})
 
-	t.Run("returns 200 and PDF when payment exists", func(t *testing.T) {
-		// Create minimal payment fixture so BuildPDF can run
-		receiver := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{})
-		wallet := data.CreateWalletFixture(t, ctx, dbPool, "w", "https://w.com", "w.com", "w://")
-		rw := data.CreateReceiverWalletFixture(t, ctx, dbPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-		rw.Receiver = *receiver
-		disbursement := data.CreateDisbursementFixture(t, ctx, dbPool, models.Disbursements, &data.Disbursement{})
-		payment := data.CreatePaymentFixture(t, ctx, dbPool, models.Payment, &data.Payment{
-			ReceiverWallet: rw,
-			Disbursement:   disbursement,
-			Asset:          *disbursement.Asset,
-			Amount:         "100.0000000",
-			Status:         data.DraftPaymentStatus,
+	t.Run("a payment outside the caller's accounts is a 404, inside it a PDF", func(t *testing.T) {
+		assert.Equal(t, http.StatusNotFound, doAs(memberA.ID, paymentB.ID).Code)
+
+		rr := doAs(memberA.ID, paymentA.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.Equal(t, "application/pdf", rr.Header().Get("Content-Type"))
+		assert.Contains(t, rr.Header().Get("Content-Disposition"), "transaction_notice_"+paymentA.ID)
+		assert.NotEmpty(t, rr.Body.Bytes())
+
+		assert.Equal(t, http.StatusOK, doAs(owner.ID, paymentB.ID).Code)
+	})
+
+	t.Run("a Circle payment still renders", func(t *testing.T) {
+		data.CreateCircleTransferRequestFixture(t, ctx, dbPool, data.CircleTransferRequest{
+			PaymentID: paymentA.ID, CirclePayoutID: utils.Ptr("payout-1"), Status: utils.Ptr(data.CircleTransferStatusSuccess),
 		})
-
-		mResolver.On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{}, nil).
-			Maybe()
-
-		h := ReportsHandler{
-			Models:                      models,
-			DBConnectionPool:            dbPool,
-			DistributionAccountResolver: mResolver,
-			HorizonClient:               nil,
-			AuthManager:                 auth.NewAuthManagerMock(t),
-		}
-
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/reports/payment/"+payment.ID, nil)
-		require.NoError(t, err)
-		r := chi.NewRouter()
-		r.Get("/reports/payment/{id}", h.GetPaymentExport)
-		r.ServeHTTP(rr, req)
-		resp := rr.Result()
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "application/pdf", resp.Header.Get("Content-Type"))
-		assert.Contains(t, resp.Header.Get("Content-Disposition"), "transaction_notice_")
-		assert.NotEmpty(t, body)
+		assert.Equal(t, http.StatusOK, doAs(owner.ID, paymentA.ID).Code)
 	})
 }
 

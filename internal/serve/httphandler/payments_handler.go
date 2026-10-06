@@ -65,16 +65,8 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := p.Models.Payment.Get(ctx, paymentID, p.DBConnectionPool)
 	if err == nil {
-		// Membership-filtered visibility: 404 outside the caller's scope — existence
-		// is never disclosed. payment.SourceWalletID is the payment's own persisted source
-		// wallet (guaranteed non-empty for both disbursement and direct payments).
-		scope, scopeErr := resolveWalletReadScope(ctx, p.AuthManager, p.Models)
-		if scopeErr != nil {
-			scopeErr.Render(w)
-			return
-		}
-		if scope != nil && !walletInReadScope(scope, payment.SourceWalletID) {
-			httperror.NotFound("payment not found", nil, nil).Render(w)
+		if httpErr := ensurePaymentInReadScope(ctx, p.AuthManager, p.Models, payment); httpErr != nil {
+			httpErr.Render(w)
 			return
 		}
 	}

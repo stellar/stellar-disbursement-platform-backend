@@ -21,7 +21,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -36,12 +35,11 @@ const (
 
 // ReportsHandler handles GET /reports/statement (statement PDF) and GET /reports/payment/{id} (payment notice PDF).
 type ReportsHandler struct {
-	DistributionAccountResolver signing.DistributionAccountResolver
-	ReportsService              services.ReportsServiceInterface
-	Models                      *data.Models
-	DBConnectionPool            db.DBConnectionPool
-	HorizonClient               horizonclient.ClientInterface
-	AuthManager                 auth.AuthManager
+	ReportsService   services.ReportsServiceInterface
+	Models           *data.Models
+	DBConnectionPool db.DBConnectionPool
+	HorizonClient    horizonclient.ClientInterface
+	AuthManager      auth.AuthManager
 }
 
 // GetStatementExport returns the statement PDF for one distribution account: the one named by
@@ -192,6 +190,16 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
 	}
+	if httpErr := ensurePaymentInReadScope(ctx, h.AuthManager, h.Models, payment); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+	payments := []data.Payment{*payment}
+	if err = h.Models.CircleTransferRequests.PopulateCircleTransactionInfo(ctx, h.DBConnectionPool, payments); err != nil {
+		httperror.InternalError(ctx, "Cannot retrieve payment circle info", err, nil).Render(w)
+		return
+	}
+	payment = &payments[0]
 	if payment.ReceiverWallet != nil {
 		receiver, rErr := h.Models.Receiver.Get(ctx, h.DBConnectionPool, payment.ReceiverWallet.Receiver.ID)
 		if rErr != nil {
@@ -221,13 +229,16 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	distAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	// The sender is the account the payment was actually sent from: recorded on success and kept
+	// through a later rotation. Until then, the source account's current address (none for Circle).
+	sourceWallet, err := h.Models.DistributionWallets.Get(ctx, h.DBConnectionPool, payment.SourceWalletID)
 	if err != nil {
-		log.Ctx(ctx).Warnf("resolving distribution account for export: %v", err)
+		httperror.InternalError(ctx, "Cannot retrieve payment source account", err, nil).Render(w)
+		return
 	}
-	senderWalletAddress := ""
-	if err == nil && distAccount.IsStellar() {
-		senderWalletAddress = distAccount.Address
+	senderWalletAddress := payment.SenderAddress
+	if senderWalletAddress == "" && sourceWallet.Address != nil {
+		senderWalletAddress = *sourceWallet.Address
 	}
 
 	var feeCharged string
@@ -254,6 +265,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 
 	enrichment := &transaction.Enrichment{
 		SenderName:           orgName,
+		SenderAccountName:    sourceWallet.Name,
 		SenderWalletAddress:  senderWalletAddress,
 		FeeCharged:           feeCharged,
 		MemoText:             memoText,

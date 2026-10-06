@@ -4,8 +4,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func TestOrDash(t *testing.T) {
@@ -233,4 +235,31 @@ func TestTransactionHeaderLayout(t *testing.T) {
 	requireNotNilAndPositive(t, "MmPerPage", layout.MmPerPage)
 	requireNotNilAndPositive(t, "TableWidth", layout.TableWidth)
 	requireNotNilAndPositive(t, "BodyFontSize", layout.BodyFontSize)
+}
+
+func TestDetailRows(t *testing.T) {
+	labels := func(rows []detailRow) []string {
+		out := make([]string, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, r.label)
+		}
+		return out
+	}
+	enrichment := &Enrichment{SenderName: "redcorp", SenderAccountName: "Main account", SenderWalletAddress: "GABC"}
+
+	t.Run("stellar payment: no Circle rows", func(t *testing.T) {
+		left, right := detailRows(&data.Payment{}, enrichment)
+		assert.Equal(t, []string{"Sender Name", "Distribution Account", "Sender Wallet Address", "Fee Charged"}, labels(left))
+		assert.Equal(t, "Main account", left[1].value)
+		assert.Equal(t, []string{"Recipient Org ID", "Recipient Wallet Address", "Wallet Provider"}, labels(right))
+	})
+
+	t.Run("circle payment: id and type rows", func(t *testing.T) {
+		payoutType := data.CircleTransactionTypePayout
+		p := &data.Payment{CircleTransactionID: utils.Ptr("payout-1"), CircleTransactionType: &payoutType}
+		left, _ := detailRows(p, enrichment)
+		require.Len(t, left, 6)
+		assert.Equal(t, detailRow{"Circle Transaction ID", "payout-1", false}, left[4])
+		assert.Equal(t, detailRow{"Circle Transaction Type", "PAYOUT", false}, left[5])
+	})
 }

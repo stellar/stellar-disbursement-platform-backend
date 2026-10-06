@@ -793,12 +793,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			o.Models,
 		)
 		reportsHandler := httphandler.ReportsHandler{
-			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
-			ReportsService:              reportsService,
-			Models:                      o.Models,
-			DBConnectionPool:            o.MtnDBConnectionPool,
-			HorizonClient:               o.SubmitterEngine.HorizonClient,
-			AuthManager:                 authManager,
+			ReportsService:   reportsService,
+			Models:           o.Models,
+			DBConnectionPool: o.MtnDBConnectionPool,
+			HorizonClient:    o.SubmitterEngine.HorizonClient,
+			AuthManager:      authManager,
 		}
 		// Reports follow the payment read rules: business roles at the route, membership scope in the
 		// handlers, and nothing at all while the organization has reporting switched off.
