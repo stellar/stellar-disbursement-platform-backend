@@ -524,7 +524,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					o.DistributionAccountService,
 					o.SubmitterEngine,
 				),
-				HorizonClient: o.SubmitterEngine.HorizonClient,
 			}
 
 			// Read operations

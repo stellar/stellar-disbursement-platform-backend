@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
@@ -35,7 +33,6 @@ type PaymentsHandler struct {
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
 	DirectPaymentService        *services.DirectPaymentService
-	HorizonClient               horizonclient.ClientInterface
 }
 
 type RetryPaymentsRequest struct {
@@ -60,79 +57,6 @@ func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, 
 	}
 
 	return payments, nil
-}
-
-// getPaymentReceiver is the receiver shape returned by GET /payments/:id (id and external_id only).
-type getPaymentReceiver struct {
-	ID         string `json:"id"`
-	ExternalID string `json:"external_id"`
-}
-
-// getPaymentReceiverWallet is receiver_wallet in GET payment response (receiver is id + external_id only).
-type getPaymentReceiverWallet struct {
-	ID               string                            `json:"id"`
-	Receiver         getPaymentReceiver                `json:"receiver"`
-	Wallet           data.Wallet                       `json:"wallet"`
-	Status           data.ReceiversWalletStatus        `json:"status"`
-	StatusHistory    data.ReceiversWalletStatusHistory `json:"status_history,omitempty"`
-	CreatedAt        time.Time                         `json:"created_at"`
-	UpdatedAt        time.Time                         `json:"updated_at"`
-	InvitationSentAt *time.Time                        `json:"invitation_sent_at"`
-}
-
-// getPaymentResponse is the response body for GET /payments/:id.
-type getPaymentResponse struct {
-	ID                    string                      `json:"id"`
-	Amount                string                      `json:"amount"`
-	StellarTransactionID  string                      `json:"stellar_transaction_id"`
-	StellarOperationID    string                      `json:"stellar_operation_id"`
-	Status                data.PaymentStatus          `json:"status"`
-	Type                  data.PaymentType            `json:"type"`
-	StatusHistory         data.PaymentStatusHistory   `json:"status_history,omitempty"`
-	Disbursement          *data.Disbursement          `json:"disbursement,omitempty"`
-	Asset                 data.Asset                  `json:"asset"`
-	ReceiverWallet        *getPaymentReceiverWallet   `json:"receiver_wallet,omitempty"`
-	CreatedAt             time.Time                   `json:"created_at"`
-	UpdatedAt             time.Time                   `json:"updated_at"`
-	ExternalPaymentID     string                      `json:"external_payment_id,omitempty"`
-	SourceWalletID        string                      `json:"source_wallet_id"`
-	CircleTransactionID   *string                     `json:"circle_transaction_id,omitempty"`
-	CircleTransactionType *data.CircleTransactionType `json:"circle_transaction_type,omitempty"`
-	SenderAddress         string                      `json:"sender_address,omitempty"`
-}
-
-func paymentToGetPaymentResponse(p data.Payment) getPaymentResponse {
-	resp := getPaymentResponse{
-		ID:                    p.ID,
-		Amount:                p.Amount,
-		StellarTransactionID:  p.StellarTransactionID,
-		StellarOperationID:    p.StellarOperationID,
-		Status:                p.Status,
-		Type:                  p.Type,
-		StatusHistory:         p.StatusHistory,
-		Disbursement:          p.Disbursement,
-		Asset:                 p.Asset,
-		CreatedAt:             p.CreatedAt,
-		UpdatedAt:             p.UpdatedAt,
-		ExternalPaymentID:     p.ExternalPaymentID,
-		SourceWalletID:        p.SourceWalletID,
-		CircleTransactionID:   p.CircleTransactionID,
-		CircleTransactionType: p.CircleTransactionType,
-		SenderAddress:         p.SenderAddress,
-	}
-	if p.ReceiverWallet != nil {
-		resp.ReceiverWallet = &getPaymentReceiverWallet{
-			ID:               p.ReceiverWallet.ID,
-			Receiver:         getPaymentReceiver{ID: p.ReceiverWallet.Receiver.ID, ExternalID: p.ReceiverWallet.Receiver.ExternalID},
-			Wallet:           p.ReceiverWallet.Wallet,
-			Status:           p.ReceiverWallet.Status,
-			StatusHistory:    p.ReceiverWallet.StatusHistory,
-			CreatedAt:        p.ReceiverWallet.CreatedAt,
-			UpdatedAt:        p.ReceiverWallet.UpdatedAt,
-			InvitationSentAt: p.ReceiverWallet.InvitationSentAt,
-		}
-	}
-	return resp
 }
 
 func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +96,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpjson.RenderStatus(w, http.StatusOK, paymentToGetPaymentResponse(payments[0]), httpjson.JSON)
+	httpjson.RenderStatus(w, http.StatusOK, payments[0], httpjson.JSON)
 }
 
 func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {

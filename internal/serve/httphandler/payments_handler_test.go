@@ -165,8 +165,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			"receiver_wallet": {
 				"id": "` + receiverWallet.ID + `",
 				"receiver": {
-					"id": "` + receiver.ID + `",
-					"external_id": "` + receiver.ExternalID + `"
+					"id": "` + receiver.ID + `"
 				},
 				"wallet": {
 					"id": "` + wallet.ID + `",

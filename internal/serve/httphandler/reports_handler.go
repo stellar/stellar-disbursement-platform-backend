@@ -120,6 +120,14 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
 		return
 	}
+	if payment.ReceiverWallet != nil {
+		receiver, rErr := h.Models.Receiver.Get(ctx, h.DBConnectionPool, payment.ReceiverWallet.Receiver.ID)
+		if rErr != nil {
+			httperror.InternalError(ctx, "Cannot retrieve payment receiver", rErr, nil).Render(w)
+			return
+		}
+		payment.ReceiverWallet.Receiver.ExternalID = receiver.ExternalID
+	}
 
 	internalNotes := strings.TrimSpace(r.URL.Query().Get("internal_notes"))
 	if utf8.RuneCountInString(internalNotes) > internalNotesMaxLength {
