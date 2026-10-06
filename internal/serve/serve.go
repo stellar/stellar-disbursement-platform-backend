@@ -800,14 +800,15 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			HorizonClient:               o.SubmitterEngine.HorizonClient,
 			AuthManager:                 authManager,
 		}
-		r.With(middleware.RequirePermission(
-			data.ReadAll,
-			middleware.AnyRoleMiddleware(authManager),
-		)).Get("/reports/statement", reportsHandler.GetStatementExport)
-		r.With(middleware.RequirePermission(
-			data.ReadPayments,
-			middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...),
-		)).Get("/reports/payment/{id}", reportsHandler.GetPaymentExport)
+		// Reports follow the payment read rules: business roles at the route, membership scope in the
+		// handlers, and nothing at all while the organization has reporting switched off.
+		r.With(
+			middleware.RequirePermission(data.ReadReports, middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...)),
+			middleware.RequireReportingEnabled(o.Models),
+		).Group(func(r chi.Router) {
+			r.Get("/reports/statement", reportsHandler.GetStatementExport)
+			r.Get("/reports/payment/{id}", reportsHandler.GetPaymentExport)
+		})
 
 		exportHandler := httphandler.ExportHandler{
 			Models:      o.Models,
