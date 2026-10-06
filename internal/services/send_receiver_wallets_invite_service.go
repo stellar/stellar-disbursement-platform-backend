@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/url"
 	"path"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/stellar/go-stellar-sdk/strkey"
@@ -67,6 +67,14 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 	organization, err := s.Models.Organizations.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("getting organization: %w", err)
+	}
+
+	if organization.ReceiverInvitationsDisabled != nil && *organization.ReceiverInvitationsDisabled {
+		log.Ctx(ctx).Debugf(
+			"receiver wallet invitations are disabled for tenant %s; skipping scheduled run",
+			currentTenant.ID,
+		)
+		return nil
 	}
 
 	// Debug purposes
@@ -180,13 +188,15 @@ func (s SendReceiverWalletInviteService) prepareMessage(ctx context.Context, rwa
 		}
 	}
 
+	// text/template keeps the body raw so it renders correctly over SMS; the email path escapes it at the
+	// wrapper (EmptyBodyEmailTemplate), so operator-authored markup can never reach the receiver as live HTML.
 	content := new(strings.Builder)
 	err := msgTemplate.Execute(content, struct {
 		OrganizationName string
-		RegistrationLink template.HTML
+		RegistrationLink string
 	}{
 		OrganizationName: organization.Name,
-		RegistrationLink: template.HTML(registrationLink),
+		RegistrationLink: registrationLink,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("executing registration message template: %w", err)

@@ -157,7 +157,8 @@ foo bar
 
 func Test_TwilioSendGrid_SendMessage_withHTMLContent(t *testing.T) {
 	htmlContent := "<html><body><h1>Hello</h1></body></html>"
-	message := Message{ToEmail: "foo@stellar.org", Title: "test title", Body: htmlContent}
+	// Trusted staff message: its pre-rendered HTML body is sent as-is (untrusted types are escaped instead).
+	message := Message{ToEmail: "foo@stellar.org", Title: "test title", Body: htmlContent, Type: MessageTypeUserInvitation}
 
 	mSendGrid := newMockTwilioSendGridClient(t)
 

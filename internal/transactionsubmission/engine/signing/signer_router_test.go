@@ -72,6 +72,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		networkPassphrase:    networkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
+		walletKeys:           store.NewDistributionWalletKeyModel(dbConnectionPool),
 		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 

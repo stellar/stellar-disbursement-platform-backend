@@ -1,9 +1,11 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -64,6 +66,10 @@ type CreateUserRequest struct {
 	LastName  string          `json:"last_name"`
 	Email     string          `json:"email"`
 	Roles     []data.UserRole `json:"roles"`
+	// WalletID scopes the new user to one distribution wallet. It is optional: requests that
+	// omit it — single-wallet tenants, and any client not sending the field — fall back to the
+	// tenant's default wallet, which the owner can change afterwards.
+	WalletID string `json:"wallet_id"`
 }
 
 func (cur CreateUserRequest) validate() *httperror.HTTPError {
@@ -74,6 +80,11 @@ func (cur CreateUserRequest) validate() *httperror.HTTPError {
 	validator.CheckError(utils.ValidateStringLength(cur.LastName, "last_name", namesMaxLength), "last_name", "")
 	validator.CheckError(utils.ValidateEmail(utils.TrimAndLower(cur.Email)), "email", "")
 	validateRoles(validator, cur.Roles)
+
+	// Owner and developer are tenant-wide, so a wallet cannot be attached to them.
+	if cur.WalletID != "" && len(cur.Roles) == 1 && data.IsTenantWideRole(cur.Roles[0]) {
+		validator.AddError("wallet_id", fmt.Sprintf("the %s role is tenant-wide and cannot be scoped to a wallet", cur.Roles[0]))
+	}
 
 	if validator.HasErrors() {
 		return httperror.BadRequest("Request invalid", nil, validator.Errors)
@@ -166,6 +177,8 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 			httperror.Unauthorized("", activationErr, nil).Render(rw)
 		} else if errors.Is(activationErr, auth.ErrNoRowsAffected) {
 			httperror.BadRequest("", activationErr, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
+		} else if errors.Is(activationErr, auth.ErrLastOwner) {
+			httperror.BadRequest(auth.ErrLastOwner.Error(), activationErr, nil).Render(rw)
 		} else {
 			httperror.InternalError(ctx, "", activationErr, nil).Render(rw)
 		}
@@ -213,11 +226,24 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Scoped users need a wallet membership to see anything (empty lists/403s otherwise).
+	// Owners and developers are tenant-wide by definition and never get membership rows.
+	role := reqBody.Roles[0]
+	var membershipWallet *data.DistributionWallet
+	if !data.IsTenantWideRole(role) {
+		var walletErr *httperror.HTTPError
+		if membershipWallet, walletErr = h.resolveMembershipWallet(ctx, reqBody.WalletID); walletErr != nil {
+			walletErr.Render(rw)
+			return
+		}
+	}
+
 	newUser := auth.User{
 		FirstName: strings.TrimSpace(reqBody.FirstName),
 		LastName:  strings.TrimSpace(reqBody.LastName),
 		Email:     utils.TrimAndLower(reqBody.Email),
 		Roles:     data.FromUserRoleArrayToStringArray(reqBody.Roles),
+		IsOwner:   role == data.OwnerUserRole,
 	}
 
 	u, err := h.AuthManager.CreateUser(ctx, &newUser, "")
@@ -229,6 +255,21 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 		httperror.InternalError(ctx, "Cannot create user", err, nil).Render(rw)
 		return
+	}
+
+	if membershipWallet != nil {
+		// The auth package writes through its own connection pool and exposes no executor, so
+		// the user row and the membership row cannot share a transaction. Everything checkable
+		// was checked before the user was created; if the grant still fails, deactivate the
+		// user rather than leave a live account with no wallet access — an account that can log
+		// in and see nothing is the exact silent failure this membership prevents.
+		if _, err = h.Models.WalletMemberships.Insert(ctx, h.Models.DBConnectionPool, u.ID, membershipWallet.ID, role, &authenticatedUserID); err != nil {
+			if deactivateErr := h.AuthManager.DeactivateUser(ctx, token, u.ID); deactivateErr != nil {
+				h.CrashTrackerClient.LogAndReportErrors(ctx, deactivateErr, "Cannot deactivate user left without a wallet membership")
+			}
+			httperror.InternalError(ctx, "Cannot grant wallet membership to new user", err, nil).Render(rw)
+			return
+		}
 	}
 
 	err = services.SendInvitationMessage(ctx, h.MessengerClient, h.Models,
@@ -244,6 +285,33 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 	log.Ctx(ctx).Infof("[CreateUserAccount] - User ID %s created user with account ID %s", authenticatedUserID, u.ID)
 	httpjson.RenderStatus(rw, http.StatusCreated, u, httpjson.JSON)
+}
+
+// resolveMembershipWallet picks the distribution wallet a new scoped user is scoped to: the
+// one the request named, or the tenant default when it named none. It deliberately runs before
+// the user is created, so an unusable wallet rejects the whole request instead of leaving a
+// user behind that no membership could be attached to.
+func (h UserHandler) resolveMembershipWallet(ctx context.Context, walletID string) (*data.DistributionWallet, *httperror.HTTPError) {
+	if walletID == "" {
+		wallet, err := h.Models.DistributionWallets.GetDefault(ctx, h.Models.DBConnectionPool)
+		if err != nil {
+			return nil, httperror.InternalError(ctx, "Cannot resolve default wallet for new user", err, nil)
+		}
+		return wallet, nil
+	}
+
+	wallet, err := h.Models.DistributionWallets.Get(ctx, h.Models.DBConnectionPool, walletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return nil, httperror.BadRequest("", err, map[string]interface{}{"wallet_id": "wallet_id is invalid"})
+		}
+		return nil, httperror.InternalError(ctx, "Cannot resolve wallet for new user", err, nil)
+	}
+	if wallet.Status == data.ArchivedDistributionWalletStatus {
+		return nil, httperror.Conflict("cannot grant membership on an archived wallet", nil, nil)
+	}
+
+	return wallet, nil
 }
 
 func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) {
@@ -277,6 +345,35 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// Includes deactivated users, whose role can still be changed.
+	users, err := h.AuthManager.GetAllUsers(ctx, token)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidToken) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot get users", err, nil).Render(rw)
+		return
+	}
+	subjectIdx := slices.IndexFunc(users, func(u auth.User) bool { return u.ID == reqBody.UserID })
+	if subjectIdx < 0 {
+		httperror.BadRequest("", nil, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
+		return
+	}
+	subject := &users[subjectIdx]
+
+	// Leaving a tenant-wide role lands the user on the default wallet, as an invite does; resolved
+	// before the role changes so an unusable wallet rejects the whole request.
+	newRole := reqBody.Roles[0]
+	var fallbackWallet *data.DistributionWallet
+	if services.IsTenantWideUser(subject) && !data.IsTenantWideRole(newRole) {
+		var walletErr *httperror.HTTPError
+		if fallbackWallet, walletErr = h.resolveMembershipWallet(ctx, ""); walletErr != nil {
+			walletErr.Render(rw)
+			return
+		}
+	}
+
 	updateUserRolesErr := h.AuthManager.UpdateUserRoles(ctx, token, reqBody.UserID, data.FromUserRoleArrayToStringArray(reqBody.Roles))
 	if updateUserRolesErr != nil {
 		if errors.Is(updateUserRolesErr, auth.ErrInvalidToken) {
@@ -289,8 +386,28 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 			return
 		}
 
+		if errors.Is(updateUserRolesErr, auth.ErrLastOwner) {
+			httperror.BadRequest(auth.ErrLastOwner.Error(), updateUserRolesErr, nil).Render(rw)
+			return
+		}
+
 		httperror.InternalError(ctx, "Cannot update user activation", updateUserRolesErr, nil).Render(rw)
 		return
+	}
+
+	// The role change cannot share a transaction with the membership writes (auth has its own pool).
+	if data.IsTenantWideRole(newRole) {
+		if err = services.RevokeAllWalletMemberships(ctx, h.Models, reqBody.UserID, authenticatedUserID); err != nil {
+			httperror.InternalError(ctx, "Cannot revoke wallet memberships of a tenant-wide user", err, nil).Render(rw)
+			return
+		}
+	}
+	if fallbackWallet != nil {
+		_, err = h.Models.WalletMemberships.Insert(ctx, h.Models.DBConnectionPool, reqBody.UserID, fallbackWallet.ID, newRole, &authenticatedUserID)
+		if err != nil && !errors.Is(err, data.ErrRecordAlreadyExists) {
+			httperror.InternalError(ctx, "Cannot grant the default wallet to the user", err, nil).Render(rw)
+			return
+		}
 	}
 
 	log.Ctx(ctx).Infof("[UpdateUserRoles] - User ID %s updated user with account ID %s roles to %v", authenticatedUserID, reqBody.UserID, reqBody.Roles)

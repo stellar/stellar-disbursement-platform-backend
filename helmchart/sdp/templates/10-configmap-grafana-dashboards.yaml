@@ -1,0 +1,23 @@
+{{- if .Values.grafanaDashboards.enabled -}}
+# Provisions the committed Grafana dashboards as a ConfigMap. The `grafana_dashboard: "1"`
+# label is the convention the kube-prometheus-stack Grafana sidecar watches for auto-import.
+# Source of truth for the JSON is resources/grafana/ in the stellar-disbursement-platform-backend
+# repository; the copies under dashboards/ exist because Helm's .Files can only read files
+# inside the chart directory.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sdp.fullname" . }}-grafana-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+    {{- with .Values.grafanaDashboards.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+data:
+  {{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+{{- end }}

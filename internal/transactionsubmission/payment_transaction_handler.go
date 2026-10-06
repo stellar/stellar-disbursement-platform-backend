@@ -57,7 +57,7 @@ func (h *PaymentTransactionHandler) BuildInnerTransaction(ctx context.Context, t
 
 	var operation txnbuild.Operation
 	var txMemo txnbuild.Memo
-	amount := txJob.Transaction.Amount.StringFixed(6)
+	amount := txJob.Transaction.Amount.StringFixed(7)
 
 	if strkey.IsValidEd25519PublicKey(txJob.Transaction.Destination) {
 		memo, err := txJob.Transaction.BuildMemo()
@@ -209,7 +209,13 @@ func (h *PaymentTransactionHandler) RequiresRebuildOnRetry() bool {
 func (h *PaymentTransactionHandler) AddContextLoggerFields(transaction *store.Transaction) map[string]interface{} {
 	fields := map[string]interface{}{
 		"asset":               transaction.AssetCode,
+		"amount":              transaction.Amount.String(),
 		"destination_account": transaction.Destination,
+	}
+
+	// asset_issuer is empty for the native asset (XLM); only log it for issued assets.
+	if transaction.AssetIssuer != "" {
+		fields["asset_issuer"] = transaction.AssetIssuer
 	}
 
 	if transaction.Memo != "" {

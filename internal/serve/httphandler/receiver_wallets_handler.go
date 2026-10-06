@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type RetryInvitationMessageResponse struct {
@@ -34,12 +35,41 @@ type RetryInvitationMessageResponse struct {
 type ReceiverWalletsHandler struct {
 	Models             *data.Models
 	CrashTrackerClient crashtracker.CrashTrackerClient
+	AuthManager        auth.AuthManager
+}
+
+// ensureReceiverWalletInScope gates the endpoints that address a receiver through one of their
+// wallets, looking the receiver up so the check runs through the same gate as every other receiver
+// write. notFoundMsg is the endpoint's own 404 message: absent and out-of-scope must render
+// identically, or the difference between them is an existence oracle.
+func (h ReceiverWalletsHandler) ensureReceiverWalletInScope(ctx context.Context, receiverWalletID, notFoundMsg string) *httperror.HTTPError {
+	receiverWallet, err := h.Models.ReceiverWallet.GetByID(ctx, h.Models.DBConnectionPool, receiverWalletID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return httperror.NotFound(notFoundMsg, err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot get receiver wallet", fmt.Errorf("getting receiver wallet %s: %w", receiverWalletID, err), nil)
+	}
+
+	scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverWallet.Receiver.ID)
+	if scopeErr != nil && scopeErr.StatusCode == http.StatusNotFound {
+		return httperror.NotFound(notFoundMsg, nil, nil)
+	}
+
+	return scopeErr
 }
 
 func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	receiverWalletID := chi.URLParam(req, "receiver_wallet_id")
+
+	// Resolve the receiver before retrying: RetryInvitationMessage mutates and returns in one
+	// statement, so the scope check has to happen first.
+	if scopeErr := h.ensureReceiverWalletInScope(ctx, receiverWalletID, ""); scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
 
 	receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationMessage(ctx, h.Models.DBConnectionPool, receiverWalletID)
 	if err != nil {
@@ -96,6 +126,11 @@ func (h ReceiverWalletsHandler) PatchReceiverWalletStatus(rw http.ResponseWriter
 	if err != nil {
 		errMsg := fmt.Sprintf("invalid status %q; valid values %v", patchRequest.Status, data.ReceiversWalletStatuses())
 		httperror.BadRequest(errMsg, nil, nil).Render(rw)
+		return
+	}
+
+	if scopeErr := h.ensureReceiverWalletInScope(ctx, receiverWalletID, "receiver wallet not found"); scopeErr != nil {
+		scopeErr.Render(rw)
 		return
 	}
 
@@ -181,15 +216,25 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		return
 	}
 
+	if scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverID); scopeErr != nil {
+		scopeErr.Render(rw)
+		return
+	}
+
 	updatedReceiverWallet, err := db.RunInTransactionWithResult(ctx, h.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.ReceiverWallet, error) {
 		// 1: Validate existing receiver wallet
 		currentReceiverWallet, txErr := h.Models.ReceiverWallet.GetByID(ctx, dbTx, receiverWalletID)
 		if txErr != nil {
+			if errors.Is(txErr, data.ErrRecordNotFound) {
+				return nil, httperror.NotFound("receiver wallet not found", txErr, nil)
+			}
 			return nil, fmt.Errorf("getting receiver wallet by ID %s: %w", receiverWalletID, txErr)
 		}
 
+		// Belonging to another receiver answers the same as not existing: the caller is only entitled
+		// to the receiver in the URL, so anything else must not be confirmed.
 		if currentReceiverWallet.Receiver.ID != receiverID {
-			return nil, httperror.BadRequest("Receiver wallet does not belong to the specified receiver", nil, nil)
+			return nil, httperror.NotFound("receiver wallet not found", nil, nil)
 		}
 
 		if !currentReceiverWallet.Wallet.UserManaged {

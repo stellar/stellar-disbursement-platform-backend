@@ -1,0 +1,84 @@
+{{- if .Values.sdp.httpRoute.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+    {{- with .Values.sdp.httpRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.sdp.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- if .Values.sdp.httpRoute.gateway.enabled }}
+    - name: {{ .Values.sdp.httpRoute.gateway.name | default (printf "%s-gateway" (include "sdp.fullname" .)) }}
+    {{- else }}
+    {{- range .Values.sdp.httpRoute.parentRefs }}
+    - name: {{ .name }}
+      {{- if .namespace }}
+      namespace: {{ .namespace }}
+      {{- end }}
+      {{- if .sectionName }}
+      sectionName: {{ .sectionName }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  hostnames:
+    {{- if .Values.sdp.httpRoute.hostnames }}
+    {{- range .Values.sdp.httpRoute.hostnames }}
+    - {{ tpl . $ | quote }}
+    {{- end }}
+    {{- else }}
+    - {{ include "sdp.domain" . | quote }}
+    {{- if .Values.sdp.route.mtnDomain }}
+    - {{ include "sdp.mtnDomain" . | quote }}
+    {{- end }}
+    {{- end }}
+  rules:
+    - backendRefs:
+        - name: {{ include "sdp.fullname" . }}
+          port: {{ include "sdp.port" . }}
+{{- if .Values.sdp.route.adminDomain }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "sdp.fullname" . }}-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-admin") | nindent 4 }}
+    {{- with .Values.sdp.httpRoute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.sdp.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- if .Values.sdp.httpRoute.gateway.enabled }}
+    - name: {{ .Values.sdp.httpRoute.gateway.name | default (printf "%s-gateway" (include "sdp.fullname" .)) }}
+    {{- else }}
+    {{- range .Values.sdp.httpRoute.parentRefs }}
+    - name: {{ .name }}
+      {{- if .namespace }}
+      namespace: {{ .namespace }}
+      {{- end }}
+      {{- if .sectionName }}
+      sectionName: {{ .sectionName }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  hostnames:
+    - {{ include "sdp.adminDomain" . | quote }}
+  rules:
+    - backendRefs:
+        - name: {{ include "sdp.fullname" . }}
+          port: {{ include "sdp.adminPort" . }}
+{{- end }}
+{{- end }}

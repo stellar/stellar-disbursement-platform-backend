@@ -470,11 +470,16 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"circle_recipients",
 		"circle_transfer_requests",
 		"disbursements",
+		"disbursements_audit",
+		"distribution_wallets",
+		"distribution_wallets_audit",
 		"embedded_wallets",
+		"events",
 		"messages",
 		"organizations",
 		"passkey_sessions",
 		"payments",
+		"payments_audit",
 		"receiver_verifications",
 		"receiver_verifications_audit",
 		"receiver_wallets",
@@ -484,6 +489,8 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"sdp_migrations",
 		"short_urls",
 		"sponsored_transactions",
+		"wallet_memberships",
+		"wallet_memberships_audit",
 		"wallets",
 		"wallets_assets",
 		"receiver_registration_attempts",
@@ -661,8 +668,9 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
-				// Needed for createSchemaAndRunMigrations:
-				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Twice()
+				// Needed for createSchemaAndRunMigrations, addTrustlinesForDistributionAccount,
+				// and syncDefaultDistributionWallet:
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Times(3)
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
 
 				// Needed for setupTenantData (this one cannot be mocked):

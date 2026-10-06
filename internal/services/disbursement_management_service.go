@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -39,10 +40,11 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound        = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
+	ErrDisbursementNotFound         = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart  = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause  = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementNotReadyToCancel = errors.New("disbursement is not ready to be canceled")
+	ErrDisbursementWalletDisabled   = errors.New("disbursement wallet is disabled")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
@@ -61,14 +63,15 @@ func (e InsufficientBalanceError) Error() string {
 	requiredAmount := e.DisbursementAmount.Add(e.TotalPendingAmount)
 	shortfall := requiredAmount.Sub(e.AvailableBalance)
 
+	// Round against the user so the message never shows enough funds or a zero shortfall.
 	return fmt.Sprintf(
 		"the disbursement %s failed due to an account balance (%s) that was insufficient to fulfill new amount (%s) along with the pending amount (%s). To complete this action, your distribution account (%s) needs to be recharged with at least %s %s",
 		e.DisbursementID,
-		e.AvailableBalance.StringFixed(2),
-		e.DisbursementAmount.StringFixed(2),
-		e.TotalPendingAmount.StringFixed(2),
+		e.AvailableBalance.RoundFloor(6).StringFixed(6),
+		e.DisbursementAmount.RoundCeil(6).StringFixed(6),
+		e.TotalPendingAmount.RoundCeil(6).StringFixed(6),
 		e.DistributionAddress,
-		shortfall.StringFixed(2),
+		shortfall.RoundCeil(6).StringFixed(6),
 		e.DisbursementAsset.Code,
 	)
 }
@@ -254,6 +257,19 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 
+		// Outbox: approval + hand-off to the TSS pipeline, same transaction.
+		eventData := map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"actor_user_id":   user.ID,
+		}
+		if err = events.Write(ctx, dbTx, events.DisbursementApproved, disbursement.SourceWalletID, eventData); err != nil {
+			return fmt.Errorf("writing disbursement.approved event: %w", err)
+		}
+		if err = events.Write(ctx, dbTx, events.DisbursementSubmitted, disbursement.SourceWalletID, eventData); err != nil {
+			return fmt.Errorf("writing disbursement.submitted event: %w", err)
+		}
+
 		return nil
 	})
 }
@@ -298,9 +314,13 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 	}
 
 	totalPendingAmount := decimal.Zero
+	// Scoped to this disbursement's OWN source wallet: pending commitments on other wallets
+	// don't compete for THIS wallet's balance. Without this, a busy Haiti/Venezuela account
+	// could wrongly block a valid disbursement on HQ (or vice versa) by tenant-wide coincidence.
 	incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 		Filters: map[data.FilterKey]interface{}{
-			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+			data.FilterKeyStatus:          data.PaymentInProgressStatuses(),
+			data.FilterKeySourceWalletIDs: []string{disbursement.SourceWalletID},
 		},
 	}, dbTx, data.QueryTypeSelectAll)
 	if err != nil {
@@ -373,6 +393,70 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 		err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// Outbox: paused, same transaction.
+		if err = events.Write(ctx, dbTx, events.DisbursementPaused, disbursement.SourceWalletID, map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"actor_user_id":   user.ID,
+		}); err != nil {
+			return fmt.Errorf("writing disbursement.paused event: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// CancelDisbursement cancels a disbursement that hasn't been started yet (DRAFT or READY) and
+// all of its payments, releasing any capacity the payments would otherwise reserve against the
+// source wallet's balance. Once a disbursement is STARTED, real on-chain submissions may already
+// be in flight, so this transition is intentionally not offered from STARTED/PAUSED - PauseDisbursement
+// is the correct action there instead.
+func (s *DisbursementManagementService) CancelDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		disbursement, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
+		if err != nil {
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return ErrDisbursementNotFound
+			} else {
+				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
+			}
+		}
+
+		// 1. Verify Transition is Possible
+		err = disbursement.Status.TransitionTo(data.CanceledDisbursementStatus)
+		if err != nil {
+			return ErrDisbursementNotReadyToCancel
+		}
+
+		// 2. Cancel all of the disbursement's payments. Since it's never been started, they are
+		// all in DRAFT status - see CancelAllDraftForDisbursement for why this doesn't go through
+		// the general payment state machine (which only allows READY -> CANCELED, used by the
+		// single-payment PATCH /payments/{id}/status endpoint).
+		err = s.Models.Payment.CancelAllDraftForDisbursement(ctx, dbTx, disbursementID)
+		if err != nil {
+			return fmt.Errorf("error updating payment status to canceled for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// 3. Update disbursement status to `canceled`
+		err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.CanceledDisbursementStatus)
+		if err != nil {
+			return fmt.Errorf("error updating disbursement status to canceled for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// Outbox: a canceled disbursement is a rejected one (same category DeleteDisbursement
+		// already uses for a deleted draft) - there is no dedicated "canceled" event type in the
+		// frozen v1 event-type list (internal/events/events.go), and adding one is explicitly
+		// called out there as "a spec change order". Reusing DisbursementRejected with a distinct
+		// "reason" keeps this within the existing contract; see ACTION-ITEMS.md for the write-up.
+		if err = events.Write(ctx, dbTx, events.DisbursementRejected, disbursement.SourceWalletID, map[string]any{
+			"disbursement_id": disbursementID,
+			"name":            disbursement.Name,
+			"actor_user_id":   user.ID,
+			"reason":          "canceled",
+		}); err != nil {
+			return fmt.Errorf("writing disbursement.rejected event: %w", err)
 		}
 
 		return nil

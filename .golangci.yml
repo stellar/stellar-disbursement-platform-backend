@@ -10,6 +10,7 @@ linters:
     - errcheck
     - errname
     - errorlint
+    - exhaustive
     - govet
     - nilerr
     - nilnesserr
@@ -30,6 +31,10 @@ linters:
       # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`.
       check-blank: true
 
+    exhaustive:
+      # Treat a `default` clause as covering all unlisted cases
+      default-signifies-exhaustive: true
+
     wrapcheck:
       extra-ignore-sigs:
         - .Close()
@@ -45,6 +50,8 @@ linters:
     paths:
       # mocks are ignored
       - ".*.mock.*\\.go$"
+      # third-party Go files vendored inside frontend node_modules
+      - ".*/node_modules/.*"
 
     rules:
       - path: _test\.go

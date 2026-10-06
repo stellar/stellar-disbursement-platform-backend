@@ -130,6 +130,10 @@ func (h BridgeIntegrationHandler) Patch(w http.ResponseWriter, r *http.Request) 
 	// Get user from context
 	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(w)
+			return
+		}
 		httperror.InternalError(ctx, "Cannot retrieve user from context", err, nil).Render(w)
 		return
 	}
@@ -168,6 +172,9 @@ func (h BridgeIntegrationHandler) optInForExistingCustomer(ctx context.Context, 
 			return
 		case errors.Is(err, bridge.ErrBridgeCustomerNotActive):
 			httperror.BadRequest("The provided customer_id is not active", err, nil).Render(w)
+			return
+		case errors.Is(err, bridge.ErrBridgeCustomerAlreadyBound):
+			httperror.Conflict("The provided customer_id is already linked to another organization", err, nil).Render(w)
 			return
 		case errors.As(err, &bridgeError):
 			extras := bridgeErrorToExtras(bridgeError)

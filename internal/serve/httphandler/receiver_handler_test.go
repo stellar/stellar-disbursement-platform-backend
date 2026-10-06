@@ -18,6 +18,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/dto"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -35,6 +36,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
 	// setup
@@ -70,6 +72,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		route := fmt.Sprintf("/receivers/%s", receiver.ID)
 		req, err := http.NewRequest("GET", route, nil)
 		require.NoError(t, err)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -131,6 +134,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		route := fmt.Sprintf("/receivers/%s", receiver.ID)
 		req, err := http.NewRequest("GET", route, nil)
 		require.NoError(t, err)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -235,6 +239,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		route := fmt.Sprintf("/receivers/%s", receiver.ID)
 		req, err := http.NewRequest("GET", route, nil)
 		require.NoError(t, err)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -345,6 +350,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		// test
 		req, err := http.NewRequest("GET", "/receivers/invalid_id", nil)
 		require.NoError(t, err)
+		req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
@@ -367,9 +373,13 @@ func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetReceivers))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "payments-test-owner"))
+		handler.GetReceivers(w, r)
+	}))
 	defer ts.Close()
 
 	tests := []struct {
@@ -483,9 +493,13 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(handler.GetReceivers))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(sdpcontext.SetUserIDInContext(r.Context(), "payments-test-owner"))
+		handler.GetReceivers(w, r)
+	}))
 	defer ts.Close()
 
 	ctx := context.Background()
@@ -1397,6 +1411,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
 	ctx := context.Background()
@@ -1582,6 +1597,7 @@ func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodGet, "/receivers/verification-types", nil)
 	require.NoError(t, err)
+	req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 	http.HandlerFunc(handler.GetReceiverVerificationTypes).ServeHTTP(rr, req)
 
 	resp := rr.Result()
@@ -1776,6 +1792,7 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -1841,6 +1858,7 @@ func Test_ReceiverHandler_CreateReceiver_HTTPValidationError(t *testing.T) {
 			require.NoError(t, err)
 
 			req := httptest.NewRequest("POST", "/receivers", bytes.NewBuffer(reqBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			req.Header.Set("Content-Type", "application/json")
 
 			w := httptest.NewRecorder()
@@ -1878,6 +1896,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
 	// Setup router
@@ -1996,6 +2015,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+			data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 			wallets := data.CreateWalletFixtures(t, ctx, dbConnectionPool)
 			data.MakeWalletUserManaged(t, ctx, dbConnectionPool, wallets[0].ID)
@@ -2004,6 +2024,7 @@ func Test_ReceiverHandler_CreateReceiver_Success(t *testing.T) {
 			require.NoError(t, err)
 
 			req, err := http.NewRequest("POST", "/receivers", bytes.NewBuffer(jsonBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -2031,10 +2052,12 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 
 	ctx := context.Background()
 	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -2132,6 +2155,7 @@ func Test_ReceiverHandler_CreateReceiver_Conflict(t *testing.T) {
 			require.NoError(t, err)
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -2151,10 +2175,12 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 
 	ctx := context.Background()
 	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+	data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
 	handler := &ReceiverHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -2216,6 +2242,7 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 			require.NoError(t, err)
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/receivers", bytes.NewReader(reqBody))
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
@@ -2245,6 +2272,7 @@ func Test_ReceiverHandler_CreateReceiver_MemoTypeDetection(t *testing.T) {
 
 				// Clean up
 				data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+				data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 			}
 		})
 	}

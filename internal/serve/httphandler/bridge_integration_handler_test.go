@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -227,8 +228,8 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 					Return(nil, errors.New("user not found")).
 					Once()
 			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedResponse: `{"error": "Cannot retrieve user from context"}`,
+			expectedStatus:   http.StatusUnauthorized,
+			expectedResponse: `{"error": "Not authorized."}`,
 		},
 		{
 			name:        "Bridge service already opted in error",
@@ -443,6 +444,26 @@ func Test_BridgeIntegrationHandler_Patch_optInToBridge(t *testing.T) {
 			}`,
 		},
 		{
+			name: "manual onboarding with a customer ID linked to another organization",
+			requestBody: PatchRequest{
+				Status:     data.BridgeIntegrationStatusOptedIn,
+				CustomerID: "customer-456",
+			},
+			prepareMocks: func(t *testing.T, mBridgeService *bridge.MockService, mAuthenticator *auth.AuthenticatorMock) {
+				mAuthenticator.
+					On("GetUser", mock.Anything, testUser.ID).
+					Return(testUser, nil).
+					Once()
+
+				mBridgeService.
+					On("OptInForExistingCustomer", mock.Anything, "customer-456", testUser.ID).
+					Return(nil, fmt.Errorf("storing manual Bridge integration in database: %w", bridge.ErrBridgeCustomerAlreadyBound)).
+					Once()
+			},
+			expectedStatus:   http.StatusConflict,
+			expectedResponse: `{"error": "The provided customer_id is already linked to another organization"}`,
+		},
+		{
 			name: "manual onboarding when already opted in",
 			requestBody: PatchRequest{
 				Status:     data.BridgeIntegrationStatusOptedIn,
@@ -606,8 +627,8 @@ func Test_BridgeIntegrationHandler_Patch_createVirtualAccount(t *testing.T) {
 					Return(nil, errors.New("user not found")).
 					Once()
 			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedResponse: `{"error": "Cannot retrieve user from context"}`,
+			expectedStatus:   http.StatusUnauthorized,
+			expectedResponse: `{"error": "Not authorized."}`,
 		},
 		{
 			name:        "organization not opted in",

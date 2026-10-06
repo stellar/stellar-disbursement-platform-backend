@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"go/types"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go-stellar-sdk/support/config"
@@ -10,11 +11,14 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -96,6 +100,7 @@ func (c *DistributionAccountCommand) Command(cmdService DistAccCmdServiceInterfa
 	}
 
 	distributionAccountCmd.AddCommand(c.RotateCommand(cmdService))
+	distributionAccountCmd.AddCommand(c.RotateWalletDEKCommand())
 
 	return distributionAccountCmd
 }
@@ -105,16 +110,24 @@ func (c *DistributionAccountCommand) RotateCommand(cmdService DistAccCmdServiceI
 	var submitterEngine engine.SubmitterEngine
 	var txSubmitterOpts di.TxSubmitterEngineOptions
 	var tenantRoutingOpts cmdUtils.TenantRoutingOptions
+	var walletID string
 	adminServeOpts := serveadmin.ServeOptions{}
 
 	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 	configOpts = append(configOpts,
 		cmdUtils.SingleTenantRoutingConfigOptions(&tenantRoutingOpts),
-		cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount))
+		cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount),
+		&config.ConfigOption{
+			Name:      "wallet-id",
+			Usage:     "ID of the distribution wallet to rotate. When omitted, the tenant's default wallet (its distribution account) is rotated.",
+			OptType:   types.String,
+			ConfigKey: &walletID,
+			Required:  false,
+		})
 
 	rotateCmd := &cobra.Command{
 		Use:   "rotate",
-		Short: "Rotate the distribution account for a tenant",
+		Short: "Rotate the distribution account of a tenant's distribution wallet",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -154,15 +167,47 @@ func (c *DistributionAccountCommand) RotateCommand(cmdService DistAccCmdServiceI
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
+			tenantManager := tenant.NewManager(tenant.WithDatabase(c.AdminDBConnectionPool))
+
+			// Rotation writes the tenant schema's distribution_wallets row, which the admin pool
+			// cannot reach, so open a pool scoped to the tenant schema for the duration of the run.
+			t, err := sdpcontext.GetTenantFromContext(ctx)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error getting tenant from context: %v", err)
+			}
+			tenantSchemaDSN, err := tenantManager.GetDSNForTenant(ctx, t.Name)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error getting DSN for tenant %s: %v", t.Name, err)
+			}
+			tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error opening database connection on tenant schema: %v", err)
+			}
+			defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool after rotating the distribution account")
+
+			models, err := data.NewModels(tenantSchemaConnectionPool)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error getting models for tenant schema: %v", err)
+			}
+
+			// Per-wallet key material lives in the TSS database, envelope-encrypted under the same
+			// host KEK the signature service uses.
+			walletKeyService, err := tssSvc.NewDistributionWalletKeyService(c.TSSDBConnectionPool, txSubmitterOpts.SignatureServiceOptions.DistAccEncryptionPassphrase)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error creating distribution wallet key service: %v", err)
+			}
+
 			distributionAccService := DistributionAccountService{
 				distAccService:             distAccService,
 				submitterEngine:            submitterEngine,
-				tenantManager:              tenant.NewManager(tenant.WithDatabase(c.AdminDBConnectionPool)),
+				tenantManager:              tenantManager,
 				nativeAssetBootstrapAmount: adminServeOpts.TenantAccountNativeAssetBootstrapAmount,
 				maxBaseFee:                 int64(txSubmitterOpts.MaxBaseFee),
+				models:                     models,
+				walletKeyService:           walletKeyService,
+				walletID:                   walletID,
 			}
-			err := cmdService.RotateDistributionAccount(ctx, distributionAccService)
-			if err != nil {
+			if err = cmdService.RotateDistributionAccount(ctx, distributionAccService); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd distribution-account rotate crash")
 				log.Ctx(ctx).Fatalf("Error rotating distribution account: %v", err)
 			}

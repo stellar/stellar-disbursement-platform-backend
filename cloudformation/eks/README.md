@@ -4,6 +4,7 @@
 - AWS CLI installed and configured
 - Helm installed
 - kubectl configured to connect to your cluster
+- A Route53 public hosted zone for your domain 
 
 ## Environment Setup
 Before starting, set these environment variables:
@@ -12,6 +13,7 @@ Before starting, set these environment variables:
 export AWS_REGION=your-region  # e.g., us-west-2, eu-west-1, etc.
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export ENVIRONMENT=dev  # or prod, staging, etc.
+export NAMESPACE=sdp
 
 # Optional variables (for customizing deployment)
 export STACK_NAME_PREFIX=sdp  # Prefix for all CloudFormation stacks
@@ -21,23 +23,23 @@ export DOMAIN_NAME=example.org  # Your registered domain
 ## Cloudformation Stacks
 This guide walks through deploying the Stellar Disbursement Platform (SDP) infrastructure on AWS. The deployment consists of four CloudFormation stacks that create the necessary infrastructure in a specific order:
 
-- Network Stack (sdp-network-eks.yaml)
+- Network Stack (`sdp-network-eks.yaml`)
   - Creates or uses existing VPC and subnets
   - Sets up networking for both public and private resources
   - Exports used (imported) by database and EKS stack to deploy resources
 
-- Database Stack (sdp-database-eks.yaml)
+- Database Stack (`sdp-database-eks.yaml`)
   - Deploys RDS PostgreSQL database in private subnet
   - Creates necessary database secrets in AWS Secrets Manager
 
-- Keys Stack (sdp-keys-eks.yaml) [Optional]
+- Keys Stack (`sdp-keys-eks.yaml`) [Optional]
   - Manages Stellar and encryption keys by either:
     - Using provided keys via parameters, or
     - Auto-generating keys using Lambda function for dev/test environments
-  - Stores all keys and secrets in AWS Secrets Manager under /sdp/${ENVIRONMENT}/ path
-  - Keys include SEP-10 signing keys, distribution account keys, JWT secrets, etc.
+  - Stores all keys and secrets in AWS Secrets Manager under `/${namespace}/${ENVIRONMENT}/SECRET_NAME`
+  - Keys include SEP-10 signing keys, distribution account keys, etc.
 
-- EKS Stack (sdp-eks.yaml)
+- EKS Stack (`sdp-eks.yaml`)
   - Creates EKS cluster and node group
   - Sets up IAM roles and security groups
   - Configures IRSA (IAM Roles for Service Accounts)
@@ -45,7 +47,12 @@ This guide walks through deploying the Stellar Disbursement Platform (SDP) infra
 
 After the CloudFormation stacks are deployed, additional Kubernetes resources are installed via Helm charts to complete the setup. The SDP expects secrets to be available as Kubernetes secrets, but how those secrets are synchronized (whether through ExternalSecrets, direct creation, or other means) is left to the deployer's preference.
 
-Note: Both the Keys stack and ExternalSecrets are optional implementation choices. You can manage and sync secrets to Kubernetes secrets through whatever mechanism best fits your security requirements and operational preferences.
+> **Note**: Create each successive stack only after the previous one has finished. You can check if stack creation is complete with the following command:
+ ```bash
+  aws cloudformation describe-stacks --region $AWS_REGION \
+    --query "Stacks[?contains(StackName,'${STACK_NAME_PREFIX}-')].[StackName,StackStatus]" \
+    --output table
+  ```
 
 ## Change Directory to the EKS Cloudformation Directory
 ```bash
@@ -59,17 +66,28 @@ aws sts get-caller-identity
 ```
 
 ## 1. Network Stack Deployment
-Deploy the networking infrastructure. Review custom parameters if needed.
+Deploy the networking infrastructure. 
+
+Review custom parameters if needed, such as if your deployment will use an existing VPC. By default, a new one will be created with no additional parameters necessary.
 
 ```bash
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME_PREFIX}-network \
   --template-body file://sdp-network-eks.yaml \
-  --region ${AWS_REGION}
+  --region ${AWS_REGION} \
+  --parameters \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT}
 ```
 
 ## 2. Database Stack Deployment
-Deploy the RDS database. Review custom parameters if needed.
+Deploy the RDS database. 
+
+Review custom parameters if needed. Notable custom parameter(s) to override:
+| ParameterKey | Default Value | Description |
+| --- | --- | --- |
+| `DBPassword` | `postgres` | Database admin password. Be sure to change this for production deployments. |
+| `MultiAZ` | `false` | When `true`, provisions a replica of your RDS instance in a second availability zone (a physically separate data center) in case of an outage / failure of the primary. Roughly doubles the cost of the RDS instance |
+| `DeletionProtection` | `false` | When `true`, blocks deletion of the RDS instance by anyone with the required IAM permissions until the protection is explicitly disabled.  |
 
 ```bash
 aws cloudformation create-stack \
@@ -78,20 +96,40 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region ${AWS_REGION} \
   --parameters \
-    ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network
+    ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT} \
+    ParameterKey=namespace,ParameterValue=${NAMESPACE} \
 ```
 
 ## 3. Keys Stack Deployment
-For testnet, you can auto-generate Stellar secrets using the following command:
+
+Create and store SDP secrets in AWS Secrets Manager. The `sdp-keys-eks.yaml` file contains parameter fields for core and optional secrets that need to be provided. All secrets are stored at `/${namespace}/${ENVIRONMENT}/SECRET_NAME` (default `namespace` = `sdp`) and synced to Kubernetes via ExternalSecrets. 
+
+### 3.1 Testnet Secrets
+
+For **testnet** / dev environments, if no parameter values are supplied, core secret default values will be used. Stellar keys and passphrases need to be auto-generated if not supplied (see `sdp-keys-eks.yaml`). You can deploy a lambda function that generates Stellar keypairs and funds the distribution account via friendbot.
+
+This must be built and uploaded before the main keys stack:
 
 ```bash
-aws cloudformation create-stack \
-  --stack-name ${STACK_NAME_PREFIX}-keys-eks \
-  --template-body file://sdp-keys-eks.yaml \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region ${AWS_REGION}
+# Create a bucket to hold the layer (name must be globally unique)
+aws s3 mb s3://your-stellar-layer-bucket --region ${AWS_REGION}
+
+# Build node_modules and zip it (requires Node 22 installed on machine)
+mkdir -p nodejs &&
+cd nodejs && npm install @stellar/stellar-sdk && cd .. &&
+zip -r stellar-layer.zip nodejs/
+
+# Upload it to the bucket
+aws s3 cp stellar-layer.zip s3://your-stellar-layer-bucket/stellar-layer.zip
 ```
-For mainnet (or using pre-created Stellar accounts), you will need to provide (at a minimum)the necessary parameters. Example:
+
+Then pass the bucket name when deploying the stack below via `ParameterKey=StellarLayerS3Bucket ParameterValue=your-stellar-layer-bucket`. This parameter is required whenever any Stellar key or passphrase is left blank for auto-generation, and the parameter value must be the bucket name you provided above (e.g. `your-stellar-layer-bucket`).
+
+> **Note**: Do not generate these keypairs for mainnet/prod. Skip this section and bring your own keys.
+
+Create the SDP secrets for testnet using the following command:
+
 ```bash
 aws cloudformation create-stack \
   --stack-name ${STACK_NAME_PREFIX}-keys-eks \
@@ -99,15 +137,58 @@ aws cloudformation create-stack \
   --capabilities CAPABILITY_NAMED_IAM \
   --region ${AWS_REGION} \
   --parameters \
+    ParameterKey=StellarLayerS3Bucket,ParameterValue=your-stellar-layer-bucket
+```
+
+### 3.2 Mainnet Secrets
+
+For **mainnet** (or when using pre-created Stellar accounts), you will need to provide the necessary parameter values, both for core and any additional optional secrets. Core secrets have insecure defaults that **must** be overriden for mainnet deployment. 
+
+Please review optional secrets as desired. For a description of these, please see: [Configuring the SDP](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) and the [SDP Helm Chart README](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/helmchart/sdp/README.md).
+
+Once parameters have been configured, you can create the SDP secrets using the following command (incomplete example, supply any missing parameters):
+
+```bash
+aws cloudformation create-stack \
+  --stack-name ${STACK_NAME_PREFIX}-keys-eks \
+  --template-body file://sdp-keys-eks.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region ${AWS_REGION} \
+  --parameters \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT} \
+    ParameterKey=namespace,ParameterValue=${NAMESPACE} \
     ParameterKey=DistributionSeed,ParameterValue=your-distribution-account-secret-key \
     ParameterKey=DistributionPublicKey,ParameterValue=your-distribution-account-public-key \
-    ParameterKey=SEP10SigningPrivateKey,ParameterValue=your-sep10-signing-private-key \
-    ParameterKey=SEP10SigningPublicKey,ParameterValue=your-sep10-signing-public-key \
-    ParameterKey=SecretSep10SigningSeed,ParameterValue=your-secret-sep10-signing-secret-key \
-    ParameterKey=ChannelAccountEncryptionPassphrase,ParameterValue=your-channel-encryption-passphrase \
-    ParameterKey=DistributionAccountEncryptionPassphrase,ParameterValue=your-distribution-encryption-passphrase
+    ParameterKey=Sep10SigningPrivateKey,ParameterValue=your-sep10-signing-private-key \
+    ParameterKey=Sep10SigningPublicKey,ParameterValue=your-sep10-signing-public-key \
+    # etc
 ```
-for a description of these parameters, please see: [Configuring the SDP](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp)
+Alternatively, you can write all the parameters as key-value pairs in a JSON file (incomplete example):
+
+```json
+[
+  {
+    "ParameterKey": "env",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "DistributionSeed",
+    "ParameterValue": "your-distribution-account-secret-key"
+  }
+]
+```
+Then pass this JSON file to the `create-stack` command:
+
+```bash
+aws cloudformation create-stack \
+  --stack-name ${STACK_NAME_PREFIX}-keys-eks \
+  --template-body file://sdp-keys-eks.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region ${AWS_REGION} \
+  --parameters file://params.json
+```
+
+> **Security Notice**: Secrets passed as CloudFormation parameters are stored in the stack's parameter history and can be retrieved in plaintext by anyone with Cloudformation read permissions (`cloudformation:DescribeStacks`) in your AWS account. For production deployments where Secrets Manager access is restricted separately (`secretsmanager:GetSecretValue`), consider pre-creating sensitive values directly in AWS Secrets Manager instead of deploying this stack and passing them as parameters.
 
 ## 4. EKS Cluster Deployment
 Deploy the EKS cluster:
@@ -120,7 +201,9 @@ aws cloudformation create-stack \
   --region ${AWS_REGION} \
   --parameters \
     ParameterKey=NetworkStackName,ParameterValue=${STACK_NAME_PREFIX}-network \
-    ParameterKey=DatabaseStackName,ParameterValue=${STACK_NAME_PREFIX}-database
+    ParameterKey=DatabaseStackName,ParameterValue=${STACK_NAME_PREFIX}-database \
+    ParameterKey=env,ParameterValue=${ENVIRONMENT} \
+    ParameterKey=namespace,ParameterValue=${NAMESPACE}
 ```
 
 ### EKS Configuration and Deployment
@@ -154,6 +237,8 @@ kubectl config get-contexts
 ```bash
 kubectl create namespace sdp
 ```
+
+> **Note**: If deploying under a different namespace, replace sdp in the namespace-scoped kubectl/helm commands.
 
 ## 7. External Secrets Operator Installation
 ```bash
@@ -196,7 +281,7 @@ metadata:
   annotations:
     eks.amazonaws.com/role-arn: ${SECRETSTORE_ROLE_ARN}
 ---
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
   name: aws-backend
@@ -218,8 +303,8 @@ kubectl get secretstore aws-backend -n sdp
 
 ## 9. Create External Secrets
 ```bash
-kubectl apply -n sdp -f helm/sdp-secrets-${ENVIRONMENT}.yaml
-kubectl get externalsecret sdp-secrets -n sdp
+envsubst '${NAMESPACE} ${ENVIRONMENT}' < helm/sdp-secrets.yaml | kubectl apply -f -
+kubectl get externalsecret sdp-secrets -n ${NAMESPACE}
 ```
 
 ## 10. Install Nginx Ingress Controller
@@ -230,7 +315,7 @@ helm repo update
 
 helm install ingress-nginx ingress-nginx/ingress-nginx \
     --namespace ingress-nginx \
-    --version 4.11.0 \
+    --version 4.15.1 \
     --create-namespace \
     --set controller.service.type=LoadBalancer \
     --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=nlb \
@@ -262,8 +347,9 @@ helm install cert-manager jetstack/cert-manager \
 # Verify installation
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=120s
 
-# Apply ClusterIssuer
-kubectl apply -f helm/cluster-issuer.yaml
+# Apply ClusterIssuer 
+export EMAIL=your-email.org
+envsubst '${AWS_REGION} ${EMAIL}' < helm/cluster-issuer.yaml | kubectl apply -f -
 ```
 
 ## 12. Install External-DNS
@@ -287,26 +373,56 @@ helm install external-dns external-dns/external-dns \
 kubectl get pods -n external-dns
 ```
 
+> Note: Cert-manager (Step 11) and External-DNS (Step 12) both manage DNS through **Route53**, so `${DOMAIN_NAME}` must be served by a Route53 **public hosted zone** before this step. If it isn't, create one (or delegate a subdomain to one), repoint your registrar's `NS` records at it, and let the delegation propagate before proceeding to Step 13.
+
 ## 13. Deploy SDP Helm Chart
-Before deploying the Stellar Disbursement Platform helm chart you need to configure the helm values.  Review `values-testnet.yaml` (for Stellar Testnet) or `values-mainnet.yaml` (for Stellar Mainnet)  and substitute the example domain with your own.  For example, you may also want to change the front-end (dashboard) and backend (api) base domains.  See [Stellar Disbursement Platform Domain Structure](#stellar-disbursement-platform-domain-structure) for more information.
+Before deploying the Stellar Disbursement Platform helm chart you need to configure the helm values.  Review `values-testnet.yaml` (for Stellar Testnet) or `values-mainnet.yaml` (for Stellar Mainnet)  and substitute the default values with your own. For example, you may also want to change the front-end (dashboard) and backend (api) base domains (See [Stellar Disbursement Platform Domain Structure](#stellar-disbursement-platform-domain-structure) for more information). You should also add any additional values you require, such as embedded wallet or AWS/Twilio messaging support.
+
+See the following to learn about SDP helm values: [Configuring the SDP](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) and the [SDP Helm Chart README](https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/helmchart/sdp/README.md).
 
 
-### Add Stellar Repository
-```bash
+### Install the SDP Chart
+
+The chart can be installed either from a packaged chart or directly from the git repository.
+
+### From a packaged chart
+
+```shell
+# Add the Stellar Helm repository to Helm
 helm repo add stellar https://helm.stellar.org/charts
 ```
 
-
-### Install SDP
-```bash
+```shell
+# Install the chart
+# Replace helm-values-example.yaml with the actual path to values-testnet.yaml or values-mainnet.yaml.
 helm install sdp stellar/stellar-disbursement-platform \
     -f helm/helm-values-example.yaml \
     --namespace sdp
 ```
 
+### From the git repository
+
+```shell
+# Clone the git repository
+git clone git@github.com:stellar/stellar-disbursement-platform-backend.git
+```
+
+```shell
+# Change directory to the helm chart
+cd stellar-disbursement-platform-backend/helmchart/sdp
+```
+
+```shell
+# Install the chart
+# Replace helm-values-example.yaml with the actual path to values-testnet.yaml or values-mainnet.yaml. It will normally be in a different directory.
+helm install sdp \
+  -f helm-values-example.yaml . \
+  --namespace sdp
+```
+
 ### Verify Pods are healthy
 ```bash
-kubectl -n sdp get pods
+kubectl -n sdp get pods --show-labels
 ```
 
 ## 14. Adding an SDP Tenant
@@ -314,7 +430,8 @@ kubectl -n sdp get pods
 ### Get the SDP Pod name and exec to its shell
 ```bash
 # Get pod name
-SDP_POD=$(kubectl -n sdp get pods -l app=sdp -o jsonpath='{.items[0].metadata.name}')
+SDP_POD=$(kubectl -n sdp get pods -l app.kubernetes.io/name=sdp -o jsonpath='{.items[0].metadata.name}')
+echo $SDP_POD
 
 # Port forward to the pod
 kubectl -n sdp port-forward pod/${SDP_POD} 8003:8003
@@ -333,12 +450,18 @@ kubectl -n sdp port-forward pod/sdp-548ccbb67b-gw2tt 8003:8003
 ```
 
 ```bash
-echo -n "admin@example.org:admin-api-key" | base64      1m 27s  14:38:20
-YWRtaW5AZXhhbXBsZS5vcmc6YWRtaW4tYXBpLWtleQ==
+# Derive auth header by typing admin credentials
+AUTH_HEADER=$(echo -n "admin@example.org:admin-api-key" | base64 -w 0)     
 
-curl --location 'http://localhost:8003/tenants/' \                                                                                                             13:13:50
+# Or retrieve the credentials from secrets
+ADMIN_ACCOUNT=$(kubectl get secret --namespace sdp sdp-secrets -o jsonpath="{.data.ADMIN_ACCOUNT}" | base64 --decode)
+ADMIN_API_KEY=$(kubectl get secret --namespace sdp sdp-secrets -o jsonpath="{.data.ADMIN_API_KEY}" | base64 --decode)
+AUTH_HEADER=$(echo -n "$ADMIN_ACCOUNT:$ADMIN_API_KEY" | base64 -w 0)
+
+# Command to add tenant.
+curl --location 'http://localhost:8003/tenants/' \
 --header 'Content-Type: application/json' \
---header 'Authorization: Basic YWRtaW5AZXhhbXBsZS5vcmc6YWRtaW4tYXBpLWtleQ==' \
+--header "Authorization: Basic $AUTH_HEADER" \
 --data-raw '{
     "name": "ridedash",
     "owner_email": "admin@example.org",

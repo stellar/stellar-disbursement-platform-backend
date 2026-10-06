@@ -29,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -86,6 +87,7 @@ func Test_Serve(t *testing.T) {
 		Port:                      8000,
 		ResetTokenExpirationHours: 1,
 		SEP24JWTSecret:            "jwt_secret_1234567890",
+		SEP24JWTExpirationSeconds: sepauth.DefaultSEP24JWTExpirationSeconds,
 		Version:                   "x.y.z",
 		Sep10SigningPrivateKey:    testKP.Seed(),
 		Sep10SigningPublicKey:     testKP.Address(),
@@ -170,6 +172,74 @@ func Test_ServeOptions_ValidateSecurity(t *testing.T) {
 		err := serveOptions.ValidateSecurity()
 		require.NoError(t, err)
 		require.Contains(t, buf.String(), "reCAPTCHA is disabled in network 'Test SDF Network ; September 2015'")
+	})
+
+	t.Run("SEP-24 JWT expiration above the recommended maximum: should warn but not return error", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		serveOptions := ServeOptions{
+			NetworkPassphrase:         network.TestNetworkPassphrase,
+			SEP24JWTExpirationSeconds: sepauth.MaxRecommendedSEP24JWTExpirationSeconds + 1,
+		}
+
+		err := serveOptions.ValidateSecurity()
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), "SEP-24 JWT expiration is set to 3601 seconds, above the recommended maximum of 3600")
+	})
+
+	t.Run("SEP-24 JWT expiration at the recommended maximum: should not warn", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		serveOptions := ServeOptions{
+			NetworkPassphrase:         network.TestNetworkPassphrase,
+			SEP24JWTExpirationSeconds: sepauth.MaxRecommendedSEP24JWTExpirationSeconds,
+		}
+
+		err := serveOptions.ValidateSecurity()
+		require.NoError(t, err)
+		require.NotContains(t, buf.String(), "SEP-24 JWT expiration")
+	})
+}
+
+func Test_ServeOptions_SetupDependencies_sep24JWTExpiration(t *testing.T) {
+	dbConnectionPool := getConnectionPool(t)
+
+	t.Run("SEP-24 JWT expiration configured: should mint tokens that expire after that duration", func(t *testing.T) {
+		serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+
+		// Deliberately not the default, so this fails if the configured value is ignored in favour of a hardcoded one.
+		const wantExpirationSeconds = 1234
+		require.NotEqual(t, sepauth.DefaultSEP24JWTExpirationSeconds, wantExpirationSeconds)
+		serveOptions.SEP24JWTExpirationSeconds = wantExpirationSeconds
+		require.NoError(t, serveOptions.SetupDependencies())
+
+		before := time.Now()
+		token, err := serveOptions.sep24JWTManager.GenerateSEP24Token(
+			"GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			"",
+			"wallet.example.com",
+			"aid-org.test.com",
+			"transaction-id",
+		)
+		require.NoError(t, err)
+
+		claims, err := serveOptions.sep24JWTManager.ParseSEP24TokenClaims(token)
+		require.NoError(t, err)
+		require.NotNil(t, claims.ExpiresAt())
+
+		wantExpiresAt := before.Add(wantExpirationSeconds * time.Second)
+		assert.WithinDuration(t, wantExpiresAt, *claims.ExpiresAt(), 5*time.Second)
+	})
+
+	t.Run("SEP-24 JWT expiration below the JWT manager minimum: should return error", func(t *testing.T) {
+		serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+		serveOptions.SEP24JWTExpirationSeconds = 0
+
+		err := serveOptions.SetupDependencies()
+		require.ErrorContains(t, err, "error creating SEP-24 JWT manager with SEP24_JWT_EXPIRATION_SECONDS=0")
+		require.ErrorContains(t, err, "expiration miliseconds is required to be at least 5000")
 	})
 }
 
@@ -551,6 +621,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		MonitorService:            mMonitorService,
 		ResetTokenExpirationHours: 1,
 		SEP24JWTSecret:            "jwt_secret_1234567890",
+		SEP24JWTExpirationSeconds: sepauth.DefaultSEP24JWTExpirationSeconds,
 		BaseURL:                   "https://test.com",
 		MessageDispatcher:         messageDispatcherMock,
 		Version:                   "x.y.z",
@@ -758,6 +829,35 @@ func Test_handleHTTP_rateLimit(t *testing.T) {
 	}
 
 	require.Equal(t, expectedResponseCodes, actualResponseCodes)
+}
+
+func Test_handleHTTP_shortURLRateLimit(t *testing.T) {
+	dbConnectionPool := getConnectionPool(t)
+
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+
+	handlerMux := handleHTTP(serveOptions)
+
+	get := func(path, ip string) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set(middleware.TenantHeaderKey, "aid-org")
+		req.RemoteAddr = ip + ":1234"
+		w := httptest.NewRecorder()
+		handlerMux.ServeHTTP(w, req)
+		return w.Result().StatusCode
+	}
+
+	// 1. The first n requests to distinct short codes from one IP reach the handler (the global limiter is keyed by
+	//    path, so it never trips; the route limiter is keyed by IP alone).
+	for i := 0; i < rateLimitPer20Seconds; i++ {
+		require.Equal(t, http.StatusNotFound, get(fmt.Sprintf("/r/code%d", i), "10.0.0.1"), "request %d", i+1)
+	}
+	// 2. The n+1 request from the same IP, to yet another code, is throttled.
+	require.Equal(t, http.StatusTooManyRequests, get("/r/another", "10.0.0.1"))
+	// 3. Another IP is unaffected.
+	require.Equal(t, http.StatusNotFound, get("/r/another", "10.0.0.2"))
+	// 4. The throttled IP can still reach other endpoints.
+	require.Equal(t, http.StatusOK, get("/health", "10.0.0.1"))
 }
 
 func Test_createAuthManager(t *testing.T) {

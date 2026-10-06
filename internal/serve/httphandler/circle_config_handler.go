@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -29,6 +30,7 @@ type CircleConfigHandler struct {
 	CircleClientConfigModel     circle.ClientConfigModelInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
 	MonitorService              monitor.MonitorServiceInterface
+	AuthManager                 auth.AuthManager
 }
 
 type PatchCircleConfigRequest struct {

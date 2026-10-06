@@ -580,10 +580,9 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 		expectedErr    string
 	}{
 		{
-			name:           "return an error if paymentIDs is empty",
+			name:           "returns an empty map if paymentIDs is empty",
 			paymentIDs:     []string{},
-			expectedResult: nil,
-			expectedErr:    "paymentIDs is required",
+			expectedResult: map[string]*CircleTransferRequest{},
 		},
 		{
 			name:       "🎉 successfully finds circle current transfer request",
@@ -680,6 +679,127 @@ func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing
 			}
 		})
 	}
+}
+
+func Test_CircleTransferRequest_CircleTransactionInfo(t *testing.T) {
+	testCases := []struct {
+		name         string
+		request      CircleTransferRequest
+		expectedID   *string
+		expectedType *CircleTransactionType
+	}{
+		{
+			name:         "payout ID set",
+			request:      CircleTransferRequest{CirclePayoutID: utils.StringPtr("payout-1")},
+			expectedID:   utils.StringPtr("payout-1"),
+			expectedType: utils.Ptr(CircleTransactionTypePayout),
+		},
+		{
+			name:         "transfer ID set",
+			request:      CircleTransferRequest{CircleTransferID: utils.StringPtr("transfer-1")},
+			expectedID:   utils.StringPtr("transfer-1"),
+			expectedType: utils.Ptr(CircleTransactionTypeTransfer),
+		},
+		{
+			name:    "neither set, request never reached Circle",
+			request: CircleTransferRequest{},
+		},
+		{
+			name:    "empty-string pointers are treated as unset",
+			request: CircleTransferRequest{CirclePayoutID: utils.StringPtr(""), CircleTransferID: utils.StringPtr("")},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotID, gotType := tc.request.CircleTransactionInfo()
+			assert.Equal(t, tc.expectedID, gotID)
+			assert.Equal(t, tc.expectedType, gotType)
+		})
+	}
+}
+
+func Test_CircleTransferRequestModel_PopulateCircleTransactionInfo(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+
+	ctx := context.Background()
+	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet,
+		Status: ReadyDisbursementStatus,
+		Asset:  asset,
+	})
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	newPayment := func(amount string) *Payment {
+		return CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			ReceiverWallet: rw,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         amount,
+			Status:         DraftPaymentStatus,
+		})
+	}
+
+	t.Run("no-op on an empty slice", func(t *testing.T) {
+		require.NoError(t, m.PopulateCircleTransactionInfo(ctx, dbConnectionPool, nil))
+	})
+
+	t.Run("resolves payout, transfer and no-row payments in one call", func(t *testing.T) {
+		DeleteAllCircleTransferRequests(t, ctx, dbConnectionPool)
+
+		transferPayment, payoutPayment, plainPayment := newPayment("100"), newPayment("200"), newPayment("300")
+		CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{
+			PaymentID:        transferPayment.ID,
+			CircleTransferID: utils.StringPtr("transfer-1"),
+		})
+		CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{
+			PaymentID:      payoutPayment.ID,
+			CirclePayoutID: utils.StringPtr("payout-1"),
+		})
+
+		payments := []Payment{*transferPayment, *payoutPayment, *plainPayment}
+		require.NoError(t, m.PopulateCircleTransactionInfo(ctx, dbConnectionPool, payments))
+
+		assert.Equal(t, "transfer-1", *payments[0].CircleTransactionID)
+		assert.Equal(t, CircleTransactionTypeTransfer, *payments[0].CircleTransactionType)
+		assert.Equal(t, "payout-1", *payments[1].CircleTransactionID)
+		assert.Equal(t, CircleTransactionTypePayout, *payments[1].CircleTransactionType)
+		assert.Nil(t, payments[2].CircleTransactionID)
+		assert.Nil(t, payments[2].CircleTransactionType)
+	})
+
+	t.Run("uses the most recent request when a payment was retried", func(t *testing.T) {
+		DeleteAllCircleTransferRequests(t, ctx, dbConnectionPool)
+
+		payment := newPayment("400")
+		// The older attempt must be 'failed' to satisfy the partial unique index on payment_id.
+		failedStatus := CircleTransferStatusFailed
+		older := CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{
+			PaymentID:      payment.ID,
+			CirclePayoutID: utils.StringPtr("payout-old"),
+			Status:         &failedStatus,
+		})
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"UPDATE circle_transfer_requests SET created_at = NOW() - INTERVAL '1 hour' WHERE idempotency_key = $1",
+			older.IdempotencyKey)
+		require.NoError(t, err)
+
+		CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, CircleTransferRequest{
+			PaymentID:      payment.ID,
+			CirclePayoutID: utils.StringPtr("payout-new"),
+		})
+
+		payments := []Payment{*payment}
+		require.NoError(t, m.PopulateCircleTransactionInfo(ctx, dbConnectionPool, payments))
+		assert.Equal(t, "payout-new", *payments[0].CircleTransactionID)
+	})
 }
 
 func Test_CircleTransferRequestModel_GetPendingReconciliation(t *testing.T) {

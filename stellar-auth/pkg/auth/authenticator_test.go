@@ -103,7 +103,7 @@ func Test_DefaultAuthenticator_ValidateCredential(t *testing.T) {
 			Once()
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
-		err := authenticator.updateIsActive(ctx, randUser.ID, false)
+		err := authenticator.updateIsActive(ctx, dbConnectionPool, randUser.ID, false)
 		require.NoError(t, err)
 
 		user, err := authenticator.ValidateCredentials(ctx, randUser.Email, randUser.Password)
@@ -376,7 +376,7 @@ func Test_DefaultAuthenticator_ActivateUser(t *testing.T) {
 	t.Run("activate user correctly", func(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, NewDefaultPasswordEncrypter(), false)
 
-		err := authenticator.updateIsActive(ctx, randUser.ID, false)
+		err := authenticator.updateIsActive(ctx, dbConnectionPool, randUser.ID, false)
 		require.NoError(t, err)
 		assertUserIsActive(t, ctx, dbConnectionPool, randUser.ID, false)
 
@@ -399,7 +399,7 @@ func Test_DefaultAuthenticator_DeactivateUser(t *testing.T) {
 
 	t.Run("returns error when user does not exist", func(t *testing.T) {
 		err = authenticator.DeactivateUser(ctx, "user-id")
-		assert.EqualError(t, err, "error deactivating user ID user-id: no rows affected")
+		assert.ErrorIs(t, err, ErrNoRowsAffected)
 	})
 
 	t.Run("deactivate user correctly", func(t *testing.T) {
@@ -410,6 +410,19 @@ func Test_DefaultAuthenticator_DeactivateUser(t *testing.T) {
 		err = authenticator.DeactivateUser(ctx, randUser.ID)
 		require.NoError(t, err)
 		assertUserIsActive(t, ctx, dbConnectionPool, randUser.ID, false)
+	})
+
+	t.Run("refuses to deactivate the last active owner", func(t *testing.T) {
+		flagOwner := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, NewDefaultPasswordEncrypter(), true, "financial_controller")
+		roleOwner := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, NewDefaultPasswordEncrypter(), false, "owner")
+
+		err = authenticator.DeactivateUser(ctx, flagOwner.ID)
+		require.NoError(t, err)
+		assertUserIsActive(t, ctx, dbConnectionPool, flagOwner.ID, false)
+
+		err = authenticator.DeactivateUser(ctx, roleOwner.ID)
+		require.ErrorIs(t, err, ErrLastOwner)
+		assertUserIsActive(t, ctx, dbConnectionPool, roleOwner.ID, true)
 	})
 }
 
@@ -482,12 +495,12 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now())
 
-		err := authenticator.ResetPassword(ctx, token, newPassword)
+		_, err := authenticator.ResetPassword(ctx, token, newPassword)
 		assert.ErrorContains(t, err, "error trying to encrypt user password: unexpected error")
 	})
 
 	t.Run("Should treat a not found token error", func(t *testing.T) {
-		err := authenticator.ResetPassword(ctx, "notfoundtoken", "newpassword")
+		_, err := authenticator.ResetPassword(ctx, "notfoundtoken", "newpassword")
 		assert.ErrorIs(t, err, ErrInvalidResetPasswordToken)
 	})
 
@@ -507,8 +520,9 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now())
 
-		err := authenticator.ResetPassword(ctx, token, newPassword)
+		userID, err := authenticator.ResetPassword(ctx, token, newPassword)
 		require.NoError(t, err)
+		assert.Equal(t, randUser.ID, userID)
 
 		// Token should be invalid after
 		var dbIsValid bool
@@ -537,7 +551,7 @@ func Test_DefaultAuthenticator_ResetPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		token := CreateResetPasswordTokenFixture(t, ctx, dbConnectionPool, randUser, true, time.Now().Add(-time.Hour*25))
 
-		err := authenticator.ResetPassword(ctx, token, newPassword)
+		_, err := authenticator.ResetPassword(ctx, token, newPassword)
 		require.ErrorIs(t, err, ErrExpiredResetPasswordToken)
 	})
 
@@ -736,7 +750,7 @@ func Test_DefaultAuthenticator_GetUsers(t *testing.T) {
 	randUser2 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, true, "role1", "role2")
 	randUser3 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
 	deactivatedUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
-	outerErr = authenticator.updateIsActive(ctx, deactivatedUser.ID, false)
+	outerErr = authenticator.updateIsActive(ctx, dbConnectionPool, deactivatedUser.ID, false)
 	require.NoError(t, outerErr)
 
 	t.Run("returns empty array when user ID not found", func(t *testing.T) {

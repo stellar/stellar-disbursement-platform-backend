@@ -26,9 +26,16 @@ spec:
   
   template:
     metadata:
-      {{- if .Values.tss.deployment.podAnnotations }}
+      {{- if or .Values.tss.deployment.podAnnotations .Values.metricsScrapeAnnotations.enabled }}
       annotations:
-        {{- tpl (toYaml .Values.tss.deployment.podAnnotations) . | nindent 8 }}
+        {{- if .Values.metricsScrapeAnnotations.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ include "tss.metricsPort" . | quote }}
+        prometheus.io/path: {{ .Values.metricsScrapeAnnotations.path | default "/metrics" | quote }}
+        {{- end }}
+        {{- with .Values.tss.deployment.podAnnotations }}
+        {{- tpl (toYaml .) $ | nindent 8 }}
+        {{- end }}
       {{- end }}
       labels:
         {{- include "sdp.selectorLabelsWithSuffix" (list . "-tss") | nindent 8 }}

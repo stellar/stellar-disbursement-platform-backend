@@ -2,7 +2,12 @@ package middleware
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
@@ -23,6 +29,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -299,6 +306,124 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
+	t.Run("returns Unauthorized when the token carries no tenant", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+		// An empty tenant claim must not be allowed to run under the header-supplied tenant.
+		req.Header.Set(TenantHeaderKey, "victim_tenant")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("", nil).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns Unauthorized when the token's tenant cannot be resolved (deactivated/deleted)", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+		// A caller naming another tenant in the header must not be able to ride it in when the
+		// token's own tenant no longer resolves.
+		req.Header.Set(TenantHeaderKey, "victim_tenant")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("test_tenant_id", nil).
+			Once()
+		mTenantManager.
+			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			Return((*schema.Tenant)(nil), tenant.ErrTenantDoesNotExist).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns InternalServerError when the tenant lookup fails unexpectedly", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("test_tenant_id", nil).
+			Once()
+		mTenantManager.
+			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			Return((*schema.Tenant)(nil), errors.New("connection refused")).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("returns Unauthorized when the tenant ID cannot be read from the token", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer token")
+
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("", auth.ErrInvalidToken).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
 	t.Run("returns the response successfully", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
 		require.NoError(t, err)
@@ -354,6 +479,52 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
+}
+
+func Test_AuthenticateMiddleware_rejectsEmbeddedWalletToken(t *testing.T) {
+	// Staff and embedded wallet tokens are signed with the same key.
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	privateKey := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))
+	publicKey, err := utils.GetEC256PublicKeyFromPrivateKey(privateKey)
+	require.NoError(t, err)
+
+	authManager := auth.NewAuthManager(auth.WithDefaultJWTManagerOption(publicKey, privateKey))
+	walletJWTManager, err := wallet.NewWalletJWTManager(privateKey)
+	require.NoError(t, err)
+	walletToken, err := walletJWTManager.GenerateToken(
+		context.Background(),
+		"test_tenant_id",
+		"credential-id",
+		"CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX",
+		time.Now().Add(time.Minute),
+	)
+	require.NoError(t, err)
+
+	mTenantManager := &tenant.TenantManagerMock{}
+	defer mTenantManager.AssertExpectations(t)
+
+	r := chi.NewRouter()
+	r.With(AuthenticateMiddleware(authManager, mTenantManager)).
+		Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+	req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+walletToken)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	resp := w.Result()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 }
 
 func Test_AnyRoleMiddleware(t *testing.T) {
@@ -583,7 +754,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
 
-	t.Run("returns Status Ok when no roles is required", func(t *testing.T) {
+	t.Run("checks against every role when no roles are required", func(t *testing.T) {
 		token := "mytoken"
 		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -591,10 +762,27 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 
 		w := httptest.NewRecorder()
 
-		requiredRoles := []data.UserRole{}
-
 		r := chi.NewRouter()
-		setRestrictedEndpoint(r, requiredRoles...)
+		setRestrictedEndpoint(r)
+
+		user := &auth.User{
+			ID:    "user-id",
+			Email: "email@email",
+			Roles: []string{data.ApproverUserRole.String()},
+		}
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
+		roleManagerMock.
+			On("HasAnyRoles", mock.Anything, user, data.FromUserRoleArrayToStringArray(data.GetAllRoles())).
+			Return(true, nil).
+			Once()
 
 		r.ServeHTTP(w, req)
 
@@ -605,6 +793,44 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
 	})
+
+	t.Run("returns Unauthorized when no roles are required and the user is deactivated", func(t *testing.T) {
+		token := "mytoken"
+		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r := chi.NewRouter()
+		setRestrictedEndpoint(r)
+
+		user := &auth.User{ID: "user-id", Email: "email@email"}
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
+		roleManagerMock.
+			On("HasAnyRoles", mock.Anything, user, data.FromUserRoleArrayToStringArray(data.GetAllRoles())).
+			Return(false, auth.ErrUserNotFound).
+			Once()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	roleManagerMock.AssertExpectations(t)
 }
 
 func Test_CorsMiddleware(t *testing.T) {

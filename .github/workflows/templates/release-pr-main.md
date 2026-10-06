@@ -8,6 +8,8 @@ The following tasks have been completed automatically by the release workflow:
 - [x] Bump version in helmchart/sdp/Chart.yaml (version and appVersion)
 - [x] Bump backend image tag in helmchart/sdp/values.yaml
 - [x] Bump frontend image tag in helmchart/sdp/values.yaml
+- [x] Bump backend and frontend image tags in cloudformation/eks/helm/values-mainnet.yaml
+- [x] Bump backend and frontend image tags in cloudformation/eks/helm/values-testnet.yaml
 - [x] Update CHANGELOG.md release entry (Unreleased + optional AI gap-fill)
 - [x] Regenerate helmchart/sdp/README.md
 

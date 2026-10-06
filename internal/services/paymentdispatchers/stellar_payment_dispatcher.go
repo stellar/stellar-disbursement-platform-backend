@@ -3,7 +3,6 @@ package paymentdispatchers
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/shopspring/decimal"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -12,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -59,10 +59,14 @@ var _ PaymentDispatcherInterface = (*StellarPaymentDispatcher)(nil)
 func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
 	var transactions []txSubStore.Transaction
 	for _, payment := range pendingPayments {
-		// TODO: change TSS to use string amount [SDP-483]
-		amount, err := strconv.ParseFloat(payment.Amount, 64)
+		amount, err := decimal.NewFromString(payment.Amount)
 		if err != nil {
 			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
+		}
+
+		const stellarMaxDecimalPlaces = 7
+		if !amount.Equal(amount.Truncate(stellarMaxDecimalPlaces)) {
+			return fmt.Errorf("payment amount %s for payment ID %s exceeds Stellar's %d decimal place precision", payment.Amount, payment.ID, stellarMaxDecimalPlaces)
 		}
 
 		memo, err := s.memoResolver.GetMemo(ctx, *payment.ReceiverWallet)
@@ -76,12 +80,13 @@ func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBT
 			Payment: txSubStore.Payment{
 				AssetCode:   payment.Asset.Code,
 				AssetIssuer: payment.Asset.Issuer,
-				Amount:      decimal.NewFromFloat(amount),
+				Amount:      amount,
 				Destination: payment.ReceiverWallet.StellarAddress,
 				Memo:        memo.Value,
 				MemoType:    memo.Type,
 			},
 			TenantID: tenantID,
+			WalletID: sdpUtils.SQLNullString(payment.SourceWalletID),
 		}
 		transactions = append(transactions, transaction)
 	}

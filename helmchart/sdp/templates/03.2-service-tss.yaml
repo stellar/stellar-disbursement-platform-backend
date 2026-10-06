@@ -1,0 +1,21 @@
+{{- if .Values.tss.enabled -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sdp.fullname" . }}-tss
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-tss") | nindent 4 }}
+    app.kubernetes.io/component: metrics
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ include "tss.metricsPort" . }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+
+  selector:
+    {{- include "sdp.selectorLabelsWithSuffix" (list . "-tss") | nindent 4 }}
+{{- end }}

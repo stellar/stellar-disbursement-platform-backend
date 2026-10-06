@@ -6,6 +6,142 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
+- Restore tenant-wide access for Developer role: developers are excluded from the distribution account membership system, and developer-minted API keys carry the same privileges as Owner-minted. [#1223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1223)
+
+### Fixed
+
+- Harden receiver-facing messages against HTML injection. [#1197](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1197)
+- Validate receiver-facing message input on every write path. [#1198](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1198)
+- Fail closed when token tenant cannot be resolved. [#1205](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1205)
+- Require a tenant role check on `GET /balances`. [#1206](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1206)
+- Reject token refresh when the token's tenant has been deactivated. [#1207](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1207)
+- Hold TSS transaction and channel-account locks until the envelope's ledger bound expires when Horizon returns an unknown outcome (5xx/timeout). [#1208](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1208)
+- Harden receiver-facing messages against unbounded template expansion. [#1209](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1209)
+- Enforce API key distribution-account scope on `PATCH` disbursement status. [#1213](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1213)
+- All role checks reject tokens of deactivated users. [#1217](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1217)
+- Prevent memory-exhaustion DoS from decompression-bomb in org logo. [#1218](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1218)
+- Stop insufficient-balance errors from reporting a 0.00 shortfall. [#1219](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1219)
+- Bound Prometheus `method` metric label to an allowlist to prevent memory-exhaustion from unbounded label cardinality. [#1221](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1221)
+- Keep Owner flag in sync with Owner role. [#1222](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1222)
+- Reject tokens without a user claim on staff endpoints. [#1225](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1225)
+
+### Security and Dependencies
+
+- Move the SDP metrics port off application Service onto a dedicated ClusterIP Service, and pin the TSS metrics Service to ClusterIP. [#1193](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1193)
+- Move `LOG_SHIPPING_URL` to global section in helm chart as a secret value. [#1193](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1193)
+- Require client signer when verifying SEP-10 challenges. [#1196](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1196)
+- Verify the SEP-10 `client_domain` signature against the operation source account. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
+- Return `400 Bad Request` instead of `500` when a `client_domain` signing key cannot be resolved. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
+- Harden URL shortener against enumeration: increase shortcode entropy and rate-limit GET /r/{code} per client IP. [#1204](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1204)
+
+## [7.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.1...7.0.0))
+
+### Added
+
+- Add support for multiple distribution accounts ("distribution wallets") per tenant, each with its own membership roles and envelope-encrypted signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add append-only audit tables for disbursements, payments, and distribution-wallet memberships, with an owner-only endpoint to read membership history. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add `distribution-account rotate --wallet-id` to rotate any distribution wallet's account, and `distribution-account rotate-wallet-dek` to rotate a wallet's signing key. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add optional Prometheus/Grafana wiring and wallet-tagged structured transaction logging for the SDP and TSS services. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Add distribution-account scoping when creating or editing API-key [#1183](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1183)
+- Add `CircleTransactionID` and `CircleTransactionType` columns to the payments CSV export. [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
+- Add multi-wallet API reference in docs/multi-wallet. [#1189](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1189)
+
+### Changed
+
+- Payment response field `circle_transfer_request_id` is renamed to `circle_transaction_id` (affects `GET /payments` and GET `/payments/{id}`). [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
+
+### Fixed
+
+- Verify automated release cloudformation version migration. [#1158](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1158)
+- Speed up test DB setup via template cloning to end flaky CI timeout [#1160](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1160) 
+- Migrations only soft-delete Vibrant Assist when it has no receiver wallets [#1162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1162)
+- Harden MFA code validation and device trust. [#1177](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1177)
+- Fix and harden distribution-account scoping on receiver reads and writes. [#1186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1186)
+- Fix multi-wallet cutover doc and remove preflight script. [#1187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1187)
+- Expose Circle transaction ID for payments made through both Payouts (previously returned `null`) and Transfers API. [#1188](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1188)
+
+### Security and Dependencies
+
+- Pin cargo-audit install in contract build job with --locked flag. [#1171](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1171)
+- Evict the API-key auth cache synchronously on permission and allowed-IP changes, keyed by API key ID per tenant instead of the raw secret, so revocations take effect on the next request rather than after the cache TTL. [#1178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1178)
+- Make SEP-24 interactive JWT expiration configurable and raise default to 10 minutes. [#1182](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1182)
+- Bump the minor-and-patch group with 3 updates. [#1152](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1152)
+- Bump the all-actions group across 1 directory with 2 updates. [#1153](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1153)
+- Bump the all-actions group with 2 updates. [#1163](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1163)
+- Bump the minor-and-patch group with 7 updates. [#1164](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1164)
+- Bump serde_with from 3.12.0 to 3.21.0 in the cargo group. [#1167](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1167)
+- Bump the all-actions group with 2 updates. [#1169](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1169)
+- Bump the minor-and-patch group across 1 directory with 9 updates. [#1170](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1170)
+- Bump js-yaml from 4.2.0 to 4.3.0 in the npm_and_yarn group. [#1172](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1172)
+- Bump immutable from 5.1.5 to 5.1.9 in the npm_and_yarn group. [#1173](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1173)
+- Bump docker/login-action from 4.4.0 to 4.5.1 in the all-actions group. [#1174](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1174)
+- Bump the minor-and-patch group with 6 updates. [#1175](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1175)
+- Bump postcss from 8.5.14 to 8.5.25 in the npm_and_yarn group. [#1176](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1176)
+- Bump the all-actions group across 1 directory with 2 updates. [#1179](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1179)
+- Bump js-yaml from 4.3.0 to 4.3.1 in the npm_and_yarn group. [#1181](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1181)
+- Bump the minor-and-patch group across 1 directory with 8 updates. [#1185](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1185)
+
+## [6.6.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.0...6.6.1))
+
+### Fixed
+
+- Accept response code 200 for Circle recipient POST. [#1157](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1157)
+
+## [6.6.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.6.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.5.0...6.6.0))
+
+### Added
+
+- Add Gateway API support to the SDP Helm chart. [#1143](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1143)
+
+### Changed
+
+- Use `claude-code-action`'s native Workload Identity Federation inputs in the automated release workflow, removing the manual OIDC token fetch and exchange steps. [#1141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1141)
+- Harden the Claude automated release workflow security. [#1130](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1130)
+- Update CONTRIBUTING.md with branch naming rules. [#1133](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1133)
+- Fix typo in the SDP Helm chart description. [#1127](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1127)
+
+### Fixed
+
+- Fix exclusion of `DIRECT` payments in receiver and wallet stats queries. [#1139](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1139)
+- Fix & update outdated Cloudformation/EKS Stacks and deployment guide. [#1140](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1140)
+- Prevent cross-tenant access via tenant-unscoped API-key validation cache. [#1142](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1142)
+
+### Security and Dependencies
+
+- Bump the minor-and-patch group across 1 directory with 14 updates. [#1145](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1145)
+- Bump alpine from 3.23 to 3.24 in the all-docker group. [#1144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1144)
+- Bump the npm_and_yarn group across 1 directory with 3 updates. [#1146](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1146)
+- Bump the all-actions group across 1 directory with 3 updates. [#1137](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1137)
+
+## [6.5.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.5.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.4.0...6.5.0))
+
+### Added
+
+- Add `receiver_invitations_disabled` organization setting that skips the scheduled receiver wallet invitation job when enabled. [#1119](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1119)
+
+### Changed
+
+- Replace the standalone `exhaustive` CI check with the `exhaustive` linter in golangci-lint. [#1121](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1121)
+- Authenticate the automated release workflow with Anthropic Workload Identity Federation, replacing the long-lived `CLAUDE_CODE_OAUTH_TOKEN` secret with short-lived OIDC-issued tokens. [#1122](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1122)
+
+### Fixed
+
+- Reject payment amounts that exceed Stellar's 7-decimal-place precision in `utils.ValidateAmount`. [#1116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1116)
+- Add ownership check to SEP-24 GET /transaction endpoint. [#1115](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1115)
+- Fix payment amount precision loss in dispatch and transaction builder. [#1114](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1114)
+- Fix NULL handling in SEP-24 transaction ownership query. [#1117](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1117)
+
+### Security and Dependencies
+
+- Upgrade Go to 1.25.0, bump `gotestsum` to v1.13.0, bump the Go module minor-and-patch group across 1 directory with 14 updates. [#1101](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1101)
+- Bump rand from 0.8.5 to 0.8.6 in /contracts in the cargo group. [#1118](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1118)
+- Bump the npm_and_yarn group across 1 directory with 2 updates (lodash, postcss). [#1120](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1120)
+- Bump the all-actions group across 1 directory with 3 updates. [#1113](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1113)
+- Bump vite from 7.1.12 to 7.3.2 in /internal/serve/sep24frontend/app. [#1102](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1102)
+
 ## [6.4.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/6.4.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.3.0...6.4.0))
 
 ### Added

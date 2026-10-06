@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
+	"slices"
 	"strings"
 
 	"github.com/manifoldco/promptui"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -187,6 +189,11 @@ func execAddUser(ctx context.Context, dbURL string, email, firstName, lastName, 
 	authManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(dbConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
 	)
+
+	// The owner flag mirrors the owner role, and owners hold no other role.
+	if isOwner || slices.Contains(roles, data.OwnerUserRole.String()) {
+		isOwner, roles = true, []string{data.OwnerUserRole.String()}
+	}
 
 	newUser := &auth.User{
 		FirstName: firstName,

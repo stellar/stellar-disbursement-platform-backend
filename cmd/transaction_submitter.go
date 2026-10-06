@@ -185,6 +185,15 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			}
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
 
+			// Initializing the Multi-tenant DB connection pool. Needed because
+			// DistributionAccountForWallet reads distribution_wallets, which lives in each
+			// tenant's own schema, not the shared admin schema.
+			mtnDBConnectionPool, err := di.NewMtnDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
+			}
+			distAccResolverOpts.MTNDBConnectionPool = mtnDBConnectionPool
+
 			// Initializing the DistributionAccountResolver
 			distributionAccountResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
 			if err != nil {

@@ -528,6 +528,93 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 		err = dbTx.Commit()
 		require.NoError(t, err)
 	})
+
+	t.Run("attributes payments of all types to correct wallet", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+
+		walletA := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet-A", "https://www.wallet-a.com", "www.wallet-a.com", "wallet-a://")
+		walletB := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet-B", "https://www.wallet-b.com", "www.wallet-b.com", "wallet-b://")
+		rwA := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, walletA.ID, RegisteredReceiversWalletStatus)
+		rwB := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, walletB.ID, RegisteredReceiversWalletStatus)
+
+		// walletA: successful DISBURSEMENT payment of 100 ...
+		disbursement.Name = "disbursement A"
+		disbursement.Wallet = walletA
+		dA := CreateDisbursementFixture(t, ctx, dbConnectionPool, &disbursementModel, &disbursement)
+
+		payment.Status = SuccessPaymentStatus
+		payment.Disbursement = dA
+		payment.Amount = "100"
+		payment.ReceiverWallet = rwA
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		// walletA: successful DIRECT payment of 200
+		payment.Status = SuccessPaymentStatus
+		payment.Type = PaymentTypeDirect
+		payment.Disbursement = nil
+		payment.Amount = "200"
+		payment.ReceiverWallet = rwA
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		// walletB: successful DIRECT payment of 500.
+		payment.Status = SuccessPaymentStatus
+		payment.Disbursement = nil
+		payment.Amount = "500"
+		payment.ReceiverWallet = rwB
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &payment)
+
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		// Defer a rollback in case anything fails.
+		defer func() {
+			err = dbTx.Rollback()
+			require.Error(t, err, "not in transaction")
+		}()
+
+		actual, err := receiverWalletModel.GetWithReceiverIDs(ctx, dbTx, ReceiverIDs{receiver.ID})
+		require.NoError(t, err)
+
+		statsByWalletID := make(map[string]ReceiverWalletStats, len(actual))
+		for _, rw := range actual {
+			statsByWalletID[rw.ID] = rw.ReceiverWalletStats
+		}
+
+		// walletA counts both payments (DISBURSEMENT + DIRECT): 2 received, 300 total.
+		assert.Equal(t, ReceiverWalletStats{
+			TotalPayments:     "2",
+			PaymentsReceived:  "2",
+			FailedPayments:    "0",
+			CanceledPayments:  "0",
+			RemainingPayments: "0",
+			ReceivedAmounts: []Amount{
+				{
+					AssetCode:      "USDC",
+					AssetIssuer:    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+					ReceivedAmount: "300.0000000",
+				},
+			},
+		}, statsByWalletID[rwA.ID])
+
+		// walletB: only its own DIRECT payment
+		assert.Equal(t, ReceiverWalletStats{
+			TotalPayments:     "1",
+			PaymentsReceived:  "1",
+			FailedPayments:    "0",
+			CanceledPayments:  "0",
+			RemainingPayments: "0",
+			ReceivedAmounts: []Amount{
+				{
+					AssetCode:      "USDC",
+					AssetIssuer:    "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
+					ReceivedAmount: "500.0000000",
+				},
+			},
+		}, statsByWalletID[rwB.ID])
+
+		err = dbTx.Commit()
+		require.NoError(t, err)
+	})
 }
 
 func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
@@ -1678,6 +1765,79 @@ func Test_ReceiverWalletModel_GetByIDs(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, rws, 1)
 		assert.Equal(t, receiverWallet.ID, rws[0].ID)
+	})
+}
+
+func Test_ReceiverWalletModel_GetBySEP24TransactionIDAndAccount(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	rwModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+	t.Run("not found for non-existent transaction ID", func(t *testing.T) {
+		_, err := rwModel.GetBySEP24TransactionIDAndAccount(ctx, "non-existent", "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU", "")
+		require.ErrorIs(t, err, ErrRecordNotFound)
+	})
+
+	t.Run("matches when stellar_address is NULL (pre-registration)", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://a.com", "a.com", "a://")
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+		err := rwModel.Update(ctx, rw.ID, ReceiverWalletUpdate{
+			SEP24TransactionID: "tx-null-address",
+		}, dbConnectionPool)
+		require.NoError(t, err)
+
+		result, err := rwModel.GetBySEP24TransactionIDAndAccount(ctx, "tx-null-address", "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU", "")
+		require.NoError(t, err)
+		assert.Equal(t, rw.ID, result.ID)
+	})
+
+	t.Run("matches when stellar_memo is NULL and subject has no memo", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletB", "https://b.com", "b.com", "b://")
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		// Set address and explicitly NULL out memo via raw SQL to simulate registration without memo
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"UPDATE receiver_wallets SET sep24_transaction_id = $1, stellar_address = $2, stellar_memo = NULL, stellar_memo_type = NULL WHERE id = $3",
+			"tx-null-memo", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", rw.ID)
+		require.NoError(t, err)
+
+		// stellar_memo is NULL in DB, caller has empty memo — should match via COALESCE
+		result, err := rwModel.GetBySEP24TransactionIDAndAccount(ctx, "tx-null-memo", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", "")
+		require.NoError(t, err)
+		assert.Equal(t, rw.ID, result.ID)
+	})
+
+	t.Run("matches when account and memo both match", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletC", "https://c.com", "c.com", "c://")
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		err := rwModel.Update(ctx, rw.ID, ReceiverWalletUpdate{
+			SEP24TransactionID: "tx-with-memo",
+			StellarAddress:     "GCECPFQBQS2ESW6XSLBMXNXM3A45XIVRPG4IO3CFD5HN6FZM5BMFSW5Y",
+			StellarMemo:        utils.Ptr("12345"),
+			StellarMemoType:    utils.Ptr(schema.MemoTypeID),
+		}, dbConnectionPool)
+		require.NoError(t, err)
+
+		result, err := rwModel.GetBySEP24TransactionIDAndAccount(ctx, "tx-with-memo", "GCECPFQBQS2ESW6XSLBMXNXM3A45XIVRPG4IO3CFD5HN6FZM5BMFSW5Y", "12345")
+		require.NoError(t, err)
+		assert.Equal(t, rw.ID, result.ID)
+	})
+
+	t.Run("not found when account differs", func(t *testing.T) {
+		_, err := rwModel.GetBySEP24TransactionIDAndAccount(ctx, "tx-with-memo", "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU", "12345")
+		require.ErrorIs(t, err, ErrRecordNotFound)
+	})
+
+	t.Run("not found when memo differs", func(t *testing.T) {
+		_, err := rwModel.GetBySEP24TransactionIDAndAccount(ctx, "tx-with-memo", "GCECPFQBQS2ESW6XSLBMXNXM3A45XIVRPG4IO3CFD5HN6FZM5BMFSW5Y", "99999")
+		require.ErrorIs(t, err, ErrRecordNotFound)
 	})
 }
 

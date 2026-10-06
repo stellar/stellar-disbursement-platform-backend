@@ -82,7 +82,7 @@ func SetTokenInContext(ctx context.Context, token string) context.Context {
 // GetAPIKeyFromContext retrieves the API key from the context.
 func GetAPIKeyFromContext(ctx context.Context) (*data.APIKey, error) {
 	apiKey, ok := ctx.Value(apiKeyContextKey{}).(*data.APIKey)
-	if !ok {
+	if !ok || apiKey == nil {
 		return nil, ErrAPIKeyNotFoundInContext
 	}
 	return apiKey, nil

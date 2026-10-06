@@ -121,6 +121,36 @@ func Test_DisbursementStatus_TransitionTo(t *testing.T) {
 			target: PausedDisbursementStatus,
 			err:    fmt.Errorf("cannot transition from DRAFT to PAUSED"),
 		},
+		{
+			name:   "user cancels disbursement before starting it (from draft) transition",
+			actual: DraftDisbursementStatus,
+			target: CanceledDisbursementStatus,
+			err:    nil,
+		},
+		{
+			name:   "user cancels disbursement before starting it (from ready) transition",
+			actual: ReadyDisbursementStatus,
+			target: CanceledDisbursementStatus,
+			err:    nil,
+		},
+		{
+			name:   "invalid transition: can't cancel a started disbursement",
+			actual: StartedDisbursementStatus,
+			target: CanceledDisbursementStatus,
+			err:    fmt.Errorf("cannot transition from STARTED to CANCELED"),
+		},
+		{
+			name:   "invalid transition: can't cancel a paused disbursement",
+			actual: PausedDisbursementStatus,
+			target: CanceledDisbursementStatus,
+			err:    fmt.Errorf("cannot transition from PAUSED to CANCELED"),
+		},
+		{
+			name:   "invalid transition: canceled is terminal",
+			actual: CanceledDisbursementStatus,
+			target: ReadyDisbursementStatus,
+			err:    fmt.Errorf("cannot transition from CANCELED to READY"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -166,6 +196,11 @@ func Test_DisbursementStatus_SourceStatuses(t *testing.T) {
 			targetStatus:           CompletedDisbursementStatus,
 			expectedSourceStatuses: []DisbursementStatus{StartedDisbursementStatus},
 		},
+		{
+			name:                   "Canceled",
+			targetStatus:           CanceledDisbursementStatus,
+			expectedSourceStatuses: []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -175,6 +210,6 @@ func Test_DisbursementStatus_SourceStatuses(t *testing.T) {
 }
 
 func Test_DisbursementStatus_DisbursementStatuses(t *testing.T) {
-	expectedStatuses := []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus, StartedDisbursementStatus, PausedDisbursementStatus, CompletedDisbursementStatus}
+	expectedStatuses := []DisbursementStatus{DraftDisbursementStatus, ReadyDisbursementStatus, StartedDisbursementStatus, PausedDisbursementStatus, CompletedDisbursementStatus, CanceledDisbursementStatus}
 	require.Equal(t, expectedStatuses, DisbursementStatuses())
 }

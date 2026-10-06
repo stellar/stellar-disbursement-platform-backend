@@ -22,7 +22,15 @@ type TransactionError interface {
 	IsRetryable() bool
 	ShouldMarkAsError() bool
 	ShouldReportToCrashTracker() bool
+	IsOutcomeUnknown() bool
 	GetErrorType() string
+}
+
+// StructuredError is a TransactionError that can expose its details as discrete, machine-parseable
+// log fields (instead of a single flattened error string), so operators can filter/alert on e.g.
+// tx_result_code="tx_insufficient_fee" vs operation_result_codes containing "op_no_trust".
+type StructuredError interface {
+	LogFields() map[string]interface{}
 }
 
 // HorizonSpecificError represents errors that come from Horizon transaction submission
@@ -147,6 +155,12 @@ func (e *HorizonErrorWrapper) IsRateLimit() bool {
 
 func (e *HorizonErrorWrapper) IsGatewayTimeout() bool {
 	return e.IsHorizonError() && e.StatusCode == http.StatusGatewayTimeout
+}
+
+// IsOutcomeUnknown is true when Horizon returned no verdict on the envelope (non-Horizon error, or any 5xx incl. 504),
+// so it may still be included until its ledger bound.
+func (e *HorizonErrorWrapper) IsOutcomeUnknown() bool {
+	return !e.IsHorizonError() || e.StatusCode == 0 || e.StatusCode >= http.StatusInternalServerError
 }
 
 func (e *HorizonErrorWrapper) HasResultCodes() bool {
@@ -403,10 +417,41 @@ func (e *HorizonErrorWrapper) GetErrorType() string {
 	return "Horizon"
 }
 
+// LogFields returns the discrete Horizon failure details as structured log fields. Only non-empty
+// values are included so failure log lines stay clean. The flattened Error() string is emitted
+// separately (under the "error" key) by the caller for backwards compatibility.
+func (e *HorizonErrorWrapper) LogFields() map[string]interface{} {
+	fields := map[string]interface{}{
+		"error_type": e.GetErrorType(),
+	}
+	if e.StatusCode != 0 {
+		fields["horizon_status_code"] = e.StatusCode
+	}
+	if e.Problem.Type != "" {
+		fields["problem_type"] = e.Problem.Type
+	}
+	if e.Problem.Title != "" {
+		fields["problem_title"] = e.Problem.Title
+	}
+	if e.ResultCodes != nil {
+		if e.ResultCodes.TransactionCode != "" {
+			fields["tx_result_code"] = e.ResultCodes.TransactionCode
+		}
+		if e.ResultCodes.InnerTransactionCode != "" {
+			fields["inner_tx_result_code"] = e.ResultCodes.InnerTransactionCode
+		}
+		if len(e.ResultCodes.OperationCodes) > 0 {
+			fields["operation_result_codes"] = e.ResultCodes.OperationCodes
+		}
+	}
+	return fields
+}
+
 var (
 	_ error                = &HorizonErrorWrapper{}
 	_ TransactionError     = &HorizonErrorWrapper{}
 	_ HorizonSpecificError = &HorizonErrorWrapper{}
+	_ StructuredError      = &HorizonErrorWrapper{}
 )
 
 // RPCErrorWrapper wraps RPC simulation errors to provide consistent error handling
@@ -472,6 +517,11 @@ func (e *RPCErrorWrapper) IsGatewayTimeout() bool {
 	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
 }
 
+// IsOutcomeUnknown is true when the RPC gave no verdict: a network failure or a non-simulation error.
+func (e *RPCErrorWrapper) IsOutcomeUnknown() bool {
+	return e.SimulationError == nil || e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
+}
+
 // ShouldMarkAsError determines whether a transaction needs to be marked as an error based on the
 // RPC error type so that TSS can determine whether it needs to be retried.
 func (e *RPCErrorWrapper) ShouldMarkAsError() bool {
@@ -502,7 +552,21 @@ func (e *RPCErrorWrapper) GetErrorType() string {
 	return "RPC"
 }
 
+// LogFields returns the discrete Soroban/RPC failure details as structured log fields, analogous to
+// HorizonErrorWrapper.LogFields. The flattened Error() string is emitted separately (under the
+// "error" key) by the caller.
+func (e *RPCErrorWrapper) LogFields() map[string]interface{} {
+	fields := map[string]interface{}{
+		"error_type": e.GetErrorType(),
+	}
+	if e.SimulationError != nil {
+		fields["rpc_error_type"] = string(e.SimulationError.Type)
+	}
+	return fields
+}
+
 var (
 	_ error            = &RPCErrorWrapper{}
 	_ TransactionError = &RPCErrorWrapper{}
+	_ StructuredError  = &RPCErrorWrapper{}
 )

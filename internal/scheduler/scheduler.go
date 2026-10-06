@@ -85,7 +85,7 @@ func newScheduler(cancel context.CancelFunc) *Scheduler {
 	}
 }
 
-// addJob adds a job to the scheduler. This method does not start the job. To start the job, call start().
+// addJob adds a job to the scheduler. This method does not start the job. To start the job, call start.
 func (s *Scheduler) addJob(job jobs.Job) {
 	log.Infof("registering job to scheduler [name: %s], [interval: %s], [isMultiTenant: %t]",
 		job.GetName(), job.GetInterval(), job.IsJobMultiTenant())
@@ -240,6 +240,13 @@ func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptio
 	return func(s *Scheduler) {
 		j := jobs.NewCircleReconciliationJob(options)
 		s.addJob(j)
+	}
+}
+
+// WithEventDeliveryJobOption registers the outbox webhook-delivery job (multi-wallet).
+func WithEventDeliveryJobOption(models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		s.addJob(jobs.NewEventDeliveryJob(models))
 	}
 }
 

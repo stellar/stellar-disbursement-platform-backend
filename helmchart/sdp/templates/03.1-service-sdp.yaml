@@ -16,6 +16,6 @@ spec:
       targetPort: admin
       protocol: TCP
       name: admin
-    
+
   selector:
     {{- include "sdp.selectorLabels" . | nindent 4 }}

@@ -31,6 +31,9 @@ type Disbursement struct {
 	CreatedAt                           *time.Time                `json:"created_at" db:"created_at"`
 	UpdatedAt                           *time.Time                `json:"updated_at" db:"updated_at"`
 	RegistrationContactType             RegistrationContactType   `json:"registration_contact_type,omitempty" db:"registration_contact_type"`
+	// SourceWalletID is the distribution wallet this disbursement is sourced from. Required
+	// at creation and immutable after; enforced NOT NULL + FK ON DELETE RESTRICT at the DB.
+	SourceWalletID string `json:"source_wallet_id" db:"source_wallet_id"`
 	*DisbursementStats
 }
 
@@ -70,11 +73,15 @@ var (
 )
 
 func (d *DisbursementModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, disbursement *Disbursement) (string, error) {
+	if disbursement.SourceWalletID == "" {
+		return "", fmt.Errorf("source wallet ID is required to create a disbursement: %w", ErrMissingInput)
+	}
+
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type)
+		    disbursements (name, status, status_history, wallet_id, asset_id, verification_field, receiver_registration_message_template, registration_contact_type, source_wallet_id)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6, $7, $8)
+		    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	var newID string
@@ -87,6 +94,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, 
 		utils.SQLNullString(string(disbursement.VerificationField)),
 		disbursement.ReceiverRegistrationMessageTemplate,
 		disbursement.RegistrationContactType,
+		disbursement.SourceWalletID,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -131,6 +139,7 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 			"verification_field::text",
 			"file_name",
 			"receiver_registration_message_template",
+			"source_wallet_id",
 		},
 	}.Build()
 
@@ -338,6 +347,10 @@ func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *
 	if queryParams.Filters[FilterKeyCreatedAtBefore] != nil {
 		qb.AddCondition("d.created_at <= ?", queryParams.Filters[FilterKeyCreatedAtBefore])
 	}
+	if walletIDs, ok := queryParams.Filters[FilterKeySourceWalletIDs].([]string); ok {
+		// Membership-filtered visibility: empty scope yields zero rows by design.
+		qb.AddCondition("d.source_wallet_id = ANY(?)", pq.Array(walletIDs))
+	}
 
 	switch queryType {
 	case QueryTypeSelectPaginated:
@@ -430,7 +443,7 @@ func (dsh *DisbursementStatusHistory) Scan(src interface{}) error {
 }
 
 // CompleteDisbursements sets disbursements statuses to complete after all payments are processed and successfully sent.
-func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec db.SQLExecuter, disbursementIDs []string) error {
+func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec db.SQLExecuter, disbursementIDs []string) ([]string, error) {
 	query := `
 		WITH incompleted_disbursements AS (
 			SELECT
@@ -460,12 +473,13 @@ func (d *DisbursementModel) CompleteDisbursements(ctx context.Context, sqlExec d
 			AND id NOT IN (SELECT disbursement_id FROM incompleted_disbursements)
 	`
 
-	_, err := sqlExec.ExecContext(ctx, query, CompletedDisbursementStatus, pq.Array(disbursementIDs), StartedDisbursementStatus, SuccessPaymentStatus)
+	completedIDs := []string{}
+	err := sqlExec.SelectContext(ctx, &completedIDs, query+" RETURNING id", CompletedDisbursementStatus, pq.Array(disbursementIDs), StartedDisbursementStatus, SuccessPaymentStatus)
 	if err != nil {
-		return fmt.Errorf("error completing disbursement: %w", err)
+		return nil, fmt.Errorf("error completing disbursement: %w", err)
 	}
 
-	return nil
+	return completedIDs, nil
 }
 
 // Delete deletes a disbursement by ID
@@ -498,7 +512,7 @@ func (d *DisbursementModel) CompleteIfNecessary(ctx context.Context, sqlExec db.
 		SET status         = $1,
 			status_history = array_append(status_history, create_disbursement_status_history(NOW(), $1, ''))
 		WHERE d.status = $2
-		-- disbursement has no payments that are not in a final state. 
+		-- disbursement has no payments that are not in a final state.
 		  AND NOT EXISTS (SELECT 1
 						  FROM payments p
 						  WHERE p.disbursement_id = d.id

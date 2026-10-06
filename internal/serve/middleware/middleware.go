@@ -117,12 +117,31 @@ func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.M
 
 			// Attempt fetching tenant ID from token
 			tenantID, err := authManager.GetTenantID(ctx, token)
-			if err == nil && tenantID != "" {
-				currentTenant, tenantErr := tenantManager.GetTenantByID(ctx, tenantID)
-				if tenantErr == nil && currentTenant != nil {
-					ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
+			if err != nil {
+				if !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
+					log.Ctx(ctx).Error(fmt.Errorf("getting tenant ID from token: %w", err))
 				}
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
 			}
+			if tenantID == "" {
+				// A token that carries no tenant cannot be trusted to run under the header tenant.
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			}
+			currentTenant, tenantErr := tenantManager.GetTenantByID(ctx, tenantID)
+			switch {
+			case errors.Is(tenantErr, tenant.ErrTenantDoesNotExist):
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			case tenantErr != nil:
+				httperror.InternalError(ctx, "", fmt.Errorf("getting tenant by ID from token: %w", tenantErr), nil).Render(rw)
+				return
+			case currentTenant == nil:
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			}
+			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 
 			// Add the user ID to the request context logger
 			ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", userID))
@@ -137,6 +156,11 @@ func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.M
 // AnyRoleMiddleware validates if the user has at least one of the required roles to request
 // the current endpoint.
 func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserRole) func(http.Handler) http.Handler {
+	// Accessible by all users (no roles listed means any role)
+	if len(requiredRoles) == 0 {
+		requiredRoles = data.GetAllRoles()
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -144,12 +168,6 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 			token, err := sdpcontext.GetTokenFromContext(ctx)
 			if err != nil {
 				httperror.Unauthorized("", nil, nil).Render(rw)
-				return
-			}
-
-			// Accessible by all users
-			if len(requiredRoles) == 0 {
-				next.ServeHTTP(rw, req)
 				return
 			}
 

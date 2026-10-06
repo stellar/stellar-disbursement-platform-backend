@@ -1,0 +1,343 @@
+package httphandler
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+
+	"github.com/stellar/go-stellar-sdk/support/log"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+)
+
+// resolveWalletReadScope returns the caller's read scope: nil = tenant-wide (no filter), otherwise the exact, possibly empty, wallet set.
+// An API key answers from its own stored scope without loading a user, so its creator's status and memberships don't matter.
+func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		return apiKey.WalletScope(), nil
+	}
+
+	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
+	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return nil, httperror.Unauthorized("", err, nil)
+		}
+		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+	}
+
+	// Owners and developers are tenant-wide by definition — no membership lookup (and no DB) needed.
+	if services.IsTenantWideUser(user) {
+		return nil, nil
+	}
+
+	scope, err := services.ResolveWalletReadScope(ctx, models.DBConnectionPool, models.WalletMemberships, user)
+	if err != nil {
+		return nil, httperror.InternalError(ctx, "Cannot resolve wallet visibility", err, nil)
+	}
+
+	return scope, nil
+}
+
+// ensureReceiverInScope gates a receiver-scoped action on the caller's wallet scope, using the same
+// derivation the receiver reads filter with (data.ReceiverInScopeCondition). Outside the scope it
+// answers 404, never 403 — existence is not disclosed, matching GetReceiver.
+func ensureReceiverInScope(ctx context.Context, authManager auth.AuthManager, models *data.Models, sqlExec db.SQLExecuter, receiverID string) *httperror.HTTPError {
+	scope, scopeErr := resolveWalletReadScope(ctx, authManager, models)
+	if scopeErr != nil {
+		return scopeErr
+	}
+
+	inScope, err := models.Receiver.IsInScope(ctx, sqlExec, receiverID, scope)
+	if err != nil {
+		return httperror.InternalError(ctx, "Cannot resolve receiver scope", err, nil)
+	}
+	if !inScope {
+		return httperror.NotFound("Receiver not found", nil, nil)
+	}
+
+	return nil
+}
+
+// walletInReadScope reports whether a wallet is visible within the resolved scope. Callers
+// must respond with 404 (not 403) on individual reads outside the scope — per the read-leakage
+// rules, existence is never disclosed.
+func walletInReadScope(scope []string, walletID string) bool {
+	return scope == nil || slices.Contains(scope, walletID)
+}
+
+// resolveWalletListScope computes the scope for the membership-filtered LIST/aggregate endpoints
+// (disbursements, payments, receivers, statistics, exports), layering the active account
+// selection on top of read visibility so the per-account view is consistent for everyone:
+//   - no X-Wallet-Id ("All accounts"): full visibility — owners and developers see tenant-wide
+//     (nil), a member sees their membership set.
+//   - explicit X-Wallet-Id: narrow to that one account, but never beyond what the caller may
+//     see. Owners and developers can select any account; a member selecting an account they hold no membership
+//     on gets an empty scope (sees nothing) rather than a leak.
+//
+// This is intentionally separate from resolveWalletReadScope, which stays a pure visibility
+// check for the switcher's account list and for single-resource reads (where navigating to a
+// specific item must not be filtered out by the currently-selected account).
+func resolveWalletListScope(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models) ([]string, *httperror.HTTPError) {
+	visibility, httpErr := resolveWalletReadScope(ctx, authManager, models)
+	if httpErr != nil {
+		return nil, httpErr
+	}
+
+	return narrowScopeToSelectedWallet(visibility, req), nil
+}
+
+func narrowScopeToSelectedWallet(visibility []string, req *http.Request) []string {
+	headerWalletID := req.Header.Get(XWalletIDHeader)
+	if headerWalletID == "" {
+		return visibility
+	}
+
+	// visibility == nil means tenant-wide (owner or developer, may see every account); otherwise the wallet must be in the
+	// member's set.
+	if visibility == nil || slices.Contains(visibility, headerWalletID) {
+		return []string{headerWalletID}
+	}
+	return []string{}
+}
+
+// ensureWalletActionAllowed gates a state transition on the caller's wallet membership
+// Owners and developers pass; everyone else needs a qualifying role on the wallet. Returns a 403
+// that discloses no wallet details.
+//
+// For an API key the wallet dimension is its own scope and the role dimension is its permission
+// set, already checked by RequirePermission on the route — so the key's scope is the whole answer.
+func ensureWalletActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, walletID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		if !apiKey.CanActOnWallet(walletID) {
+			return httperror.Forbidden(services.ErrWalletActionForbidden.Error(), nil, nil)
+		}
+		return nil
+	}
+
+	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
+	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return httperror.Unauthorized("", err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+	}
+	if err := services.EnsureUserCanActOnWallet(ctx, models.DBConnectionPool, models.WalletMemberships, user, walletID, requiredRoles...); err != nil {
+		if errors.Is(err, services.ErrWalletActionForbidden) {
+			return httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot authorize wallet action", err, nil)
+	}
+	return nil
+}
+
+// walletCapability is one wallet-scoped write action, written as the two gates a request has to
+// clear: the tenant-role gate declared on its route (serve.go) and the membership-role gate
+// enforced at the action site. Authorization is global role first and membership second — a
+// membership can only narrow, never widen — so the caller must satisfy both sets.
+type walletCapability struct {
+	name        string
+	globalRoles []data.UserRole
+	walletRoles []data.UserRole
+}
+
+// walletCapabilityMatrix is the single place that pairing is written down: the capabilities
+// endpoint and the inert-grant check both read it instead of restating the rules, and
+// Test_WalletCapabilityMatrix_Conformance pins each entry to the enforcement site named in its
+// comment, so this table cannot drift from the code that actually enforces it.
+var walletCapabilityMatrix = []walletCapability{
+	{
+		// POST /disbursements, POST /disbursements/{id}/instructions, DELETE /disbursements/{id}.
+		name:        "can_create_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.InitiatorUserRole},
+	},
+	{
+		// PATCH /disbursements/{id}/status (STARTED) → PatchDisbursementStatus.
+		name:        "can_start_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
+	},
+	{
+		// PATCH /disbursements/{id}/status (PAUSED) → PatchDisbursementStatus.
+		name:        "can_pause_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
+	},
+	{
+		// PATCH /disbursements/{id}/status (CANCELED) → PatchDisbursementStatus.
+		name:        "can_cancel_disbursement",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.ApproverUserRole},
+	},
+	{
+		// POST /payments (direct payment) → PostDirectPayment.
+		name:        "can_create_payment",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+	},
+	{
+		// PATCH /payments/retry → RetryPayments.
+		name:        "can_retry_payment",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+	},
+	{
+		// PATCH /payments/{id}/status (cancel) → PatchPaymentStatus.
+		name:        "can_cancel_payment",
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole},
+	},
+}
+
+// walletCapabilitiesFor computes what a caller may do on one wallet from their global and membership
+// roles. Tenant-wide users skip the membership gate; only owners also clear every global gate.
+func walletCapabilitiesFor(user *auth.User, membershipRoles []data.UserRole) map[string]bool {
+	isOwner := user.IsOwner || slices.Contains(user.Roles, string(data.OwnerUserRole))
+	tenantWide := services.IsTenantWideUser(user)
+	globalRoles := userRoles(user)
+
+	capabilities := make(map[string]bool, len(walletCapabilityMatrix))
+	for _, capability := range walletCapabilityMatrix {
+		globalOK := isOwner || rolesIntersect(globalRoles, capability.globalRoles)
+		walletOK := tenantWide || rolesIntersect(membershipRoles, capability.walletRoles)
+		capabilities[capability.name] = globalOK && walletOK
+	}
+	return capabilities
+}
+
+// walletGrantIsInert reports whether granting a membership to user would confer nothing: owners and
+// developers are tenant-wide, so a row changes nothing for them and the operator could not tell.
+func walletGrantIsInert(user *auth.User) bool {
+	return services.IsTenantWideUser(user)
+}
+
+// inertGrantReason explains a rejected grant in the operator's terms.
+func inertGrantReason(role, granteeRole data.UserRole) string {
+	return fmt.Sprintf(
+		"%s %s membership grants nothing to %s %s: %ss already have tenant-wide access to "+
+			"every distribution account, so this membership would have no effect",
+		indefiniteArticle(role), role, indefiniteArticle(granteeRole), granteeRole, granteeRole)
+}
+
+func indefiniteArticle(role data.UserRole) string {
+	if name := role.String(); name != "" && strings.ContainsRune("aeiou", rune(name[0])) {
+		return "an"
+	}
+	return "a"
+}
+
+func userRoles(user *auth.User) []data.UserRole {
+	roles := make([]data.UserRole, 0, len(user.Roles))
+	for _, role := range user.Roles {
+		roles = append(roles, data.UserRole(role))
+	}
+	return roles
+}
+
+func rolesIntersect(have, want []data.UserRole) bool {
+	for _, role := range have {
+		if slices.Contains(want, role) {
+			return true
+		}
+	}
+	return false
+}
+
+// XWalletIDHeader carries the explicit source distribution wallet on write requests.
+const XWalletIDHeader = "X-Wallet-Id"
+
+// resolveSourceWalletForWrite implements the routing rule for fund-moving writes:
+//   - explicit X-Wallet-Id is honored after entitlement + status checks
+//   - omitted header: tenants with EXACTLY ONE active wallet (pre-opt-in single-wallet
+//     tenants) legitimately fall back to it per the spec's narrow default semantics; tenants
+//     with multiple wallets get 400 — no silent routing fallbacks
+//   - 403 carries no wallet existence/details (unknown wallet and unentitled wallet are
+//     indistinguishable to scoped users); owners and developers get an honest 404 for unknown ids
+//   - archived wallets accept no new disbursements or payments → 400 (only after the caller
+//     proves entitlement, so archived-ness is not leaked)
+//
+// An API key resolves against its own scope throughout: it never loads a user, a key naming exactly
+// one wallet keeps working without the header, and an unknown id is always a 403 (a key has no
+// tenant-wide identity to earn the honest 404). The header only selects — it never grants.
+func resolveSourceWalletForWrite(ctx context.Context, req *http.Request, authManager auth.AuthManager, models *data.Models, requiredRoles ...data.UserRole) (*data.DistributionWallet, *httperror.HTTPError) {
+	apiKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx)
+	viaAPIKey := keyErr == nil
+
+	var user *auth.User
+	if !viaAPIKey {
+		var err error
+		user, err = ctxHelper.GetUserFromContext(ctx, authManager)
+		if err != nil {
+			if errors.Is(err, auth.ErrUserNotFound) {
+				return nil, httperror.Unauthorized("", err, nil)
+			}
+			return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
+		}
+	}
+
+	dbPool := models.DBConnectionPool
+	headerWalletID := req.Header.Get(XWalletIDHeader)
+
+	// A key naming one wallet is unambiguous without the header. The tenant-level fallback below
+	// only fires when exactly one wallet is active, so without this an existing integration would
+	// start failing the moment its tenant adds a second wallet.
+	if headerWalletID == "" && viaAPIKey && len(apiKey.WalletScope()) == 1 {
+		headerWalletID = apiKey.WalletScope()[0]
+	}
+
+	var wallet *data.DistributionWallet
+	if headerWalletID == "" {
+		activeWallets, listErr := models.DistributionWallets.GetAll(ctx, dbPool, false)
+		if listErr != nil {
+			return nil, httperror.InternalError(ctx, "Cannot resolve the source wallet", listErr, nil)
+		}
+		if len(activeWallets) != 1 {
+			return nil, httperror.BadRequest(
+				"the X-Wallet-Id header is required to select a source distribution wallet", nil, nil)
+		}
+		wallet = &activeWallets[0]
+	} else {
+		loaded, getErr := models.DistributionWallets.Get(ctx, dbPool, headerWalletID)
+		if getErr != nil {
+			if !errors.Is(getErr, data.ErrRecordNotFound) {
+				return nil, httperror.InternalError(ctx, "Cannot resolve the source wallet", getErr, nil)
+			}
+			// Unknown wallet: tenant-wide users get an honest 404; everyone else gets the same 403
+			// as an unentitled wallet — existence is never disclosed.
+			if !viaAPIKey && services.IsTenantWideUser(user) {
+				return nil, httperror.NotFound("distribution wallet not found", getErr, nil)
+			}
+			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), getErr, nil)
+		}
+		wallet = loaded
+	}
+
+	if viaAPIKey {
+		if !apiKey.CanActOnWallet(wallet.ID) {
+			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), nil, nil)
+		}
+	} else if authzErr := services.EnsureUserCanActOnWallet(ctx, dbPool, models.WalletMemberships, user, wallet.ID, requiredRoles...); authzErr != nil {
+		if errors.Is(authzErr, services.ErrWalletActionForbidden) {
+			return nil, httperror.Forbidden(services.ErrWalletActionForbidden.Error(), authzErr, nil)
+		}
+		return nil, httperror.InternalError(ctx, "Cannot authorize wallet action", authzErr, nil)
+	}
+
+	if wallet.Status != data.ActiveDistributionWalletStatus {
+		return nil, httperror.BadRequest("the wallet is not active and accepts no new disbursements or payments", nil, nil)
+	}
+
+	// Per-wallet observability: wallet_id joins the request's structured-log context.
+	log.Set(ctx, log.Ctx(ctx).WithField("wallet_id", wallet.ID))
+
+	return wallet, nil
+}

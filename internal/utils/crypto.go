@@ -67,6 +67,9 @@ func Decrypt(message string, passphrase string) (string, error) {
 	}
 
 	nonceSize := gcmCipher.NonceSize()
+	if len(decodedMsg) < nonceSize {
+		return "", fmt.Errorf("ciphertext is too short (%d bytes), expected at least the %d-byte nonce", len(decodedMsg), nonceSize)
+	}
 	nonce, cipheredText := decodedMsg[:nonceSize], decodedMsg[nonceSize:]
 
 	plainText, err := gcmCipher.Open(nil, nonce, cipheredText, nil)

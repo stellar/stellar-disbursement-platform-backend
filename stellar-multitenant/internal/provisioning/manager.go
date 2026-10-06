@@ -171,7 +171,41 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*sc
 		}
 	}
 
+	// Keep the tenant's default distribution wallet in sync with the provisioned account: the
+	// schema migrations seed the default wallet before the account exists (or not at all in
+	// layouts without the admin schema), so ensure it reflects the final account material.
+	if err := m.syncDefaultDistributionWallet(ctx, *updatedTenant); err != nil {
+		return t, fmt.Errorf("%w. syncing default distribution wallet: %w", ErrUpdateTenantFailed, err)
+	}
+
 	return updatedTenant, nil
+}
+
+// syncDefaultDistributionWallet ensures the tenant schema's default distribution wallet row
+// mirrors the tenant's provisioned distribution account (address, type, status).
+func (m *Manager) syncDefaultDistributionWallet(ctx context.Context, tenant schema.Tenant) error {
+	tenantSchemaDSN, err := m.tenantManager.GetDSNForTenant(ctx, tenant.Name)
+	if err != nil {
+		return fmt.Errorf("getting tenant DSN: %w", err)
+	}
+
+	tenantSchemaConnectionPool, models, err := GetTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("getting tenant schema connection and models: %w", err)
+	}
+	defer utils.DeferredClose(ctx, tenantSchemaConnectionPool, "closing tenant schema connection pool after syncing default distribution wallet")
+
+	var address *string
+	if tenant.DistributionAccountType.IsStellar() {
+		address = tenant.DistributionAccountAddress
+	}
+
+	_, err = models.DistributionWallets.EnsureDefaultWallet(ctx, tenantSchemaConnectionPool, address, tenant.DistributionAccountType, tenant.DistributionAccountStatus)
+	if err != nil {
+		return fmt.Errorf("ensuring default distribution wallet for tenant %s: %w", tenant.Name, err)
+	}
+
+	return nil
 }
 
 // fundTenantDistributionStellarAccountIfNeeded funds the tenant distribution account with native asset if necessary, based on the accountType provided.

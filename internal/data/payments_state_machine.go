@@ -68,6 +68,10 @@ func PaymentInProgressStatuses() []PaymentStatus {
 	return []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus}
 }
 
+func PaymentNonTerminalStatuses() []PaymentStatus {
+	return []PaymentStatus{DraftPaymentStatus, ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus}
+}
+
 // PaymentCompletedStatuses returns a list of payment statuses that reached a terminal state.
 func PaymentCompletedStatuses() []PaymentStatus {
 	return []PaymentStatus{SuccessPaymentStatus, CanceledPaymentStatus}

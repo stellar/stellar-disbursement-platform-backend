@@ -17,8 +17,11 @@ global:
     url: ""
     ## @param global.rpc.requestAuthHeaderKey The name of the HTTP header to include when authenticating requests to a protected RPC server.
     requestAuthHeaderKey: ""
-    ## @param global.rpc.requestAuthHeaderValue he value of the HTTP header used for authenticating requests to a protected RPC server.
+    ## @param global.rpc.requestAuthHeaderValue The value of the HTTP header used for authenticating requests to a protected RPC server.
     requestAuthHeaderValue: ""
+
+  ## @param global.logShippingURL A Loki-compatible push endpoint (e.g. a Grafana Alloy loki.source.api receiver) that structured logs from both the SDP and the TSS are shipped to directly over HTTP. Stored in the Kubernetes secret, as these endpoints commonly carry credentials in the URL's userinfo or query string.
+  logShippingURL: ""
 
   ## @param global.replicaCount Number of replicas for the application.
   replicaCount: 1
@@ -143,7 +146,7 @@ sdp:
   image:
     repository: stellar/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "6.4.0"
+    tag: "7.0.0"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
@@ -186,6 +189,7 @@ sdp:
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
   ## @param sdp.configMap.data.DISABLE_RECAPTCHA Determines if ReCaptcha should be disabled for login ("true" or "false").
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
+  ## @param sdp.configMap.data.SEP24_JWT_EXPIRATION_SECONDS How long the SEP-24 JWT token embedded in the receiver registration URL stays valid, in seconds. Minimum 5. Values above 3600 log a warning at startup.
   ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
   ## @param sdp.configMap.data.MAX_INVITATION_RESEND_ATTEMPTS The maximum number of times an invitation can be resent. 0 or negative values disable the job.
@@ -229,6 +233,7 @@ sdp:
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_RECAPTCHA: "false"
       DISABLE_MFA: "false"
+      SEP24_JWT_EXPIRATION_SECONDS: "600"
 
       ## Background tasks configuration
       SCHEDULER_PAYMENT_JOB_SECONDS: "10"
@@ -277,6 +282,7 @@ sdp:
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_API_KEY API key for the Twilio SendGrid (email) service.
   ## @extra sdp.kubeSecrets.data.TWILIO_SENDGRID_SENDER_ADDRESS Email address used to send emails via Twilio SendGrid.
   ## @extra sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
+  ## @extra sdp.kubeSecrets.data.LOG_SHIPPING_URL A Loki-compatible push endpoint (e.g. a Grafana Alloy loki.source.api receiver) that structured logs are shipped to directly over HTTP, for platforms with no log-drain feature. Uses global.logShippingURL by default.
   ## @extra sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token. This EC key needs to be at least as strong as prime256v1 (P-256).
   ## @extra sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret used to sign SEP-24 JWT tokens for wallet registration and interactive deposit authentication.
   ## @extra sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
@@ -321,6 +327,7 @@ sdp:
 
       ## Monitoring and logging configuration
 #      SENTRY_DSN: #required when CRASH_TRACKER_TYPE is set to "SENTRY"
+#      LOG_SHIPPING_URL: #optional, ships structured logs directly to a Loki-compatible endpoint
 
       ## Security configuration
 #      EC256_PRIVATE_KEY: #required
@@ -361,6 +368,52 @@ sdp:
       - '{{ include "sdp.domain" . }}'
       secretName: backend-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
       # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
+
+  ## @extra sdp.httpRoute Configuration for the Gateway API HTTPRoute for the SDP service. Additive to (not a replacement for) sdp.ingress.
+  ## @param sdp.httpRoute.enabled If true, a Gateway API HTTPRoute will be created for the SDP service. When sdp.route.adminDomain is set, a second HTTPRoute is created for the admin endpoint.
+  ## @extra sdp.httpRoute.parentRefs References to existing Gateways the HTTPRoute should attach to. Ignored when sdp.httpRoute.gateway.enabled is true.
+  ## @param sdp.httpRoute.parentRefs[0].name Name of the parent Gateway resource.
+  ## @param sdp.httpRoute.parentRefs[0].namespace Namespace of the parent Gateway. Empty string defaults to the release namespace.
+  ## @param sdp.httpRoute.parentRefs[0].sectionName Listener name within the Gateway to attach to. Empty string attaches to all listeners.
+  ## @param sdp.httpRoute.hostnames Optional list of hostnames for the HTTPRoute. When empty, defaults to sdp.route.domain and sdp.route.mtnDomain. Each entry must be a DNS hostname (no scheme, no port). Strings are passed through `tpl`, so Helm expressions like '{{ .Values.sdp.route.domain }}' work.
+  ## @param sdp.httpRoute.annotations Extra annotations added to the HTTPRoute object.
+  ## @param sdp.httpRoute.labels Extra labels added to the HTTPRoute object.
+  ## @extra sdp.httpRoute.gateway Optional in-chart Gateway resource. Most users will set sdp.httpRoute.parentRefs instead and let a platform-owned Gateway handle traffic.
+  ## @param sdp.httpRoute.gateway.enabled If true, a Gateway resource is created in the release namespace and the HTTPRoute auto-attaches to it (parentRefs is ignored).
+  ## @param sdp.httpRoute.gateway.gatewayClassName Name of the GatewayClass to use (e.g. "istio", "envoy", "cilium"). Required when gateway.enabled is true.
+  ## @param sdp.httpRoute.gateway.name Optional name override for the created Gateway. Defaults to `<fullname>-gateway`.
+  ## @extra sdp.httpRoute.gateway.listeners Listener configuration for the created Gateway.
+  ## @param sdp.httpRoute.gateway.listeners[0].name Listener name.
+  ## @param sdp.httpRoute.gateway.listeners[0].protocol Listener protocol (HTTP or HTTPS).
+  ## @param sdp.httpRoute.gateway.listeners[0].port Listener port.
+  ## @param sdp.httpRoute.gateway.annotations Extra annotations added to the Gateway object.
+  ## @param sdp.httpRoute.gateway.labels Extra labels added to the Gateway object.
+  httpRoute:
+    enabled: false
+    parentRefs:
+      - name: sdp-gateway
+        namespace: ""      # defaults to release namespace
+        sectionName: ""
+    hostnames: []
+    annotations: {}
+    labels: {}
+    gateway:
+      enabled: false
+      gatewayClassName: ""
+      name: ""
+      listeners:
+        - name: http
+          protocol: HTTP
+          port: 80
+        # - name: https
+        #   protocol: HTTPS
+        #   port: 443
+        #   tls:
+        #     mode: Terminate
+        #     certificateRefs:
+        #       - name: backend-tls-cert-name
+      annotations: {}
+      labels: {}
 
 # =========================== START tss ===========================
 ## @section Transaction Submission Service
@@ -462,6 +515,7 @@ tss:
   ## @param tss.kubeSecrets.data The sensitive data to be stored in the secret.
   ## @extra tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @extra tss.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts.
+  ## @extra tss.kubeSecrets.data.LOG_SHIPPING_URL A Loki-compatible push endpoint that structured logs are shipped to directly over HTTP. Uses global.logShippingURL by default.
   ## @extra tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
   ## @extra tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.
   ## @extra tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
@@ -481,6 +535,7 @@ tss:
 
       ## Monitoring and logging configuration
 #      SENTRY_DSN: #optional
+#      LOG_SHIPPING_URL: #optional, ships structured logs directly to a Loki-compatible endpoint
 
       ## RPC configuration
 #      RPC_REQUEST_AUTH_HEADER_VALUE: #optional, depends on value of RPC_REQUEST_AUTH_HEADER_KEY
@@ -511,7 +566,7 @@ dashboard:
   ## @param dashboard.image.fullName Full name of the Docker image.
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:6.4.0
+    fullName: stellar/stellar-disbursement-platform-frontend:7.0.0
     pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.
@@ -563,3 +618,87 @@ dashboard:
     - hosts:
       - '{{ include "sdp.dashboard.domain" . }}'
       secretName: dashboard-tls-cert-name # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
+
+  ## @extra dashboard.httpRoute Configuration for the Gateway API HTTPRoute for the dashboard. Additive to (not a replacement for) dashboard.ingress.
+  ## @param dashboard.httpRoute.enabled If true, a Gateway API HTTPRoute will be created for the dashboard.
+  ## @extra dashboard.httpRoute.parentRefs References to existing Gateways the HTTPRoute should attach to. Ignored when dashboard.httpRoute.gateway.enabled is true.
+  ## @param dashboard.httpRoute.parentRefs[0].name Name of the parent Gateway resource.
+  ## @param dashboard.httpRoute.parentRefs[0].namespace Namespace of the parent Gateway. Empty string defaults to the release namespace.
+  ## @param dashboard.httpRoute.parentRefs[0].sectionName Listener name within the Gateway to attach to. Empty string attaches to all listeners.
+  ## @param dashboard.httpRoute.hostnames Optional list of hostnames for the HTTPRoute. When empty, defaults to dashboard.route.domain and dashboard.route.mtnDomain. Each entry must be a DNS hostname (no scheme, no port). Strings are passed through `tpl`, so Helm expressions like '{{ .Values.dashboard.route.domain }}' work.
+  ## @param dashboard.httpRoute.annotations Extra annotations added to the HTTPRoute object.
+  ## @param dashboard.httpRoute.labels Extra labels added to the HTTPRoute object.
+  ## @extra dashboard.httpRoute.gateway Optional in-chart Gateway resource. Most users will set dashboard.httpRoute.parentRefs instead and let a platform-owned Gateway handle traffic.
+  ## @param dashboard.httpRoute.gateway.enabled If true, a Gateway resource is created in the release namespace and the HTTPRoute auto-attaches to it (parentRefs is ignored).
+  ## @param dashboard.httpRoute.gateway.gatewayClassName Name of the GatewayClass to use (e.g. "istio", "envoy", "cilium"). Required when gateway.enabled is true.
+  ## @param dashboard.httpRoute.gateway.name Optional name override for the created Gateway. Defaults to `<fullname>-dashboard-gateway`.
+  ## @extra dashboard.httpRoute.gateway.listeners Listener configuration for the created Gateway.
+  ## @param dashboard.httpRoute.gateway.listeners[0].name Listener name.
+  ## @param dashboard.httpRoute.gateway.listeners[0].protocol Listener protocol (HTTP or HTTPS).
+  ## @param dashboard.httpRoute.gateway.listeners[0].port Listener port.
+  ## @param dashboard.httpRoute.gateway.annotations Extra annotations added to the Gateway object.
+  ## @param dashboard.httpRoute.gateway.labels Extra labels added to the Gateway object.
+  httpRoute:
+    enabled: false
+    parentRefs:
+      - name: dashboard-gateway
+        namespace: ""      # defaults to release namespace
+        sectionName: ""
+    hostnames: []
+    annotations: {}
+    labels: {}
+    gateway:
+      enabled: false
+      gatewayClassName: ""
+      name: ""
+      listeners:
+        - name: http
+          protocol: HTTP
+          port: 80
+        # - name: https
+        #   protocol: HTTPS
+        #   port: 443
+        #   tls:
+        #     mode: Terminate
+        #     certificateRefs:
+        #       - name: dashboard-tls-cert-name
+      annotations: {}
+      labels: {}
+
+# =========================== START observability ===========================
+## @section Observability
+## @descriptionStart
+## Optional Prometheus/Grafana wiring for scraping the SDP + TSS metrics endpoints.
+## The metrics Services (SDP port `metrics`/8002, TSS port `metrics`/9002) are always
+## published, but nothing is scraped or provisioned until one of the flags below is
+## enabled. Every flag defaults to OFF so existing installs are unaffected, and the
+## hosting choice (Prometheus Operator vs. annotation-based scrape vs. external stack)
+## is intentionally left open.
+## @descriptionEnd
+
+## @extra serviceMonitor Prometheus-Operator ServiceMonitor for the SDP + TSS metrics ports. Requires the monitoring.coreos.com/v1 CRDs to be installed in the cluster.
+## @param serviceMonitor.enabled If true, render a ServiceMonitor selecting the SDP and TSS metrics Services.
+## @param serviceMonitor.interval Scrape interval for the metrics endpoints.
+## @param serviceMonitor.scrapeTimeout Per-scrape timeout. Must be less than or equal to the interval.
+## @param serviceMonitor.path HTTP path that exposes Prometheus metrics on the metrics port.
+## @param serviceMonitor.additionalLabels Extra labels for the ServiceMonitor metadata. Many Operator installs only discover ServiceMonitors carrying a specific release label (e.g. `release: kube-prometheus-stack`).
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  additionalLabels: {}
+
+## @extra metricsScrapeAnnotations Annotation-based scraping for plain (non-Operator) Prometheus setups that rely on kubernetes_sd pod discovery.
+## @param metricsScrapeAnnotations.enabled If true, inject `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` annotations onto the SDP + TSS pods.
+## @param metricsScrapeAnnotations.path HTTP path advertised via the `prometheus.io/path` annotation.
+metricsScrapeAnnotations:
+  enabled: false
+  path: /metrics
+
+## @extra grafanaDashboards Provision the committed Grafana dashboards (resources/grafana/*.json, vendored under the chart's dashboards/ directory) as a ConfigMap for the kube-prometheus-stack Grafana sidecar.
+## @param grafanaDashboards.enabled If true, create a ConfigMap labeled `grafana_dashboard: "1"` embedding the vendored dashboard JSON files.
+## @param grafanaDashboards.additionalLabels Extra labels for the dashboards ConfigMap (e.g. a sidecar folder label).
+grafanaDashboards:
+  enabled: false
+  additionalLabels: {}

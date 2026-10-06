@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
@@ -127,21 +128,29 @@ func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob
 		"updated_at":      tx.UpdatedAt.String(),
 	}
 
+	// payment_id (the SDP Transaction.ExternalID) is the correlation key that lets an operator grep
+	// the TSS logs for an SDP payment; wallet_id is the source distribution wallet (multi-wallet
+	// per-wallet observability). Both are attached to every TSS log line for this job.
+	if tx.ExternalID != "" {
+		labels["payment_id"] = tx.ExternalID
+	}
+	if tx.WalletID.Valid {
+		labels["wallet_id"] = tx.WalletID.String
+	}
+
 	// Add handler-specific fields if we have a handler
 	handlerFields := tw.txHandler.AddContextLoggerFields(&tx)
 	for k, v := range handlerFields {
 		labels[k] = v
 	}
 
-	if tx.XDRSent.Valid {
-		labels["xdr_sent"] = tx.XDRSent.String
-	}
-	if tx.XDRReceived.Valid {
-		labels["xdr_received"] = tx.XDRReceived.String
-	}
 	if tx.StellarTransactionHash.Valid {
 		labels["tx_hash"] = tx.StellarTransactionHash.String
 	}
+
+	// NOTE: xdr_sent / xdr_received (full base64 envelopes) are intentionally NOT attached to the
+	// per-job context logger — doing so repeated the entire XDR on every log line. They are emitted
+	// once, on completion, via TSSMonitorService.addTransactionDetails.
 
 	return log.Set(ctx, log.Ctx(ctx).WithFields(labels))
 }
@@ -194,8 +203,20 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //
 //	Horizon: 400 tx_too_late, unexpected errors
 //	RPC: unexpected errors
+//
+// Errors that keep the bundle locked until its ledger bound expires, because the recorded envelope may still be
+// included (any handler, whenever a hash was already recorded for the attempt):
+//
+//	Horizon: 5xx (incl. 504 Timeout), client-side timeouts, transport errors
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, txErr utils.TransactionError) error {
-	log.Ctx(ctx).Errorf("🔴 Error processing job (%s): %v", txErr.GetErrorType(), txErr)
+	// Emit the failure with discrete, structured fields (horizon_status_code, tx_result_code,
+	// operation_result_codes, ...) so operators can filter/alert on specific result codes, instead of
+	// only the flattened error string. The "error" field preserves the human-readable message.
+	failureLog := log.Ctx(ctx).WithField("error", txErr.Error())
+	if structuredErr, ok := txErr.(utils.StructuredError); ok {
+		failureLog = failureLog.WithFields(log.F(structuredErr.LogFields()))
+	}
+	failureLog.Errorf("🔴 Error processing job (%s)", txErr.GetErrorType())
 
 	isRetryable := txErr.IsRetryable()
 	defer func() {
@@ -225,15 +246,23 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, fmt.Sprintf("%s transaction error - cannot be retried", strings.ToLower(txErr.GetErrorType())))
 		}
 	} else {
-		if txErr.IsRetryable() && tw.txHandler.RequiresRebuildOnRetry() {
-			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
-				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
-			}
-		}
-
 		var horizonErr utils.HorizonSpecificError
 		if errors.As(txErr, &horizonErr) && horizonErr.IsBadSequence() {
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "tx_bad_seq detected!")
+		}
+
+		if txJob.Transaction.StellarTransactionHash.Valid && txErr.IsOutcomeUnknown() {
+			log.Ctx(ctx).WithFields(log.F{
+				"tx_hash":                    txJob.Transaction.StellarTransactionHash.String,
+				"locked_until_ledger_number": txJob.LockedUntilLedgerNumber,
+			}).Warn("unknown Horizon outcome; holding transaction and channel account locks until the ledger bound expires")
+			return nil
+		}
+
+		if isRetryable && tw.txHandler.RequiresRebuildOnRetry() {
+			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
+			}
 		}
 	}
 
@@ -291,8 +320,8 @@ func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *
 
 // TODO: add tests
 // unlockJob will unlock the channel account and transaction instantaneously, so they can be made available ASAP. If
-// this method is not called, the algorithm will fall back to get these resources qutomatically unlocked when their
-// `locked-to-ledger` expire.
+// this method is not called, the algorithm will fall back to get these resources automatically unlocked when their
+// `locked-to-ledger` expire, which is required when the submission outcome is unknown (the envelope may still land).
 func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
 	_, err := tw.chAccModel.Unlock(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey)
 	if err != nil {
@@ -331,7 +360,13 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 
 	tw.txHandler.MonitorTransactionProcessingSuccess(ctx, txJob, tw.jobUUID)
 
-	log.Ctx(ctx).Infof("🎉 Successfully processed transaction job %v", txJob)
+	// Log the on-chain confirmation details from the Horizon response. Previously only the DB-sourced
+	// tx_hash survived; the confirming ledger and the actual fee charged were discarded.
+	log.Ctx(ctx).WithFields(log.F{
+		"stellar_ledger": hTxResp.Ledger,
+		"fee_charged":    hTxResp.FeeCharged,
+		"result":         hTxResp.Successful,
+	}).Infof("🎉 Successfully processed transaction job %v", txJob)
 
 	return nil
 }
@@ -361,12 +396,15 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		tw.txHandler.MonitorTransactionReconciliationSuccess(ctx, txJob, tw.jobUUID, ReconcileSuccess)
 		return nil
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
-		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
+		log.Ctx(ctx).WithFields(log.F(hWrapperErr.LogFields())).
+			WithField("error", hWrapperErr.Error()).
+			Warn("received unexpected horizon error while reconciling transaction")
 
 		tw.txHandler.MonitorTransactionReconciliationFailure(ctx, txJob, tw.jobUUID, true, hWrapperErr.Error())
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
+	// Authoritative 404: a bundle with a hash is only reselected after its lock (== MaxLedger) expires or a definitive 4xx.
 	log.Ctx(ctx).Warnf("Previous transaction didn't make through, marking %v for resubmission...", txJob)
 
 	_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID)
@@ -472,7 +510,17 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 }
 
 func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob *TxJob) (*txnbuild.FeeBumpTransaction, error) {
-	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	signStart := time.Now()
+	defer func() {
+		log.Ctx(ctx).WithField("duration_ms", time.Since(signStart).Milliseconds()).
+			Debug("built and signed fee-bump transaction")
+	}()
+
+	var walletID string
+	if txJob.Transaction.WalletID.Valid {
+		walletID = txJob.Transaction.WalletID.String
+	}
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccountForWallet(ctx, txJob.Transaction.TenantID, walletID)
 	if err != nil {
 		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
 	} else if !distributionAccount.IsStellar() {
@@ -521,7 +569,13 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 }
 
 func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx *txnbuild.FeeBumpTransaction) error {
+	log.Ctx(ctx).WithField("tx_hash", txJob.Transaction.StellarTransactionHash.String).
+		Info("submitting transaction to Horizon, awaiting result")
+
+	submitStart := time.Now()
 	resp, err := tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	log.Ctx(ctx).WithField("duration_ms", time.Since(submitStart).Milliseconds()).
+		Debug("Horizon responded to fee-bump submission")
 	if err != nil {
 		txErr := utils.NewHorizonErrorWrapper(err)
 		err = tw.handleFailedTransaction(ctx, txJob, resp, txErr)
@@ -557,7 +611,11 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 // archived SAC balance entry. Only restores the balance entry; if other footprint entries
 // (e.g. SAC contract instance) are also archived, restoration won't be sufficient.
 func (tw *TransactionWorker) restoreArchivedEntries(ctx context.Context, txJob *TxJob) error {
-	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	var walletID string
+	if txJob.Transaction.WalletID.Valid {
+		walletID = txJob.Transaction.WalletID.String
+	}
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccountForWallet(ctx, txJob.Transaction.TenantID, walletID)
 	if err != nil {
 		return fmt.Errorf("resolving distribution account: %w", err)
 	}

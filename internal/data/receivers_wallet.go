@@ -141,8 +141,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIDs(ctx context.Context, sqlExec d
 			a.issuer as asset_issuer,
 			COALESCE(SUM(p.amount) FILTER(WHERE p.asset_id = a.id AND p.status = 'SUCCESS'), '0') as received_amount
 		FROM receiver_wallets_cte rwc
-		JOIN payments p ON rwc.receiver_id = p.receiver_id
-		JOIN disbursements d ON p.disbursement_id = d.id AND rwc.wallet_id = d.wallet_id
+		JOIN payments p ON rwc.id = p.receiver_wallet_id
 		JOIN assets a ON a.id = p.asset_id
 		GROUP BY (rwc.id, a.code, a.issuer)
 	), receiver_wallets_stats_aggregate AS (
@@ -302,7 +301,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	return receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) GetBySEP24TransactionID(ctx context.Context, transactionID string) (*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetBySEP24TransactionIDAndAccount(ctx context.Context, transactionID, stellarAccount, stellarMemo string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
 
 	query := `
@@ -312,10 +311,11 @@ func (rw *ReceiverWalletModel) GetBySEP24TransactionID(ctx context.Context, tran
 			receiver_wallets rw
 		WHERE
 			rw.sep24_transaction_id = $1
+			AND (COALESCE(rw.stellar_address, '') = '' OR (rw.stellar_address = $2 AND COALESCE(rw.stellar_memo, '') = $3))
 		LIMIT 1
 	`
 
-	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, transactionID)
+	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, transactionID, stellarAccount, stellarMemo)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound

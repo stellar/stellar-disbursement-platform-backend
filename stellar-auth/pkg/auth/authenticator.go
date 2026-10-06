@@ -24,6 +24,7 @@ var (
 	ErrUserNotFound              = errors.New("user not found")
 	ErrUserEmailAlreadyExists    = errors.New("a user with this email already exists")
 	ErrUserHasValidToken         = errors.New("user has a valid token")
+	ErrLastOwner                 = errors.New("a tenant must keep at least one active owner")
 )
 
 const (
@@ -38,7 +39,8 @@ type Authenticator interface {
 	ActivateUser(ctx context.Context, userID string) error
 	DeactivateUser(ctx context.Context, userID string) error
 	ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error)
-	ResetPassword(ctx context.Context, resetToken, password string) error
+	// ResetPassword sets a new password from a valid reset token and returns the ID of the user whose password was changed.
+	ResetPassword(ctx context.Context, resetToken, password string) (string, error)
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
@@ -52,11 +54,13 @@ type defaultAuthenticator struct {
 }
 
 type authUser struct {
-	ID                string `db:"id"`
-	FirstName         string `db:"first_name"`
-	LastName          string `db:"last_name"`
-	Email             string `db:"email"`
-	EncryptedPassword string `db:"encrypted_password"`
+	ID                string         `db:"id"`
+	FirstName         string         `db:"first_name"`
+	LastName          string         `db:"last_name"`
+	Email             string         `db:"email"`
+	EncryptedPassword string         `db:"encrypted_password"`
+	IsOwner           bool           `db:"is_owner"`
+	Roles             pq.StringArray `db:"roles"`
 }
 
 func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, password string) (*User, error) {
@@ -219,10 +223,10 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 	return nil
 }
 
-func (a *defaultAuthenticator) updateIsActive(ctx context.Context, userID string, isActive bool) error {
+func (a *defaultAuthenticator) updateIsActive(ctx context.Context, sqlExec db.SQLExecuter, userID string, isActive bool) error {
 	const query = "UPDATE auth_users SET is_active = $1 WHERE id = $2"
 
-	result, err := a.dbConnectionPool.ExecContext(ctx, query, isActive, userID)
+	result, err := sqlExec.ExecContext(ctx, query, isActive, userID)
 	if err != nil {
 		return fmt.Errorf("error updating is_active for user ID %s: %w", userID, err)
 	}
@@ -240,7 +244,7 @@ func (a *defaultAuthenticator) updateIsActive(ctx context.Context, userID string
 }
 
 func (a *defaultAuthenticator) ActivateUser(ctx context.Context, userID string) error {
-	err := a.updateIsActive(ctx, userID, true)
+	err := a.updateIsActive(ctx, a.dbConnectionPool, userID, true)
 	if err != nil {
 		return fmt.Errorf("error activating user ID %s: %w", userID, err)
 	}
@@ -249,7 +253,16 @@ func (a *defaultAuthenticator) ActivateUser(ctx context.Context, userID string) 
 }
 
 func (a *defaultAuthenticator) DeactivateUser(ctx context.Context, userID string) error {
-	err := a.updateIsActive(ctx, userID, false)
+	err := db.RunInTransaction(ctx, a.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		ownerIDs, err := lockActiveOwnerIDs(ctx, dbTx, defaultOwnerRoleName)
+		if err != nil {
+			return err
+		}
+		if isLastOwner(ownerIDs, userID) {
+			return ErrLastOwner
+		}
+		return a.updateIsActive(ctx, dbTx, userID, false)
+	})
 	if err != nil {
 		return fmt.Errorf("error deactivating user ID %s: %w", userID, err)
 	}
@@ -311,8 +324,8 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQ
 	return resetToken, nil
 }
 
-func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, password string) error {
-	return db.RunInTransaction(ctx, a.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, password string) (string, error) {
+	return db.RunInTransactionWithResult(ctx, a.dbConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
 		query := `
 			SELECT
 				auth_user_id, created_at
@@ -331,33 +344,33 @@ func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, pa
 		err := dbTx.GetContext(ctx, &aupr, query, resetToken)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return ErrInvalidResetPasswordToken
+				return "", ErrInvalidResetPasswordToken
 			}
-			return fmt.Errorf("error searching password reset token for user in database: %w", err)
+			return "", fmt.Errorf("error searching password reset token for user in database: %w", err)
 		}
 
 		// Token is only valid for 20 minutes
 		if aupr.CreatedAt.Add(time.Minute * 20).Before(time.Now()) {
-			return ErrExpiredResetPasswordToken
+			return "", ErrExpiredResetPasswordToken
 		}
 
 		encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, password)
 		if err != nil {
-			return fmt.Errorf("error trying to encrypt user password: %w", err)
+			return "", fmt.Errorf("error trying to encrypt user password: %w", err)
 		}
 
 		query = `UPDATE auth_users SET encrypted_password = $1 WHERE id = $2`
 		_, err = dbTx.ExecContext(ctx, query, encryptedPassword, aupr.UserID)
 		if err != nil {
-			return fmt.Errorf("error reseting user password in the database: %w", err)
+			return "", fmt.Errorf("error reseting user password in the database: %w", err)
 		}
 
 		err = a.invalidateResetPasswordToken(ctx, dbTx, resetToken)
 		if err != nil {
-			return fmt.Errorf("error invalidating reset password token: %w", err)
+			return "", fmt.Errorf("error invalidating reset password token: %w", err)
 		}
 
-		return nil
+		return aupr.UserID, nil
 	})
 }
 
@@ -459,7 +472,9 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		SELECT
 			first_name,
 			last_name,
-			email
+			email,
+			is_owner,
+			COALESCE(roles, '{}') AS roles
 		FROM
 			auth_users
 		WHERE
@@ -480,6 +495,8 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		FirstName: u.FirstName,
 		LastName:  u.LastName,
 		Email:     u.Email,
+		IsOwner:   u.IsOwner,
+		Roles:     u.Roles,
 	}, nil
 }
 

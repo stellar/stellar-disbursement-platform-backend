@@ -1,9 +1,11 @@
 package monitor
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +110,81 @@ func Test_TSSPrometheusClient_MonitorDBQueryDuration(t *testing.T) {
 		assert.Contains(t, body, sumMetric)
 		assert.Contains(t, body, countMetric)
 	})
+}
+
+func Test_TSSPrometheusClient_MonitorHTTPRequestDuration(t *testing.T) {
+	// Regression: HTTPRequestDurationTag used to be referenced by MonitorHTTPRequestDuration but was
+	// never registered in SummaryTSSVecMetrics, so a nil-map .With() would panic the TSS submitter.
+	mTSSPrometheusClient := &tssPrometheusClient{}
+
+	require.Contains(t, SummaryTSSVecMetrics, HTTPRequestDurationTag,
+		"TSS HTTP request-duration summary must be registered")
+
+	metricsRegistry := prometheus.NewRegistry()
+	metricsRegistry.MustRegister(SummaryTSSVecMetrics[HTTPRequestDurationTag])
+	mTSSPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
+
+	r := chi.NewRouter()
+	r.Get("/metrics", mTSSPrometheusClient.httpHandler.ServeHTTP)
+
+	assert.NotPanics(t, func() {
+		mTSSPrometheusClient.MonitorHTTPRequestDuration(time.Second, HTTPRequestLabels{
+			Status: "200",
+			Route:  "/health",
+			Method: "GET",
+		})
+	}, "MonitorHTTPRequestDuration must not panic (HTTPRequestDurationTag registered)")
+
+	req, err := http.NewRequest("GET", "/metrics", nil)
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	data, err := io.ReadAll(rr.Result().Body)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	body := string(data)
+	assert.Contains(t, body, `tss_http_requests_duration_seconds_sum{method="GET",route="/health",status="200"} 1`)
+	assert.Contains(t, body, `tss_http_requests_duration_seconds_count{method="GET",route="/health",status="200"} 1`)
+
+	SummaryTSSVecMetrics[HTTPRequestDurationTag].Reset()
+}
+
+func Test_TSSPrometheusClient_MonitorHTTPRequestDuration_CollapsesUnknownMethods(t *testing.T) {
+	mTSSPrometheusClient := &tssPrometheusClient{}
+
+	metricsRegistry := prometheus.NewRegistry()
+	metricsRegistry.MustRegister(SummaryTSSVecMetrics[HTTPRequestDurationTag])
+	mTSSPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
+	defer SummaryTSSVecMetrics[HTTPRequestDurationTag].Reset()
+
+	const attackN = 50
+	for i := 0; i < attackN; i++ {
+		mTSSPrometheusClient.MonitorHTTPRequestDuration(time.Second, HTTPRequestLabels{
+			Status: "405",
+			Route:  "undefined",
+			Method: fmt.Sprintf("ZZBOGUS%02d", i),
+		})
+	}
+
+	r := chi.NewRouter()
+	r.Get("/metrics", mTSSPrometheusClient.httpHandler.ServeHTTP)
+	req, err := http.NewRequest("GET", "/metrics", nil)
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	body := rr.Body.String()
+
+	var series int
+	for _, ln := range strings.Split(body, "\n") {
+		if strings.HasPrefix(ln, "tss_http_requests_duration_seconds_sum{") {
+			series++
+		}
+	}
+	assert.Equal(t, 1, series, "distinct method tokens must collapse to a single bounded series")
+	assert.Contains(t, body, fmt.Sprintf(
+		`tss_http_requests_duration_seconds_count{method="unknown",route="undefined",status="405"} %d`, attackN))
+	assert.NotContains(t, body, `method="ZZBOGUS`)
 }
 
 func Test_TSSPrometheusClient_MonitorCounters(t *testing.T) {

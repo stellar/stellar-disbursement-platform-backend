@@ -17,7 +17,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_ExportHandler_ExportDisbursements(t *testing.T) {
@@ -34,7 +36,8 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ExportHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -111,6 +114,7 @@ func Test_ExportHandler_ExportDisbursements(t *testing.T) {
 				url += "?" + tc.queryParams
 			}
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
@@ -161,7 +165,8 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ExportHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -216,6 +221,23 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 		ExternalPaymentID: "PAY03",
 	})
 
+	// Transfers- and Payouts-backed payments in the same account; the other two stay non-Circle.
+	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:        pendingPayment.ID,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-1"),
+	})
+	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:      successfulPayment.ID,
+		CirclePayoutID: utils.StringPtr("circle-payout-id-1"),
+	})
+
+	expectedCircleInfo := map[string][2]string{
+		pendingPayment.ID:    {"circle-transfer-id-1", "TRANSFER"},
+		successfulPayment.ID: {"circle-payout-id-1", "PAYOUT"},
+		directPayment.ID:     {"", ""},
+		failedPayment.ID:     {"", ""},
+	}
+
 	tests := []struct {
 		name               string
 		queryParams        string
@@ -261,6 +283,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				url += "?" + tc.queryParams
 			}
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
@@ -282,7 +305,7 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				"ID", "Amount", "StellarTransactionID", "Status", "Type",
 				"Disbursement.ID", "Asset.Code", "Asset.Issuer", "Wallet.Name", "Receiver.ID",
 				"Receiver.PhoneNumber", "Receiver.Email", "Receiver.ExternalID", "ReceiverWallet.Address", "ReceiverWallet.Status",
-				"CreatedAt", "UpdatedAt", "ExternalPaymentID", "CircleTransferRequestID",
+				"CreatedAt", "UpdatedAt", "ExternalPaymentID", "CircleTransactionID", "CircleTransactionType",
 			}
 			assert.Equal(t, expectedHeaders, header)
 
@@ -313,6 +336,10 @@ func Test_ExportHandler_ExportPayments(t *testing.T) {
 				if tc.expectedPayments[i].Type == data.PaymentTypeDisbursement {
 					assert.Equal(t, tc.expectedPayments[i].Disbursement.ID, row[5])
 				}
+
+				circleInfo := expectedCircleInfo[tc.expectedPayments[i].ID]
+				assert.Equal(t, circleInfo[0], row[18])
+				assert.Equal(t, circleInfo[1], row[19])
 			}
 		})
 	}
@@ -332,7 +359,8 @@ func Test_ExportHandler_ExportReceivers(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ExportHandler{
-		Models: models,
+		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 	}
 
 	r := chi.NewRouter()
@@ -413,6 +441,7 @@ func Test_ExportHandler_ExportReceivers(t *testing.T) {
 				url += "?" + tc.queryParams
 			}
 			req, err := http.NewRequest(http.MethodGet, url, nil)
+			req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner"))
 			require.NoError(t, err)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)

@@ -13,6 +13,7 @@ type DisbursementReceiver struct {
 	Email          string          `json:"email,omitempty" db:"email"`
 	PhoneNumber    string          `json:"phone_number" db:"phone_number"`
 	ExternalID     string          `json:"external_id" db:"external_id"`
+	SourceWalletID string          `json:"-" csv:"-" db:"source_wallet_id"`
 	ReceiverWallet *ReceiverWallet `json:"receiver_wallet" db:"receiver_wallet"`
 	Payment        *Payment        `json:"payment" db:"payment"`
 	CreatedAt      time.Time       `json:"created_at" db:"created_at"`

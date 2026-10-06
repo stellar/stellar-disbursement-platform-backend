@@ -74,23 +74,70 @@ func Test_ValidatePathIsNotTraversal(t *testing.T) {
 }
 
 func Test_ValidateAmount(t *testing.T) {
+	const (
+		emptyMsg       = "amount cannot be empty"
+		notPositiveMsg = "the provided amount must be greater than zero"
+		invalidMsg     = "the provided amount is not a valid number"
+		tooPreciseMsg  = "the provided amount exceeds the maximum supported precision of 7 decimal places"
+		tooLargeMsg    = "the provided amount exceeds the maximum supported value"
+	)
+
 	testCases := []struct {
-		amount  string
-		wantErr error
+		name       string
+		amount     string
+		wantErrMsg string // empty means no error expected
 	}{
-		{"", fmt.Errorf("amount cannot be empty")},
-		{"notvalidamount", fmt.Errorf("the provided amount is not a valid number")},
-		{"0", fmt.Errorf("the provided amount must be greater than zero")},
-		{"0.00", fmt.Errorf("the provided amount must be greater than zero")},
-		{"1", nil},
-		{"1.00", nil},
-		{"1.01", nil},
+		// empty / unparseable
+		{name: "empty", amount: "", wantErrMsg: emptyMsg},
+		{name: "whitespace", amount: "   ", wantErrMsg: invalidMsg},
+		{name: "non-numeric", amount: "notvalidamount", wantErrMsg: invalidMsg},
+		{name: "trailing garbage", amount: "1.23abc", wantErrMsg: invalidMsg},
+		{name: "hex", amount: "0xFF", wantErrMsg: invalidMsg},
+		{name: "plus sign prefix", amount: "+1.0", wantErrMsg: invalidMsg},
+		{name: "comma decimal separator", amount: "1,23", wantErrMsg: invalidMsg},
+		{name: "multiple dots", amount: "1.2.3", wantErrMsg: invalidMsg},
+		{name: "scientific notation", amount: "1e-7", wantErrMsg: invalidMsg},
+		{name: "over 20 chars", amount: "0.12345678901234567890", wantErrMsg: invalidMsg},
+
+		// non-positive
+		{name: "zero int", amount: "0", wantErrMsg: notPositiveMsg},
+		{name: "zero decimal", amount: "0.00", wantErrMsg: notPositiveMsg},
+		{name: "zero padded to 7dp", amount: "0.0000000", wantErrMsg: notPositiveMsg},
+		{name: "negative int", amount: "-1", wantErrMsg: notPositiveMsg},
+		{name: "negative fractional", amount: "-0.5", wantErrMsg: notPositiveMsg},
+
+		// valid amounts at various precisions
+		{name: "integer", amount: "1"},
+		{name: "2dp", amount: "1.00"},
+		{name: "2dp non-zero", amount: "1.01"},
+		{name: "7dp max precision", amount: "1.1234567"},
+		{name: "smallest unit", amount: "0.0000001"},
+		{name: "large value at 7dp", amount: "999999.9999999"},
+		{name: "7dp with trailing zeros", amount: "1.1000000"},
+		{name: "leading zero integer part", amount: "0.5"},
+		{name: "max int64 amount", amount: "922337203685.4775807"},
+
+		// exceeding 7 decimal places — SDP-2072 silent-rounding scenarios
+		{name: "8dp non-zero last digit", amount: "1.12345678", wantErrMsg: tooPreciseMsg},
+		{name: "8dp padded zero but numerically valid", amount: "1.00000000"},
+		{name: "8dp trailing zero but numerically 7dp", amount: "1.12345670"},
+		{name: "sub-unit rounded up", amount: "0.00000009", wantErrMsg: tooPreciseMsg},
+		{name: "sub-unit rounded to zero", amount: "0.00000001", wantErrMsg: tooPreciseMsg},
+		{name: "9dp", amount: "1.123456789", wantErrMsg: tooPreciseMsg},
+
+		// beyond int64 range — caught by SDK bounds check
+		{name: "overflow just above int64 max", amount: "922337203685.4775808", wantErrMsg: tooLargeMsg},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.amount, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			gotError := ValidateAmount(tc.amount)
-			assert.Equalf(t, tc.wantErr, gotError, "ValidateAmount(%q) should be %v, but got %v", tc.amount, tc.wantErr, gotError)
+			if tc.wantErrMsg == "" {
+				assert.NoErrorf(t, gotError, "ValidateAmount(%q) should be nil, but got %v", tc.amount, gotError)
+				return
+			}
+			require.Errorf(t, gotError, "ValidateAmount(%q) should error, but got nil", tc.amount)
+			assert.Equalf(t, tc.wantErrMsg, gotError.Error(), "ValidateAmount(%q) error mismatch", tc.amount)
 		})
 	}
 }
@@ -405,6 +452,9 @@ func Test_ValidateNoHTML_Valid(t *testing.T) {
 		"Whitespace    \n\t  ",
 		"This doesn't contain any HTML tags or scripts.",
 		"Text with word expression but not as code.",
+		"Claim your payment: {{.RegistrationLink}}",
+		"Meeting at 3 < 5 pm, see you",
+		"Price <100 dollars, save 20% & more",
 	}
 
 	for i, tc := range validTestCases {
@@ -429,6 +479,11 @@ func Test_ValidateNoHTML(t *testing.T) {
 		"JAVASCRIPT:ALERT(localStorage.getItem('sdp_session'))",
 		"javascript:alert('XSS')",
 		"JAVASCRIPT:ALERT('XSS')",
+		// Slash-separated tags: missed by a regex denylist, parsed as live elements by browsers.
+		"<svg/onload=alert(document.domain)>",
+		"<img/src=x onerror=alert(document.domain)>",
+		`<a/href="https://evil.com">legit text</a/>`,
+		"<svg/onload=alert(1)>",
 	}
 
 	for i, tc := range rawHTMLTestCases {
@@ -443,6 +498,53 @@ func Test_ValidateNoHTML(t *testing.T) {
 		t.Run(fmt.Sprintf("encodedHTML/%d(%s)", i, encodedHTMLStr), func(t *testing.T) {
 			err := ValidateNoHTML(encodedHTMLStr)
 			require.Error(t, err, "ValidateNoHTML(%q) didn't catch the error", encodedHTMLStr)
+		})
+	}
+}
+
+func Test_ValidateMessageTemplate(t *testing.T) {
+	testCases := []struct {
+		name        string
+		template    string
+		expectError bool
+	}{
+		// allowed
+		{name: "empty is allowed", template: "", expectError: false},
+		{name: "blank is allowed", template: "   ", expectError: false},
+		{name: "plain text", template: "You have a payment waiting for you.", expectError: false},
+		{name: "single field substitution", template: "Your code is {{.OTP}}", expectError: false},
+		{name: "field with surrounding spaces", template: "Your code is {{ .OTP }}", expectError: false},
+		{name: "multiple field substitutions", template: "{{.OTP}} is your {{.OrganizationName}} code", expectError: false},
+		{name: "chained field", template: "Hello {{.Receiver.Name}}", expectError: false},
+		{name: "dot", template: "{{.}}", expectError: false},
+
+		// rejected: expansion / control constructs
+		{name: "range over int (amplification)", template: "{{range 1000}}A{{end}}", expectError: true},
+		{name: "nested range", template: "{{range 1000}}{{range 1000}}A{{end}}{{end}}", expectError: true},
+		{name: "range over int (infinite loop)", template: "{{range 9223372036854775807}}{{end}}", expectError: true},
+		{name: "if block", template: "{{if .OTP}}x{{end}}", expectError: true},
+		{name: "with block", template: "{{with .OTP}}{{.}}{{end}}", expectError: true},
+		{name: "define/template", template: `{{define "T"}}x{{end}}{{template "T"}}`, expectError: true},
+
+		// rejected: function calls (printf width is its own amplification vector)
+		{name: "printf width amplification", template: `{{printf "%9999999d" 1}}`, expectError: true},
+		{name: "function pipeline", template: "{{.OTP | printf \"%s\"}}", expectError: true},
+
+		// rejected: variable declaration
+		{name: "variable declaration", template: "{{$x := .OTP}}{{$x}}", expectError: true},
+
+		// rejected: unparseable
+		{name: "unbalanced braces", template: "{{.OTP", expectError: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateMessageTemplate(tc.template)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

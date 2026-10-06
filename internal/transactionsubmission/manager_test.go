@@ -380,7 +380,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
-		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
+		On("DistributionAccountForWallet", mock.Anything, mock.Anything, mock.Anything).
 		Return(distAccount, nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{

@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -93,6 +94,54 @@ func Test_PrometheusClient_MonitorRequestTime(t *testing.T) {
 	assert.Contains(t, body, countMetric)
 }
 
+func Test_PrometheusClient_MonitorRequestTime_CollapsesUnknownMethods(t *testing.T) {
+	mPrometheusClient := &prometheusClient{}
+
+	metricsRegistry := prometheus.NewRegistry()
+	metricsRegistry.MustRegister(SummaryVecMetrics[HTTPRequestDurationTag])
+	mPrometheusClient.httpHandler = promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
+
+	// A unique route isolates these series from any other test that records into
+	// the package-global SummaryVec.
+	const route = "/sdp-2183-bounded"
+	const attackN = 50
+
+	for i := 0; i < attackN; i++ {
+		mPrometheusClient.MonitorHTTPRequestDuration(time.Second, HTTPRequestLabels{
+			Status:       "405",
+			Route:        route,
+			Method:       fmt.Sprintf("ZZBOGUS%02d", i), // distinct, attacker-controlled token
+			CommonLabels: CommonLabels{TenantName: "test-tenant"},
+		})
+	}
+
+	r := chi.NewRouter()
+	r.Get("/metrics", mPrometheusClient.httpHandler.ServeHTTP)
+	req, err := http.NewRequest("GET", "/metrics", nil)
+	require.NoError(t, err)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	body := rr.Body.String()
+
+	// All distinct methods collapse into exactly one series for this route.
+	var seriesForRoute int
+	for _, ln := range strings.Split(body, "\n") {
+		if strings.HasPrefix(ln, "sdp_http_requests_duration_seconds_sum{") &&
+			strings.Contains(ln, `route="`+route+`"`) {
+			seriesForRoute++
+		}
+	}
+	assert.Equal(t, 1, seriesForRoute, "distinct method tokens must collapse to a single bounded series")
+
+	// That one series is the "unknown" bucket and carries all observations.
+	assert.Contains(t, body, fmt.Sprintf(
+		`sdp_http_requests_duration_seconds_count{method="unknown",route="%s",status="405",tenant_name="test-tenant"} %d`,
+		route, attackN))
+
+	// No raw attacker token may ever appear as a label value.
+	assert.NotContains(t, body, `method="ZZBOGUS`)
+}
+
 func Test_PrometheusClient_MonitorDBQueryDuration(t *testing.T) {
 	mPrometheusClient := &prometheusClient{}
 
@@ -169,8 +218,9 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 
 	t.Run("disbursements counter metric", func(t *testing.T) {
 		labels := DisbursementLabels{
-			Asset:  "USDC",
-			Wallet: "Mock Wallet",
+			Asset:    "USDC",
+			Wallet:   "Mock Wallet",
+			WalletID: "dw-test",
 			CommonLabels: CommonLabels{
 				TenantName: "test-tenant",
 			},
@@ -190,7 +240,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		assert.NotEmpty(t, data)
 		body := string(data)
 
-		metric := `sdp_business_disbursements_counter{asset="USDC",tenant_name="test-tenant",wallet="Mock Wallet"} 1`
+		metric := `sdp_business_disbursements_counter{asset="USDC",tenant_name="test-tenant",wallet="Mock Wallet",wallet_id="dw-test"} 1`
 
 		assert.Contains(t, body, metric)
 

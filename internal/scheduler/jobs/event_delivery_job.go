@@ -1,0 +1,229 @@
+package jobs
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/stellar/go-stellar-sdk/support/log"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+)
+
+const (
+	eventDeliveryJobName     = "event_delivery_job"
+	eventDeliveryJobInterval = time.Second * 30
+	// eventDeliveryBatchLimit bounds one run's work; older events go first.
+	eventDeliveryBatchLimit = 100
+	// eventDeliveryMaxAttempts stops retrying poisoned events; they stay undelivered and
+	// visible in the events table for operations.
+	eventDeliveryMaxAttempts = 20
+	eventDeliveryHTTPTimeout = 10 * time.Second
+	// eventDeliveryLeaseDuration is how long a claimed batch stays reserved. Every replica runs
+	// the scheduler, so without a lease that outlives the claiming statement each replica's tick
+	// re-claims the same rows: duplicate concurrent POSTs, and the attempt cap consumed once per
+	// replica per interval. It has to outlast the slowest possible batch — eventDeliveryBatchLimit
+	// deliveries, each bounded by eventDeliveryHTTPTimeout, doubled for the per-event writes —
+	// otherwise the tail of a slow batch gets reclaimed while its owner is still working through
+	// it. Expiry is the only reclaim path (no reaper), so it also bounds how long a batch sits idle
+	// after a replica crashes mid-run; runs that finish normally release each lease as they go.
+	eventDeliveryLeaseDuration = 2 * eventDeliveryBatchLimit * eventDeliveryHTTPTimeout
+	// eventDeliveryRetentionDays bounds outbox growth: DELIVERED events older than this are
+	// pruned each run. Undelivered (including poisoned) events are NEVER pruned — they stay
+	// visible for operations until handled.
+	eventDeliveryRetentionDays = 30
+)
+
+// eventDeliveryJob delivers undelivered outbox events to the tenant's configured webhook URL:
+// at-least-once, oldest first; consumers deduplicate on event_id. Tenants without a webhook URL
+// are skipped.
+type eventDeliveryJob struct {
+	models     *data.Models
+	httpClient *http.Client
+}
+
+func NewEventDeliveryJob(models *data.Models) Job {
+	return &eventDeliveryJob{
+		models:     models,
+		httpClient: newWebhookHTTPClient(eventDeliveryHTTPTimeout),
+	}
+}
+
+// newWebhookHTTPClient builds a client hardened against SSRF: it refuses to dial private,
+// loopback, link-local, or otherwise non-public addresses, and never follows redirects (a
+// webhook target could otherwise redirect delivery to an internal address after passing the
+// initial check). The address validation happens in DialContext, at actual connection time,
+// rather than as a one-off pre-check against the parsed URL — a pre-check alone is vulnerable to
+// DNS rebinding, where the hostname resolves to a public IP during validation and to a private
+// one by the time the client actually dials.
+func newWebhookHTTPClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	safeDialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, fmt.Errorf("splitting host/port %q: %w", addr, err)
+		}
+		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("resolving host %q: %w", host, err)
+		}
+		var target net.IP
+		for _, ip := range ips {
+			if !isPublicWebhookAddress(ip.IP) {
+				return nil, fmt.Errorf("refusing to dial non-public address %s for host %q", ip.IP, host)
+			}
+			if target == nil {
+				target = ip.IP
+			}
+		}
+		// Dial the specific address just validated, not the original host, so nothing can
+		// re-resolve to a different (unvalidated) address between the check above and the dial.
+		return dialer.DialContext(ctx, network, net.JoinHostPort(target.String(), port))
+	}
+
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{DialContext: safeDialContext},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return fmt.Errorf("webhook deliveries do not follow redirects (target: %s)", req.URL)
+		},
+	}
+}
+
+// isPublicWebhookAddress reports whether ip is safe to deliver a webhook to: reachable only if
+// it isn't a private, loopback, link-local, unspecified, or multicast address.
+func isPublicWebhookAddress(ip net.IP) bool {
+	return !ip.IsPrivate() && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() &&
+		!ip.IsLinkLocalMulticast() && !ip.IsUnspecified() && !ip.IsMulticast()
+}
+
+func (j eventDeliveryJob) Execute(ctx context.Context) error {
+	// Retention: prune delivered events past the window (runs regardless of webhook config so
+	// the outbox table stays bounded even if delivery is later disabled).
+	if _, pruneErr := j.models.DBConnectionPool.ExecContext(ctx, `
+		DELETE FROM events
+		WHERE delivered_at IS NOT NULL AND delivered_at < NOW() - make_interval(days => $1)`,
+		eventDeliveryRetentionDays); pruneErr != nil {
+		return fmt.Errorf("pruning delivered events: %w", pruneErr)
+	}
+
+	organization, err := j.models.Organizations.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("getting organization for event delivery: %w", err)
+	}
+	if organization.WebhookURL == nil || *organization.WebhookURL == "" {
+		return nil // webhook delivery not configured for this tenant
+	}
+	webhookURL := *organization.WebhookURL
+
+	type eventRow struct {
+		ID      string `db:"id"`
+		Payload []byte `db:"payload"`
+	}
+	// Claiming both counts the attempt and takes a lease on the batch, so concurrent instances
+	// pick disjoint work instead of all delivering the same events. SKIP LOCKED only separates
+	// two claim statements racing at the same instant — these row locks are gone the moment the
+	// statement returns, well before the POSTs below — so it is claimed_until that reserves the
+	// rows for the delivery itself, and a replica ticking a moment later steps over them. The
+	// attempt is counted here rather than after the POST because the lease can expire unused:
+	// counting up front is what stops a crash mid-batch from letting a poisoned event retry
+	// forever.
+	var pending []eventRow
+	err = j.models.DBConnectionPool.SelectContext(ctx, &pending, `
+		WITH claimed AS (
+			SELECT id FROM events
+			WHERE delivered_at IS NULL AND delivery_attempts < $1
+			  AND (claimed_until IS NULL OR claimed_until < NOW())
+			ORDER BY occurred_at ASC
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		), reserved AS (
+			UPDATE events
+			SET delivery_attempts = delivery_attempts + 1,
+			    claimed_until = NOW() + make_interval(secs => $3)
+			FROM claimed WHERE events.id = claimed.id
+			RETURNING events.id, events.payload, events.occurred_at
+		)
+		SELECT id, payload FROM reserved ORDER BY occurred_at ASC`,
+		eventDeliveryMaxAttempts, eventDeliveryBatchLimit, eventDeliveryLeaseDuration.Seconds())
+	if err != nil {
+		return fmt.Errorf("claiming undelivered events: %w", err)
+	}
+
+	for _, event := range pending {
+		if deliverErr := j.deliver(ctx, webhookURL, organization.WebhookSecret, event.Payload); deliverErr != nil {
+			// The attempt was already counted at claim time; leaving delivered_at NULL is what
+			// puts the event back in front of the next run. Releasing the lease now — rather than
+			// letting it run out — is what keeps that next run 30s away instead of a lease window
+			// away. Nothing is delivering this event any more, so a concurrent claim is the retry,
+			// not a duplicate.
+			log.Ctx(ctx).Warnf("delivering event %s: %v", event.ID, deliverErr)
+			if _, rErr := j.models.DBConnectionPool.ExecContext(ctx, `
+				UPDATE events SET claimed_until = NULL WHERE id = $1`, event.ID); rErr != nil {
+				// Not fatal: an unreleased lease expires on its own, it only delays the retry.
+				log.Ctx(ctx).Warnf("releasing delivery lease for event %s: %v", event.ID, rErr)
+			}
+			continue
+		}
+		if _, uErr := j.models.DBConnectionPool.ExecContext(ctx, `
+			UPDATE events SET delivered_at = NOW() WHERE id = $1`, event.ID); uErr != nil {
+			return fmt.Errorf("marking event %s delivered: %w", event.ID, uErr)
+		}
+	}
+
+	return nil
+}
+
+func (j eventDeliveryJob) deliver(ctx context.Context, webhookURL, webhookSecret string, payload []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("building webhook request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Signs the payload so consumers can verify it actually came from SDP: the webhook URL is
+	// the only thing an attacker would need to send fake events otherwise, and URLs leak into
+	// logs and proxies far more easily than a dedicated secret does. The timestamp is part of
+	// the signed material rather than just a header, so it can't be rewritten — that is what
+	// lets a consumer bound replay by rejecting deliveries outside its tolerance window.
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(webhookSecret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte{'.'})
+	mac.Write(payload)
+	req.Header.Set("X-SDP-Timestamp", timestamp)
+	req.Header.Set("X-SDP-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+
+	resp, err := j.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("posting webhook: %w", err)
+	}
+	defer utils.DeferredClose(ctx, resp.Body, "closing webhook response body")
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("webhook responded %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (j eventDeliveryJob) GetInterval() time.Duration {
+	return eventDeliveryJobInterval
+}
+
+func (j eventDeliveryJob) GetName() string {
+	return eventDeliveryJobName
+}
+
+func (j eventDeliveryJob) IsJobMultiTenant() bool {
+	return true
+}
+
+var _ Job = (*eventDeliveryJob)(nil)

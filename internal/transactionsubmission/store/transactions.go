@@ -49,6 +49,9 @@ type Transaction struct {
 
 	TenantID            string         `db:"tenant_id"`
 	DistributionAccount sql.NullString `db:"distribution_account"`
+	// WalletID is the source distribution wallet for payment transactions (per-wallet
+	// observability); empty for non-payment transaction types and legacy rows.
+	WalletID sql.NullString `db:"wallet_id"`
 
 	CreatedAt *time.Time `db:"created_at"`
 	UpdatedAt *time.Time `db:"updated_at"`
@@ -216,6 +219,7 @@ func TransactionColumnNames(tableReference, resultAlias string) string {
 			"id",
 			"external_id",
 			"tenant_id",
+			"wallet_id",
 			"transaction_type",
 			"distribution_account",
 			"status",
@@ -270,15 +274,15 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_operation_xdr, tenant_id, memo, memo_type) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (transaction_type, external_id, asset_code, asset_issuer, amount, destination, public_key, wasm_hash, sponsored_account, sponsored_operation_xdr, tenant_id, memo, memo_type, wallet_id) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
-	valueArgs := make([]interface{}, 0, len(transactions)*13)
+	valueArgs := make([]interface{}, 0, len(transactions)*14)
 
 	for _, transaction := range transactions {
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			transaction.TransactionType,
 			transaction.ExternalID,
@@ -293,6 +297,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 			transaction.TenantID,
 			sdpUtils.SQLNullString(transaction.Memo),
 			sdpUtils.SQLNullString(string(transaction.MemoType)),
+			transaction.WalletID,
 		)
 	}
 

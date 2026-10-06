@@ -210,6 +210,23 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 			wantResponseBody: `{"error": "Not authorized."}`,
 		},
 		{
+			name:     "🔴[401] when the MFA attempt limit is exhausted",
+			reqBody:  `{"mfa_code":"123456","recaptcha_token":"token"}`,
+			deviceID: deviceID,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock) {
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Once()
+				authManagerMock.
+					On("AuthenticateMFA", mock.Anything, deviceID, "123456", mock.AnythingOfType("bool")).
+					Return("", auth.ErrMFAAttemptsExhausted).
+					Once()
+			},
+			wantStatusCode:   http.StatusUnauthorized,
+			wantResponseBody: `{"error": "Too many incorrect attempts. Please request a new code using the Resend code option."}`,
+		},
+		{
 			name:     "🔴[500] when the MFA validation returns an unexpedted error",
 			reqBody:  `{"mfa_code":"123456","recaptcha_token":"token"}`,
 			deviceID: deviceID,

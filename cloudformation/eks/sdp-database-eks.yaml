@@ -95,41 +95,6 @@ Resources:
         - Key: Environment
           Value: !Ref env
 
-  DBSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/db/credentials
-      Description: RDS database credentials and connection information
-      SecretString: !Sub '{"username": "${DBUsername}", "password": "${DBPassword}", "dbname": "sdp_${env}", "port": 5432, "host": "${PostgresInstance.Endpoint.Address}"}' 
-
-  DatabaseURLSecret: 
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/db/url
-      Description: Complete database connection URL
-      SecretString: !Sub '{"DATABASE_URL": "postgres://${DBUsername}:${DBPassword}@${PostgresInstance.Endpoint.Address}:${PostgresInstance.Endpoint.Port}/sdp_${env}"}'
-
-  DatabaseHostSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/db/host
-      Description: Database host
-      SecretString: !GetAtt PostgresInstance.Endpoint.Address
-
-  DatabasePortSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/db/port
-      Description: Database port
-      SecretString: !GetAtt PostgresInstance.Endpoint.Port
-
-  DatabaseNameSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub /sdp/${env}/db/name
-      Description: Database name
-      SecretString: !Sub sdp_${env}
-
   DatabaseURLSecret: 
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -195,7 +160,7 @@ Resources:
   DBEndpointParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /sdp/${env}/DB_ENDPOINT
+      Name: !Sub /${namespace}/${env}/DB_ENDPOINT
       Type: String
       Value: !GetAtt PostgresInstance.Endpoint.Address
       Description: Database endpoint
@@ -205,7 +170,7 @@ Resources:
   DBPortParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /sdp/${env}/DB_PORT
+      Name: !Sub /${namespace}/${env}/DB_PORT
       Type: String
       Value: !GetAtt PostgresInstance.Endpoint.Port
       Description: Database port
@@ -215,7 +180,7 @@ Resources:
   DBNameParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /sdp/${env}/DB_NAME
+      Name: !Sub /${namespace}/${env}/DB_NAME
       Type: String
       Value: !Sub sdp_${env}
       Description: Database name
@@ -240,11 +205,6 @@ Outputs:
     Value: !Sub sdp_${env}
     Export:
       Name: !Sub ${AWS::StackName}-db-name
-  
-  DatabaseSecretArn:
-    Value: !Ref DBSecret
-    Export:
-      Name: !Sub ${AWS::StackName}-db-secret-arn
   
   DatabaseUrlSecret:
     Value: !Ref DatabaseURLSecret

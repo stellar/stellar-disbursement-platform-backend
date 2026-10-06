@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_Organizations_DatabaseTriggers(t *testing.T) {
@@ -128,7 +129,7 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 
 	ou.Logo = csvBuf.Bytes()
 	err = ou.validate()
-	assert.EqualError(t, err, "error decoding image bytes: image: unknown format")
+	assert.EqualError(t, err, "invalid logo: invalid file type provided. Expected png or jpeg")
 
 	// invalid image type
 	img = CreateMockImage(t, 300, 300, ImageSizeSmall)
@@ -138,7 +139,13 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 
 	ou.Logo = buf.Bytes()
 	err = ou.validate()
-	assert.EqualError(t, err, "invalid image type provided. Expect png or jpeg")
+	assert.EqualError(t, err, "invalid logo: invalid file type provided. Expected png or jpeg")
+
+	// a valid header with no pixel payload passes: the data layer guards safety (format and
+	// dimensions) only; payload integrity is enforced in the upload handler
+	ou.Logo = utils.CreatePNGHeaderWithDimensions(t, 100, 100)
+	err = ou.validate()
+	assert.NoError(t, err)
 
 	// timezone UTC offset
 	ou = &OrganizationUpdate{}
@@ -294,6 +301,30 @@ func Test_Organizations_Update(t *testing.T) {
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
 		require.True(t, o.IsApprovalRequired)
+	})
+
+	t.Run("updates only organization's receiver_invitations_disabled successfully", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.ReceiverInvitationsDisabled)
+
+		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationsDisabled: utils.Ptr(true)})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, o.ReceiverInvitationsDisabled)
+		assert.True(t, *o.ReceiverInvitationsDisabled)
+
+		err = organizationModel.Update(ctx, &OrganizationUpdate{ReceiverInvitationsDisabled: utils.Ptr(false)})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		require.NotNil(t, o.ReceiverInvitationsDisabled)
+		assert.False(t, *o.ReceiverInvitationsDisabled)
 	})
 
 	t.Run("updates organization's name, timezone UTC offset and logo successfully", func(t *testing.T) {

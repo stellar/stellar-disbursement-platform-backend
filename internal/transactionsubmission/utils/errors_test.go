@@ -339,6 +339,55 @@ func Test_HorizonErrorWrapper_IsGatewayTimeout(t *testing.T) {
 	}
 }
 
+func Test_HorizonErrorWrapper_IsOutcomeUnknown(t *testing.T) {
+	testCases := []struct {
+		name        string
+		originalErr error
+		wantResult  bool
+	}{
+		{
+			name:        "non-horizon error (client timeout, transport), returns TRUE",
+			originalErr: fmt.Errorf("context deadline exceeded"),
+			wantResult:  true,
+		},
+		{
+			name:        "horizon error without a problem body, returns TRUE",
+			originalErr: horizonclient.Error{},
+			wantResult:  true,
+		},
+		{
+			name:        "horizon error whose problem body has no status (proxy JSON), returns TRUE",
+			originalErr: horizonclient.Error{Problem: problem.P{Title: "Bad Gateway"}},
+			wantResult:  true,
+		},
+		{
+			name:        "504 horizon error, returns TRUE",
+			originalErr: horizonclient.Error{Problem: problem.P{Status: http.StatusGatewayTimeout}},
+			wantResult:  true,
+		},
+		{
+			name: "400 horizon error with retryable result code, returns FALSE",
+			originalErr: horizonclient.Error{Problem: problem.P{
+				Status: http.StatusBadRequest,
+				Extras: map[string]interface{}{"result_codes": map[string]interface{}{"transaction": "tx_insufficient_fee"}},
+			}},
+			wantResult: false,
+		},
+		{
+			name:        "429 horizon error, returns FALSE",
+			originalErr: horizonclient.Error{Problem: problem.P{Status: http.StatusTooManyRequests}},
+			wantResult:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			hErr := NewHorizonErrorWrapper(tc.originalErr)
+			require.Equal(t, tc.wantResult, hErr.IsOutcomeUnknown())
+		})
+	}
+}
+
 func Test_HorizonErrorWrapper_handleExtrasResultCodes(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -1770,6 +1819,53 @@ func Test_RPCErrorWrapper_IsRetryable(t *testing.T) {
 			assert.Equal(t, tc.wantRetryable, wrapper.IsRetryable())
 		})
 	}
+}
+
+func Test_RPCErrorWrapper_IsOutcomeUnknown(t *testing.T) {
+	testCases := []struct {
+		name               string
+		errorType          stellar.SimulationErrorType
+		wantOutcomeUnknown bool
+	}{
+		{
+			name:               "network error - outcome unknown",
+			errorType:          stellar.SimulationErrorTypeNetwork,
+			wantOutcomeUnknown: true,
+		},
+		{
+			name:               "resource error - verdict received",
+			errorType:          stellar.SimulationErrorTypeResource,
+			wantOutcomeUnknown: false,
+		},
+		{
+			name:               "auth error - verdict received",
+			errorType:          stellar.SimulationErrorTypeAuth,
+			wantOutcomeUnknown: false,
+		},
+		{
+			name:               "contract execution error - verdict received",
+			errorType:          stellar.SimulationErrorTypeContractExecution,
+			wantOutcomeUnknown: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			simErr := &stellar.SimulationError{
+				Type:     tc.errorType,
+				Err:      errors.New("test error"),
+				Response: nil,
+			}
+			wrapper := NewRPCErrorWrapper(simErr)
+
+			assert.Equal(t, tc.wantOutcomeUnknown, wrapper.IsOutcomeUnknown())
+		})
+	}
+
+	t.Run("nil simulation error", func(t *testing.T) {
+		wrapper := &RPCErrorWrapper{SimulationError: nil}
+		assert.True(t, wrapper.IsOutcomeUnknown())
+	})
 }
 
 func Test_RPCErrorWrapper_IsRateLimit(t *testing.T) {

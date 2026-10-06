@@ -6,13 +6,15 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
+	"text/template"
+	"text/template/parse"
 	"time"
 	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
+	"github.com/stellar/go-stellar-sdk/amount"
 	"golang.org/x/net/html"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -22,8 +24,6 @@ var (
 	// RxPhone is a regex used to validate phone number, according with the E.164 standard https://en.wikipedia.org/wiki/E.164
 	rxPhone = regexp.MustCompile(`^\+[1-9]{1}[0-9]{9,14}$`)
 	rxOTP   = regexp.MustCompile(`^\d{6}$`)
-	// Any HTML-like tag: <a ...>, </div>, <STYLE>...</STYLE>, etc.
-	rxHTMLTag = regexp.MustCompile(`(?i)<\s*/?\s*[a-z][a-z0-9]*(\s+[^>]*)?>`)
 	// "javascript:" URL scheme anywhere in the string.
 	rxJSScheme                = regexp.MustCompile(`(?i)\bjavascript\s*:`)
 	rxCSSExpr                 = regexp.MustCompile(`(?i)\bexpression\s*\(`)
@@ -58,17 +58,25 @@ func ValidatePhoneNumber(phoneNumberStr string) error {
 	return nil
 }
 
-func ValidateAmount(amount string) error {
-	if amount == "" {
+// ValidateAmount checks that s is a positive Stellar classic-asset amount.
+func ValidateAmount(s string) error {
+	if s == "" {
 		return fmt.Errorf("amount cannot be empty")
 	}
 
-	value, err := strconv.ParseFloat(amount, 64)
+	parsed, err := amount.ParseInt64(s)
 	if err != nil {
-		return fmt.Errorf("the provided amount is not a valid number")
+		switch {
+		case strings.Contains(err.Error(), "more than 7 significant digits"):
+			return fmt.Errorf("the provided amount exceeds the maximum supported precision of 7 decimal places")
+		case strings.Contains(err.Error(), "outside bounds of int64"):
+			return fmt.Errorf("the provided amount exceeds the maximum supported value")
+		default:
+			return fmt.Errorf("the provided amount is not a valid number")
+		}
 	}
 
-	if value <= 0 {
+	if parsed <= 0 {
 		return fmt.Errorf("the provided amount must be greater than zero")
 	}
 
@@ -222,21 +230,99 @@ func ValidateURLScheme(link string, scheme ...string) error {
 	return nil
 }
 
-// ValidateNoHTML returns an error if the input contains HTML tags, JavaScript schemes, or CSS expressions,
-// as detected by regular expressions, either in encoded or decoded form.
+// ValidateNoHTML errors if the input contains HTML tags, JS schemes, or CSS expressions, encoded or not.
+// Tags are detected with the HTML tokenizer (not a regex) so evasions like <svg/onload=...> are caught.
 func ValidateNoHTML(s string) error {
 	if s == "" {
 		return nil
 	}
 
-	if rxHTMLTag.MatchString(s) || rxJSScheme.MatchString(s) || rxCSSExpr.MatchString(s) {
+	if containsHTMLTag(s) || rxJSScheme.MatchString(s) || rxCSSExpr.MatchString(s) {
 		return errors.New("input contains HTML or active content")
 	}
 
 	unescaped := html.UnescapeString(s)
-	if rxHTMLTag.MatchString(unescaped) || rxJSScheme.MatchString(unescaped) || rxCSSExpr.MatchString(unescaped) {
+	if containsHTMLTag(unescaped) || rxJSScheme.MatchString(unescaped) || rxCSSExpr.MatchString(unescaped) {
 		return errors.New("input contains HTML or active content")
 	}
 
 	return nil
+}
+
+// containsHTMLTag reports whether s contains any HTML tag, using the tokenizer so slash-separated tags
+// like <svg/onload=...> (missed by a regex, but live elements in a browser) are detected.
+func containsHTMLTag(s string) bool {
+	z := html.NewTokenizer(strings.NewReader(s))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return false
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			return true
+		default:
+			// text, comments, doctype — keep scanning
+		}
+	}
+}
+
+// ValidateMessageTemplate rejects anything but literal text and simple field substitutions like {{.OTP}}, so a
+// stored template can't loop or expand without bound at render time (CWE-400). Length and HTML are checked separately.
+func ValidateMessageTemplate(s string) error {
+	// Empty means "use the default"; nothing to render.
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+
+	tmpl, err := template.New("").Parse(s)
+	if err != nil {
+		return fmt.Errorf("message template is not valid: %w", err)
+	}
+	// A {{define}} adds a second named template to the set; only plain substitution templates are allowed.
+	if len(tmpl.Templates()) > 1 {
+		return errors.New("message template may not define nested templates")
+	}
+	if tmpl.Tree == nil || tmpl.Tree.Root == nil {
+		return nil
+	}
+	return validateTemplateNodes(tmpl.Tree.Root)
+}
+
+// validateTemplateNodes allows only text and single-field-substitution actions; every branching node is rejected.
+func validateTemplateNodes(root *parse.ListNode) error {
+	for _, n := range root.Nodes {
+		switch node := n.(type) {
+		case *parse.TextNode:
+			// literal text is inert
+		case *parse.ActionNode:
+			if err := validateActionPipe(node.Pipe); err != nil {
+				return err
+			}
+		default:
+			return errors.New("message template may only contain text and field substitutions like {{.OTP}}")
+		}
+	}
+	return nil
+}
+
+// validateActionPipe permits only {{.Field}} or {{.}}: no declarations, pipelines, or function calls.
+func validateActionPipe(pipe *parse.PipeNode) error {
+	if pipe == nil {
+		return errors.New("message template contains an empty action")
+	}
+	if len(pipe.Decl) > 0 {
+		return errors.New("message template may not declare variables")
+	}
+	if len(pipe.Cmds) != 1 {
+		return errors.New("message template may not use pipelines")
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) != 1 {
+		return errors.New("message template may only substitute a single field, like {{.OTP}}")
+	}
+	switch cmd.Args[0].(type) {
+	case *parse.FieldNode, *parse.DotNode:
+		return nil
+	default:
+		return errors.New("message template may only substitute fields like {{.OTP}}, not function calls or expressions")
+	}
 }

@@ -150,3 +150,18 @@ func Test_generateAWSEmail_success(t *testing.T) {
 	}
 	require.Equal(t, wantEmail, gotEmail)
 }
+
+func Test_generateAWSEmail_escapesUntrustedBodyByType(t *testing.T) {
+	// Untrusted receiver body containing "<html" must be ESCAPED — the old substring fast-path bypass is closed.
+	untrusted := Message{ToEmail: "r@test.com", Title: "t", Type: MessageTypeReceiverOTP, Body: `<html><img src=x onerror=alert(1)>`}
+	got, err := generateAWSEmail(untrusted, "s@test.com")
+	require.NoError(t, err)
+	require.Contains(t, *got.Message.Body.Html.Data, "&lt;html", "untrusted <html body must be escaped")
+	require.NotContains(t, *got.Message.Body.Html.Data, "<img src=x onerror", "no live markup may survive")
+
+	// Trusted staff body (full HTML rendered from an internal template) must pass through UNescaped.
+	trusted := Message{ToEmail: "u@test.com", Title: "t", Type: MessageTypeUserMFA, Body: `<html><body>Your code is 123456</body></html>`}
+	got2, err := generateAWSEmail(trusted, "s@test.com")
+	require.NoError(t, err)
+	require.Equal(t, `<html><body>Your code is 123456</body></html>`, *got2.Message.Body.Html.Data, "trusted staff HTML must be sent as-is")
+}

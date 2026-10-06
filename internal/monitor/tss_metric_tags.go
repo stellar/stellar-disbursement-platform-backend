@@ -72,6 +72,9 @@ const (
 
 func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
 	return []MetricTag{
+		HTTPRequestDurationTag,
+		SuccessfulQueryDurationTag,
+		FailureQueryDurationTag,
 		HorizonErrorCounterTag,
 		TransactionQueuedToCompletedLatencyTag,
 		TransactionStartedToCompletedLatencyTag,

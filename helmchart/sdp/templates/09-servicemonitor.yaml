@@ -1,0 +1,38 @@
+{{- if .Values.serviceMonitor.enabled -}}
+# Prometheus-Operator ServiceMonitor for the SDP and TSS metrics endpoints.
+# Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1) to be installed
+# in the cluster. Many Operator installs restrict discovery to ServiceMonitors that
+# carry a specific release label, so set `serviceMonitor.additionalLabels` accordingly
+# (e.g. `release: kube-prometheus-stack`).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: metrics
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - {{ include "sdp.name" . }}
+          {{- if .Values.tss.enabled }}
+          - {{ include "sdp.name" . }}-tss
+          {{- end }}
+  endpoints:
+    - port: metrics
+      path: {{ .Values.serviceMonitor.path | default "/metrics" }}
+      interval: {{ .Values.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout | default "10s" }}
+      scheme: http
+{{- end }}

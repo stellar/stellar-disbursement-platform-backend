@@ -5,10 +5,10 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: reece@stellar.org
+    email: ${EMAIL}
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
     - dns01:
         route53:
-          region: us-west-2  
+          region: ${AWS_REGION} 
