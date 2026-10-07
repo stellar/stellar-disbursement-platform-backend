@@ -13,6 +13,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+// breakHeaderWords stacks a column header one word per line.
+func breakHeaderWords(s string) string {
+	return strings.ReplaceAll(s, " ", "\n")
+}
+
 func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 	pdf.SetFont("Inter", "emi", tableHeaderSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
@@ -40,7 +45,7 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 			pdf.SetXY(xPos+cellPaddingX, yStart)
 			pdf.CellFormat(textW, txHeaderRowHeight, h.text, "", 0, h.align, false, 0, "")
 		} else {
-			lines := strings.Split(shared.BreakHeaderWords(h.text), "\n")
+			lines := strings.Split(breakHeaderWords(h.text), "\n")
 			blockHeight := txHeaderLineHeight * float64(len(lines))
 			lineY := yStart + (txHeaderRowHeight-blockHeight)/2
 			for _, line := range lines {
