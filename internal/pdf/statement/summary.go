@@ -7,7 +7,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func drawSummaryTable(pdf *gofpdf.Fpdf, result *services.StatementResult) {
@@ -82,16 +81,16 @@ func drawSummaryTable(pdf *gofpdf.Fpdf, result *services.StatementResult) {
 			var text string
 			switch i {
 			case 0:
-				text = utils.FormatAmountTo2Decimals(asset.BeginningBalance)
+				text = shared.FormatAmountTo2Decimals(asset.BeginningBalance)
 				if !asset.Reconciled {
 					text = "not reconciled"
 				}
 			case 1:
-				text = utils.FormatAmountTo2Decimals(asset.TotalCredits)
+				text = shared.FormatAmountTo2Decimals(asset.TotalCredits)
 			case 2:
-				text = utils.FormatAmountTo2Decimals(asset.TotalDebits)
+				text = shared.FormatAmountTo2Decimals(asset.TotalDebits)
 			case 3:
-				text = utils.FormatAmountTo2Decimals(asset.EndingBalance)
+				text = shared.FormatAmountTo2Decimals(asset.EndingBalance)
 			}
 			if i < 3 {
 				pdf.SetFont("Inter", "", bodyFontSize)

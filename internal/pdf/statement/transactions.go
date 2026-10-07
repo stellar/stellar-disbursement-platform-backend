@@ -112,7 +112,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		// If amount parsing fails, use zero as fallback
 		amount = decimal.Zero
 	}
-	amountStr := utils.FormatAmountTo2Decimals(tx.Amount)
+	amountStr := shared.FormatAmountTo2Decimals(tx.Amount)
 	if tx.Type == "debit" {
 		debitsAmount = amountStr
 		runningBalance = runningBalance.Sub(amount)
@@ -120,7 +120,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 		creditsAmount = amountStr
 		runningBalance = runningBalance.Add(amount)
 	}
-	balanceAmountStr := utils.FormatDecimal(runningBalance)
+	balanceAmountStr := shared.FormatDecimal(runningBalance)
 
 	pdf.SetDrawColor(defaultBorderColor[0], defaultBorderColor[1], defaultBorderColor[2])
 	pdf.SetLineWidth(0.26)
@@ -291,9 +291,9 @@ func drawTotalsRowForAsset(pdf *gofpdf.Fpdf, asset *services.StatementAssetSumma
 	xCredits := xDebits + txColWidths[3]
 	xBalance := xCredits + txColWidths[4]
 
-	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalDebits), asset.Code, "T", true, amountCellOpts{forTotals: true}})
-	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.TotalCredits), asset.Code, "T", true, amountCellOpts{forTotals: true}})
-	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, utils.FormatAmountTo2Decimals(asset.EndingBalance), asset.Code, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}})
+	drawAmountWithCurrency(pdf, amountCellArgs{xDebits, yStart, txColWidths[3], txDataRowHeight, shared.FormatAmountTo2Decimals(asset.TotalDebits), asset.Code, "T", true, amountCellOpts{forTotals: true}})
+	drawAmountWithCurrency(pdf, amountCellArgs{xCredits, yStart, txColWidths[4], txDataRowHeight, shared.FormatAmountTo2Decimals(asset.TotalCredits), asset.Code, "T", true, amountCellOpts{forTotals: true}})
+	drawAmountWithCurrency(pdf, amountCellArgs{xBalance, yStart, txColWidths[5], txDataRowHeight, shared.FormatAmountTo2Decimals(asset.EndingBalance), asset.Code, "T", true, amountCellOpts{forTotals: true, amountColor: activeColor}})
 
 	pdf.SetXY(xRowStart, yStart+txDataRowHeight)
 	pdf.SetLineWidth(0.25)

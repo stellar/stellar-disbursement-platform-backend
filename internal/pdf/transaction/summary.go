@@ -4,7 +4,7 @@ import (
 	"github.com/jung-kurt/gofpdf/v2"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 )
 
 func drawSummaryTable(pdf *gofpdf.Fpdf, payment *data.Payment) {
@@ -56,7 +56,7 @@ func drawSummaryTable(pdf *gofpdf.Fpdf, payment *data.Payment) {
 	}
 	ySummaryData := pdf.GetY()
 
-	amountStr := utils.FormatAmountTo2Decimals(payment.Amount)
+	amountStr := shared.FormatAmountTo2Decimals(payment.Amount)
 	currencyCode := payment.Asset.Code
 	statusStr := string(payment.Status)
 	externalPaymentID := payment.ExternalPaymentID
