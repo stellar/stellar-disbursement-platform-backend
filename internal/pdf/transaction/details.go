@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"github.com/jung-kurt/gofpdf/v2"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -105,6 +106,11 @@ func detailRows(payment *data.Payment, enrichment *Enrichment) (left, right []de
 		{"Recipient Org ID", orDash(recipientOrgID(payment)), false},
 		{"Recipient Wallet Address", orDash(recipientWalletAddress(payment)), true},
 		{"Wallet Provider", orDash(walletProvider(payment)), false},
+	}
+	for _, rows := range [][]detailRow{left, right} {
+		for i := range rows {
+			rows[i].value = shared.PrintableText(rows[i].value)
+		}
 	}
 	return left, right
 }

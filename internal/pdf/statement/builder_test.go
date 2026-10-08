@@ -22,6 +22,8 @@ func TestBuildPDF(t *testing.T) {
 	statement := func(account string, assets ...services.StatementAssetSummary) *services.StatementResult {
 		return &services.StatementResult{Summary: services.StatementSummary{Account: account, AccountName: "Main account", Assets: assets}}
 	}
+	emojiCredit := credit
+	emojiCredit.CounterpartyName = "Donor 🌸"
 	notReconciled := xlm("0.0000000", credit)
 	notReconciled.Reconciled = false
 
@@ -29,6 +31,7 @@ func TestBuildPDF(t *testing.T) {
 		name   string
 		result *services.StatementResult
 		logo   []byte
+		org    string
 	}{
 		{name: "credit and debit rows", result: statement("GABC", xlm("0.0000000", credit, debit))},
 		{name: "no transactions", result: statement("GABC", xlm("0.0000000"))},
@@ -37,11 +40,16 @@ func TestBuildPDF(t *testing.T) {
 		{name: "unparseable beginning balance still renders", result: statement("GABC", xlm("invalid-balance", credit))},
 		{name: "not reconciled", result: statement("GABC", notReconciled)},
 		{name: "organization logo", result: statement("GABC", xlm("0.0000000")), logo: []byte{0x89, 0x50, 0x4E, 0x47}},
+		{name: "emoji in names", result: statement("GABC", xlm("0.0000000", emojiCredit)), org: "Stellar Aid 🚀"},
 	}
 	from, to := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pdfBytes, err := BuildPDF(tc.result, from, to, "Test Organization", tc.logo, "example.com", "https://stellar.expert/explorer/testnet/")
+			org := tc.org
+			if org == "" {
+				org = "Test Organization"
+			}
+			pdfBytes, err := BuildPDF(tc.result, from, to, org, tc.logo, "example.com", "https://stellar.expert/explorer/testnet/")
 			require.NoError(t, err)
 			assert.Greater(t, len(pdfBytes), 1000)
 		})

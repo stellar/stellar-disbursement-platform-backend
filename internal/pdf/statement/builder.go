@@ -170,5 +170,5 @@ func accountSubtitle(accountName string) string {
 	if accountName == "" {
 		return ""
 	}
-	return "Distribution account: " + accountName
+	return "Distribution account: " + shared.PrintableText(accountName)
 }

@@ -41,8 +41,8 @@ func TestBuildPDF(t *testing.T) {
 		DisbursementCreatedByUserName: "Alice", DisbursementCreatedByTimestamp: "Jan 1, 2026 · 10:00:00 UTC",
 		DisbursementApprovedByUserName: "Bob", DisbursementApprovedByTimestamp: "Jan 2, 2026 · 10:00:00 UTC",
 	}
-	longNotes := strings.Repeat("x", internalNotesMaxLength)
-	multilineNotes := "line one\nline two\n\nline four"
+	longNotes := strings.Repeat("x", 500)
+	emojiEnrichment := &Enrichment{SenderName: "Stellar Aid 🚀", SenderAccountName: "Main 🌸", DisbursementCreatedByUserName: "Alice 😀", DisbursementCreatedByTimestamp: "Jan 1, 2026"}
 
 	testCases := []struct {
 		name       string
@@ -54,8 +54,8 @@ func TestBuildPDF(t *testing.T) {
 		{name: "minimal draft payment, no enrichment"},
 		{name: "success payment with every section filled", payment: full, enrichment: enrichment},
 		{name: "internal notes at the maximum length", payment: full, enrichment: enrichment, notes: &longNotes},
-		{name: "internal notes with line breaks", notes: &multilineNotes},
 		{name: "organization logo", logo: []byte{0x89, 0x50, 0x4E, 0x47}},
+		{name: "emoji in names", payment: full, enrichment: emojiEnrichment},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

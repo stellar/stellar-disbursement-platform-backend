@@ -3,6 +3,8 @@ package transaction
 import (
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
+
 	"github.com/jung-kurt/gofpdf/v2"
 )
 
@@ -21,13 +23,6 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 		return
 	}
 	notes := strings.TrimSpace(internalNotes)
-	if notes == "" {
-		return
-	}
-	if len(notes) > internalNotesMaxLength {
-		notes = notes[:internalNotesMaxLength]
-	}
-	notes = strings.TrimSpace(notes)
 	if notes == "" {
 		return
 	}
@@ -77,12 +72,12 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 	pdf.SetFont("Inter", "", bodyFontSize)
 }
 
-// splitNoteIntoLines splits the note into display lines, respecting explicit newlines and wrapping to textWidth.
+// splitNoteIntoLines splits the note into display lines: explicit newlines first, then wrapping to textWidth.
 func splitNoteIntoLines(pdf *gofpdf.Fpdf, notes string, textWidth float64) []string {
 	paragraphs := strings.Split(notes, "\n")
 	var lines []string
 	for _, para := range paragraphs {
-		para = strings.TrimSpace(para)
+		para = strings.TrimSpace(shared.PrintableText(para))
 		if para == "" {
 			continue
 		}

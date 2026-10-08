@@ -76,7 +76,6 @@ const (
 
 // Internal notes
 const (
-	internalNotesMaxLength     = 500
 	internalNotesCornerRadius  = 1.5
 	internalNotesMarginBottom  = 3.0
 	internalNotesSmallFontSize = 7.0

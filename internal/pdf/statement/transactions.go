@@ -85,7 +85,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	opID := tx.ID
 
 	walletAddr := utils.TruncateString(tx.CounterpartyAddress, 5)
-	name := tx.CounterpartyName
+	name := shared.PrintableText(tx.CounterpartyName)
 	hasName := name != ""
 	var line2Label, line2Value string
 	if hasName {
@@ -167,7 +167,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	if tx.ExternalPaymentID != "" {
 		pdf.SetFont("Inter", "", txSmallFontSize)
 		pdf.SetXY(xID+cellPaddingX, blockY+idBlockHeight)
-		pdf.CellFormat(cellWidth, txIDLineHeight, tx.ExternalPaymentID, "", 0, "L", false, 0, "")
+		pdf.CellFormat(cellWidth, txIDLineHeight, shared.PrintableText(tx.ExternalPaymentID), "", 0, "L", false, 0, "")
 	}
 	pdf.SetY(yStart)
 	pdf.SetTextColor(defaultCellColor[0], defaultCellColor[1], defaultCellColor[2])

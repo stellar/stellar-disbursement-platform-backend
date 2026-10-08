@@ -79,6 +79,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 
 	yLeftBottom := yStart
 	var logoWidth float64
+	orgName := strings.ToUpper(PrintableText(params.OrganizationName))
 
 	if len(params.OrganizationLogo) > 0 {
 		imgName, imgInfo := registerLogoImage(pdf, params.OrganizationLogo)
@@ -110,7 +111,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 				pdf.SetFont("Inter", "B", layout.OrganizationNameFontSize)
 				pdf.SetTextColor(layout.HighlightColor[0], layout.HighlightColor[1], layout.HighlightColor[2])
 				pdf.SetXY(col2X, yStart)
-				pdf.CellFormat(col2Width, layout.HeaderLeftColLineHeight, strings.ToUpper(params.OrganizationName), "", 0, "L", false, 0, "")
+				pdf.CellFormat(col2Width, layout.HeaderLeftColLineHeight, orgName, "", 0, "L", false, 0, "")
 			}
 			yLine2 := yStart + layout.HeaderLeftColLineHeight
 			pdf.SetFont("Inter", "", layout.OrganizationNameFontSize)
@@ -137,7 +138,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 			pdf.SetFont("Inter", "B", layout.OrganizationNameFontSize)
 			pdf.SetTextColor(layout.HighlightColor[0], layout.HighlightColor[1], layout.HighlightColor[2])
 			pdf.SetXY(xLeft, yLeftBottom)
-			pdf.CellFormat(halfWidth, layout.HeaderLeftColLineHeight, strings.ToUpper(params.OrganizationName), "", 0, "L", false, 0, "")
+			pdf.CellFormat(halfWidth, layout.HeaderLeftColLineHeight, orgName, "", 0, "L", false, 0, "")
 			yLeftBottom += layout.HeaderLeftColLineHeight
 		}
 	}

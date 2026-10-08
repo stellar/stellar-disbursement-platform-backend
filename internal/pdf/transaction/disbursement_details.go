@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"github.com/jung-kurt/gofpdf/v2"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
@@ -66,15 +67,15 @@ func drawDisbursementDetailsSection(pdf *gofpdf.Fpdf, payment *data.Payment, enr
 	yCreated := yStart + block1Height
 	var createdByName, createdByTS, approvedByName, approvedByTS string
 	if enrichment != nil {
-		createdByName = enrichment.DisbursementCreatedByUserName
+		createdByName = shared.PrintableText(enrichment.DisbursementCreatedByUserName)
 		createdByTS = enrichment.DisbursementCreatedByTimestamp
-		approvedByName = enrichment.DisbursementApprovedByUserName
+		approvedByName = shared.PrintableText(enrichment.DisbursementApprovedByUserName)
 		approvedByTS = enrichment.DisbursementApprovedByTimestamp
 	}
 	drawDisbursementDetailCreatedApprovedAt(pdf, xLeft, yCreated, "Created by", createdByName, createdByTS)
 
 	// Column 2: Disbursement Name, Approved by
-	drawDisbursementDetailRowAt(pdf, xRight, yStart, "Disbursement Name", d.Name)
+	drawDisbursementDetailRowAt(pdf, xRight, yStart, "Disbursement Name", shared.PrintableText(d.Name))
 	drawDisbursementDetailCreatedApprovedAt(pdf, xRight, yCreated, "Approved by", approvedByName, approvedByTS)
 
 	pdf.SetTextColor(0, 0, 0)
