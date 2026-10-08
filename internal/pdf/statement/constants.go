@@ -66,7 +66,7 @@ const (
 	headerSeparatorLineWidth        = 0.26
 	headerLogoToOrgNameGap          = 3.0
 	logoOffsetX                     = 1.0
-	walletAddressLabelGap           = 0.3
+	accountAddressLabelGap          = 0.3
 )
 
 // Title section spacing

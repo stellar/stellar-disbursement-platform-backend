@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Add Reports: a per-distribution-account wallet statement PDF (`GET /reports/statement`) and a per-payment transaction notice PDF (`GET /reports/payment/{id}`). [#PR](https://github.com/stellar/stellar-disbursement-platform-backend/pull/PR)
+- Add Reports: a per-distribution account statement PDF (`GET /reports/statement`) and a per-payment transaction notice PDF (`GET /reports/payment/{id}`). [#PR](https://github.com/stellar/stellar-disbursement-platform-backend/pull/PR)
 
 ### Changed
 

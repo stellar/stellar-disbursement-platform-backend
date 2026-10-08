@@ -185,7 +185,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 
 	if tx.Type == "credit" {
 		pdf.SetTextColor(noteColor[0], noteColor[1], noteColor[2])
-		line1Text := "Sender Wallet Address •"
+		line1Text := "Sender Account Address •"
 		pdf.SetXY(xTextStart, counterpartyY)
 		pdf.CellFormat(cpW, counterpartyLineHeight, line1Text, "", 0, "L", false, 0, "")
 

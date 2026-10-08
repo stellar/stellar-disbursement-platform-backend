@@ -63,7 +63,7 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 			TitleValue: payment.StellarTransactionID,
 			TitleURL:   titleURL,
 		},
-		WalletAccount:        "",
+		AccountAddress:       "",
 		StellarExpertBaseURL: stellarExpertBaseURL,
 		OperatedByBaseURL:    operatedByBaseURL,
 	})
@@ -110,7 +110,7 @@ func transactionHeaderLayout() *shared.HeaderLayout {
 		TitleFontSize:            titleFontSize,
 		HeaderLogoToOrgNameGap:   headerLogoToOrgNameGap,
 		LogoOffsetX:              logoOffsetX,
-		WalletAddressLabelGap:    walletAddressLabelGap,
+		AccountAddressLabelGap:   accountAddressLabelGap,
 		DefaultCellColor:         defaultCellColor,
 		HighlightColor:           highlightColor,
 		NoteColor:                noteColor,

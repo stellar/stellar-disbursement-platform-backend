@@ -33,7 +33,7 @@ type HeaderLayout struct {
 	TitleFontSize            float64
 	HeaderLogoToOrgNameGap   float64
 	LogoOffsetX              float64
-	WalletAddressLabelGap    float64
+	AccountAddressLabelGap   float64
 	DefaultCellColor         []int
 	HighlightColor           []int
 	NoteColor                []int
@@ -57,17 +57,17 @@ type TitleSection struct {
 
 // HeaderParams holds data and mode for the header.
 type HeaderParams struct {
-	OrganizationName     string
-	OrganizationLogo     []byte
-	StatementPeriod      *StatementPeriod
-	TitleSection         *TitleSection
-	WalletAccount        string
-	WalletAccountDisplay string // optional truncated display for mini header; if empty use WalletAccount
-	StellarExpertBaseURL string
-	OperatedByBaseURL    string
+	OrganizationName      string
+	OrganizationLogo      []byte
+	StatementPeriod       *StatementPeriod
+	TitleSection          *TitleSection
+	AccountAddress        string
+	AccountAddressDisplay string // optional truncated display for mini header; if empty use AccountAddress
+	StellarExpertBaseURL  string
+	OperatedByBaseURL     string
 }
 
-// DrawHeader draws the full header: logo + left column (org name; if WalletAccount set, add wallet address line);
+// DrawHeader draws the full header: logo + left column (org name; if AccountAddress set, add account address line);
 // right column ("Generated on"; if StatementPeriod set, add "Statement Period" + dates);
 // if TitleSection set, draw REPORT + Title + label/value (underlined+link when TitleURL set); does not draw separator.
 func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
@@ -94,17 +94,17 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 		}
 	}
 
-	if params.WalletAccount != "" {
-		// Mini header: left column has logo, then org name + "Wallet Address: " + link
+	if params.AccountAddress != "" {
+		// Mini header: left column has logo, then org name + "Account Address: " + link
 		col2X := xLeft + logoWidth + layout.HeaderLogoToOrgNameGap
 		col2Width := halfWidth - logoWidth - layout.HeaderLogoToOrgNameGap
 		if col2Width > 0 {
-			walletAddr := strings.TrimPrefix(params.WalletAccount, "stellar:")
-			displayAddr := params.WalletAccountDisplay
+			accountAddr := strings.TrimPrefix(params.AccountAddress, "stellar:")
+			displayAddr := params.AccountAddressDisplay
 			if displayAddr == "" {
-				displayAddr = walletAddr
+				displayAddr = accountAddr
 			}
-			walletURL := fmt.Sprintf("%saccount/%s", params.StellarExpertBaseURL, walletAddr)
+			accountURL := fmt.Sprintf("%saccount/%s", params.StellarExpertBaseURL, accountAddr)
 
 			if params.OrganizationName != "" {
 				pdf.SetFont("Inter", "B", layout.OrganizationNameFontSize)
@@ -115,17 +115,17 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 			yLine2 := yStart + layout.HeaderLeftColLineHeight
 			pdf.SetFont("Inter", "", layout.OrganizationNameFontSize)
 			pdf.SetTextColor(layout.NoteColor[0], layout.NoteColor[1], layout.NoteColor[2])
-			labelText := "Wallet Address: "
+			labelText := "Account Address: "
 			labelWidth := pdf.GetStringWidth(labelText)
 			pdf.SetXY(col2X, yLine2)
 			pdf.CellFormat(labelWidth, layout.TitleSectionLine3Height, labelText, "", 0, "L", false, 0, "")
-			xValueStart := col2X + labelWidth + layout.WalletAddressLabelGap
+			xValueStart := col2X + labelWidth + layout.AccountAddressLabelGap
 			pdf.SetFont("GoogleSansCode", "U", layout.OrganizationNameFontSize)
 			pdf.SetTextColor(layout.DefaultCellColor[0], layout.DefaultCellColor[1], layout.DefaultCellColor[2])
 			displayWidth := pdf.GetStringWidth(displayAddr)
 			pdf.SetXY(xValueStart, yLine2)
-			pdf.CellFormat(displayWidth, layout.TitleSectionLine3Height, displayAddr, "", 0, "L", false, 0, walletURL)
-			pdf.LinkString(xValueStart, yLine2, displayWidth, layout.TitleSectionLine3Height, walletURL)
+			pdf.CellFormat(displayWidth, layout.TitleSectionLine3Height, displayAddr, "", 0, "L", false, 0, accountURL)
+			pdf.LinkString(xValueStart, yLine2, displayWidth, layout.TitleSectionLine3Height, accountURL)
 			textBlockBottom := yLine2 + layout.TitleSectionLine3Height
 			if textBlockBottom > yLeftBottom {
 				yLeftBottom = textBlockBottom
@@ -179,7 +179,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 	pdf.SetXY(xLeft, yLeftBottom)
 
 	headerBottom := layout.HeaderBottomMargin
-	if params.WalletAccount != "" {
+	if params.AccountAddress != "" {
 		headerBottom = layout.MiniHeaderBottomMargin
 	}
 	pdf.Ln(headerBottom)
@@ -208,7 +208,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 		xLabelStart := pdf.GetX()
 		pdf.SetXY(xLabelStart, yTitleLine)
 		pdf.CellFormat(labelWidth, layout.TitleSectionLine3Height, ts.TitleLabel, "", 0, "L", false, 0, "")
-		xValueStart := xLabelStart + labelWidth + layout.WalletAddressLabelGap
+		xValueStart := xLabelStart + labelWidth + layout.AccountAddressLabelGap
 		if ts.TitleURL != "" {
 			pdf.SetFont("GoogleSansCode", "U", layout.OrganizationNameFontSize)
 			valueWidth := pdf.GetStringWidth(ts.TitleValue)

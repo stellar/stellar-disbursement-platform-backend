@@ -145,11 +145,11 @@ func TestDetailRows(t *testing.T) {
 		}
 		return out
 	}
-	enrichment := &Enrichment{SenderName: "redcorp", SenderAccountName: "Main account", SenderWalletAddress: "GABC"}
+	enrichment := &Enrichment{SenderName: "redcorp", SenderAccountName: "Main account", SenderAccountAddress: "GABC"}
 
 	t.Run("stellar payment: no Circle rows", func(t *testing.T) {
 		left, right := detailRows(&data.Payment{}, enrichment)
-		assert.Equal(t, []string{"Sender Name", "Distribution Account", "Sender Wallet Address", "Fee Charged"}, labels(left))
+		assert.Equal(t, []string{"Sender Name", "Distribution Account", "Sender Account Address", "Fee Charged"}, labels(left))
 		assert.Equal(t, "Main account", left[1].value)
 		assert.Equal(t, []string{"Recipient Org ID", "Recipient Wallet Address", "Wallet Provider"}, labels(right))
 	})

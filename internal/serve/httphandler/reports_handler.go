@@ -252,9 +252,9 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		httperror.InternalError(ctx, "Cannot retrieve payment source account", err, nil).Render(w)
 		return
 	}
-	senderWalletAddress := payment.SenderAddress
-	if senderWalletAddress == "" && sourceWallet.Address != nil {
-		senderWalletAddress = *sourceWallet.Address
+	senderAccountAddress := payment.SenderAddress
+	if senderAccountAddress == "" && sourceWallet.Address != nil {
+		senderAccountAddress = *sourceWallet.Address
 	}
 
 	var feeCharged string
@@ -282,7 +282,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 	enrichment := &transaction.Enrichment{
 		SenderName:           orgName,
 		SenderAccountName:    sourceWallet.Name,
-		SenderWalletAddress:  senderWalletAddress,
+		SenderAccountAddress: senderAccountAddress,
 		FeeCharged:           feeCharged,
 		MemoText:             memoText,
 		StellarExpertBaseURL: h.StellarExpertBaseURL,

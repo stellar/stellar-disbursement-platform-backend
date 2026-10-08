@@ -36,7 +36,7 @@ func TestBuildPDF(t *testing.T) {
 		CircleTransactionID: utils.Ptr("payout-1"), CircleTransactionType: &payoutType,
 	}
 	enrichment := &Enrichment{
-		SenderName: "Sender Org", SenderAccountName: "Main account", SenderWalletAddress: "GSENDER1234567890ABCDEF1234567890ABCDEF12",
+		SenderName: "Sender Org", SenderAccountName: "Main account", SenderAccountAddress: "GSENDER1234567890ABCDEF1234567890ABCDEF12",
 		FeeCharged: "0.00001 XLM", MemoText: "horizon-memo", StellarExpertBaseURL: "https://stellar.expert/explorer/testnet/",
 		DisbursementCreatedByUserName: "Alice", DisbursementCreatedByTimestamp: "Jan 1, 2026 · 10:00:00 UTC",
 		DisbursementApprovedByUserName: "Bob", DisbursementApprovedByTimestamp: "Jan 2, 2026 · 10:00:00 UTC",

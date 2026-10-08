@@ -50,23 +50,23 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	pdfDoc.AddPage()
 
 	headerLayout := statementHeaderLayout()
-	walletAccount := result.Summary.Account
-	walletAddr := strings.TrimPrefix(walletAccount, "stellar:")
-	walletURL := fmt.Sprintf("%saccount/%s", stellarExpertBaseURL, walletAddr)
+	account := result.Summary.Account
+	accountAddr := strings.TrimPrefix(account, "stellar:")
+	accountURL := fmt.Sprintf("%saccount/%s", stellarExpertBaseURL, accountAddr)
 
-	// First page header with title section (Wallet Statement + Wallet Address link)
+	// First page header with title section (Account Statement + Account Address link)
 	shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
 		OrganizationName: organizationName,
 		OrganizationLogo: organizationLogo,
 		StatementPeriod:  &shared.StatementPeriod{From: fromDate, To: toDate},
 		TitleSection: &shared.TitleSection{
-			Title:      "Wallet Statement",
+			Title:      "Account Statement",
 			Subtitle:   accountSubtitle(result.Summary.AccountName),
-			TitleLabel: "Wallet Address: ",
-			TitleValue: walletAddr,
-			TitleURL:   walletURL,
+			TitleLabel: "Account Address: ",
+			TitleValue: accountAddr,
+			TitleURL:   accountURL,
 		},
-		WalletAccount:        "",
+		AccountAddress:       "",
 		StellarExpertBaseURL: stellarExpertBaseURL,
 		OperatedByBaseURL:    operatedByBaseURL,
 	})
@@ -96,14 +96,14 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 				pdfDoc.AddPage()
 				if pdfDoc.PageNo() > 1 {
 					shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-						OrganizationName:     organizationName,
-						OrganizationLogo:     organizationLogo,
-						StatementPeriod:      &shared.StatementPeriod{From: fromDate, To: toDate},
-						TitleSection:         nil,
-						WalletAccount:        walletAccount,
-						WalletAccountDisplay: utils.TruncateString(walletAddr, 5),
-						StellarExpertBaseURL: stellarExpertBaseURL,
-						OperatedByBaseURL:    operatedByBaseURL,
+						OrganizationName:      organizationName,
+						OrganizationLogo:      organizationLogo,
+						StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
+						TitleSection:          nil,
+						AccountAddress:        account,
+						AccountAddressDisplay: utils.TruncateString(accountAddr, 5),
+						StellarExpertBaseURL:  stellarExpertBaseURL,
+						OperatedByBaseURL:     operatedByBaseURL,
 					})
 					shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
 				}
@@ -115,14 +115,14 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 			pdfDoc.AddPage()
 			if pdfDoc.PageNo() > 1 {
 				shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-					OrganizationName:     organizationName,
-					OrganizationLogo:     organizationLogo,
-					StatementPeriod:      &shared.StatementPeriod{From: fromDate, To: toDate},
-					TitleSection:         nil,
-					WalletAccount:        walletAccount,
-					WalletAccountDisplay: utils.TruncateString(walletAddr, 5),
-					StellarExpertBaseURL: stellarExpertBaseURL,
-					OperatedByBaseURL:    operatedByBaseURL,
+					OrganizationName:      organizationName,
+					OrganizationLogo:      organizationLogo,
+					StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
+					TitleSection:          nil,
+					AccountAddress:        account,
+					AccountAddressDisplay: utils.TruncateString(accountAddr, 5),
+					StellarExpertBaseURL:  stellarExpertBaseURL,
+					OperatedByBaseURL:     operatedByBaseURL,
 				})
 				shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
 			}
@@ -158,7 +158,7 @@ func statementHeaderLayout() *shared.HeaderLayout {
 		TitleFontSize:            titleFontSize,
 		HeaderLogoToOrgNameGap:   headerLogoToOrgNameGap,
 		LogoOffsetX:              logoOffsetX,
-		WalletAddressLabelGap:    walletAddressLabelGap,
+		AccountAddressLabelGap:   accountAddressLabelGap,
 		DefaultCellColor:         defaultCellColor,
 		HighlightColor:           highlightColor,
 		NoteColor:                noteColor,

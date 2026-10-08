@@ -12,12 +12,12 @@ const (
 	memoMaxChars            = 77
 )
 
-// Enrichment holds fields not on the payment entity (sender name, sender wallet address, fee charged),
+// Enrichment holds fields not on the payment entity (sender name, sender account address, fee charged),
 // Stellar Expert base URL for wallet links, and optional disbursement Created by / Approved by.
 type Enrichment struct {
 	SenderName                      string
 	SenderAccountName               string
-	SenderWalletAddress             string
+	SenderAccountAddress            string
 	FeeCharged                      string
 	MemoText                        string
 	StellarExpertBaseURL            string
@@ -73,18 +73,18 @@ type detailRow struct {
 // detailRows lays out the two columns of the Transaction Details section. Circle rows appear only
 // for payments that went through Circle.
 func detailRows(payment *data.Payment, enrichment *Enrichment) (left, right []detailRow) {
-	var senderName, senderAccountName, senderWalletAddr, feeCharged string
+	var senderName, senderAccountName, senderAccountAddr, feeCharged string
 	if enrichment != nil {
 		senderName = enrichment.SenderName
 		senderAccountName = enrichment.SenderAccountName
-		senderWalletAddr = enrichment.SenderWalletAddress
+		senderAccountAddr = enrichment.SenderAccountAddress
 		feeCharged = enrichment.FeeCharged
 	}
 
 	left = []detailRow{
 		{"Sender Name", orDash(senderName), false},
 		{"Distribution Account", orDash(senderAccountName), false},
-		{"Sender Wallet Address", orDash(senderWalletAddr), true},
+		{"Sender Account Address", orDash(senderAccountAddr), true},
 	}
 	if memoValue := memoForDisplay(payment, enrichment); memoValue != "" {
 		left = append(left, detailRow{"MEMO (Text)", orDash(utils.TruncateToMaxLength(memoValue, memoMaxChars)), false})
