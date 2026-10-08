@@ -46,9 +46,8 @@ type ReportsHandler struct {
 	StellarExpertBaseURL string
 }
 
-// GetStatementExport returns the statement PDF for one distribution account: the one named by
-// X-Wallet-Id, or the only account the caller can see. Reads follow the membership taxonomy, so an
-// account outside the caller's scope is a 404.
+// GetStatementExport returns the statement PDF for the account named by X-Wallet-Id, or the only account the caller can see.
+// An account outside the caller's read scope is a 404, like every other read.
 func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -115,9 +114,8 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// resolveStatementWallet picks the account a statement is for. X-Wallet-Id selects within the
-// caller's read scope (404 outside it, like every other read); without the header the only visible
-// account is used, so single-account tenants and single-account API keys need no header.
+// resolveStatementWallet picks the statement's account: X-Wallet-Id within the caller's read scope (404 outside it),
+// else the only visible account, so single-account tenants and single-account API keys need no header.
 func (h ReportsHandler) resolveStatementWallet(ctx context.Context, r *http.Request) (*data.DistributionWallet, *httperror.HTTPError) {
 	scope, scopeErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
 	if scopeErr != nil {
@@ -177,9 +175,8 @@ func filenameToken(name string) string {
 
 var nonFilenameChars = regexp.MustCompile(`[^a-z0-9]+`)
 
-// statementAccount is the on-chain identity a statement is read for. Only accounts the SDP holds
-// on the Stellar network qualify: a Circle account has no ledger history, and the shared host
-// account's history is not this tenant's.
+// statementAccount is the ledger account a statement is read for. Only accounts the SDP holds on Stellar qualify:
+// a Circle account has no ledger history, and the shared host account's history is not this tenant's.
 func statementAccount(wallet *data.DistributionWallet) (schema.TransactionAccount, *httperror.HTTPError) {
 	switch {
 	case wallet.AccountType == schema.DistributionAccountStellarEnv:

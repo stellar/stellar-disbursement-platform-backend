@@ -68,8 +68,7 @@ func ensureReceiverInScope(ctx context.Context, authManager auth.AuthManager, mo
 }
 
 // ensurePaymentInReadScope gates a single-payment read on the caller's wallet scope. Outside it the
-// answer is 404, never 403 — existence is not disclosed, matching GetReceiver. payment.SourceWalletID
-// is the payment's own persisted source wallet (non-empty for disbursement and direct payments).
+// answer is 404, never 403 — existence is not disclosed, matching GetReceiver.
 func ensurePaymentInReadScope(ctx context.Context, authManager auth.AuthManager, models *data.Models, payment *data.Payment) *httperror.HTTPError {
 	scope, scopeErr := resolveWalletReadScope(ctx, authManager, models)
 	if scopeErr != nil {

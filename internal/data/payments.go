@@ -265,9 +265,7 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 	return &payments[0], nil
 }
 
-// GetSuccessfulByStellarTransaction returns the SUCCESS payment walletID sent in the given Stellar
-// transaction, preferring the operation that matches operationID when the transaction carried
-// several. The receiver's external_id rides along for statement labelling.
+// GetSuccessfulByStellarTransaction returns walletID's SUCCESS payment in the transaction, preferring the one matching operationID.
 func (p *PaymentModel) GetSuccessfulByStellarTransaction(ctx context.Context, sqlExec db.SQLExecuter, walletID, txHash, operationID string) (*Payment, error) {
 	if walletID == "" || txHash == "" {
 		return nil, ErrRecordNotFound

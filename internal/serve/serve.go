@@ -1095,8 +1095,7 @@ func staticFileServer(r chi.Router, fileSystem fs.FS) {
 	})
 }
 
-// stellarExpertBaseURL is the explorer the report PDFs link to: the configured one, else the
-// network's own. Always with a trailing slash, which is how the PDF code joins paths onto it.
+// stellarExpertBaseURL returns the explorer base URL the report PDFs link to, with a trailing slash.
 func (opts ServeOptions) stellarExpertBaseURL() string {
 	u := strings.TrimRight(opts.StellarExpertURL, "/")
 	if u == "" {
