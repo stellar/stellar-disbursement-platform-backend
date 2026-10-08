@@ -6,7 +6,7 @@ const (
 	pageHeight   = 297.0
 	marginLR     = 15.0
 	marginTop    = 15.0
-	marginBottom = 29.0 // the statement footer carries a two-line disclaimer note
+	marginBottom = 25.0
 )
 
 // Font sizes

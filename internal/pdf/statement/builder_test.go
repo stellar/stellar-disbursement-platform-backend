@@ -24,8 +24,6 @@ func TestBuildPDF(t *testing.T) {
 	}
 	notReconciled := xlm("0.0000000", credit)
 	notReconciled.Reconciled = false
-	truncated := xlm("0.0000000", credit, debit)
-	truncated.Truncated = true
 
 	testCases := []struct {
 		name   string
@@ -38,7 +36,6 @@ func TestBuildPDF(t *testing.T) {
 		{name: "stellar: prefix on the account", result: statement("stellar:GABC", xlm("0.0000000", credit))},
 		{name: "unparseable beginning balance still renders", result: statement("GABC", xlm("invalid-balance", credit))},
 		{name: "not reconciled", result: statement("GABC", notReconciled)},
-		{name: "truncated history note", result: statement("GABC", truncated)},
 		{name: "organization logo", result: statement("GABC", xlm("0.0000000")), logo: []byte{0x89, 0x50, 0x4E, 0x47}},
 	}
 	from, to := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)

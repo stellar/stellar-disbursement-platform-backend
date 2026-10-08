@@ -44,7 +44,6 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		DefaultBorderColor:        defaultBorderColor,
 		HeaderSeparatorLineWidth:  headerSeparatorLineWidth,
 		OperatedByBaseURL:         operatedByBaseURL,
-		DisclaimerNote:            disclaimerNote(result),
 	}
 	shared.SetupFooter(pdfDoc, footerConfig)
 	pdfDoc.AddPage()
@@ -172,18 +171,4 @@ func accountSubtitle(accountName string) string {
 		return ""
 	}
 	return "Distribution account: " + accountName
-}
-
-const (
-	balancesNote   = "Balances are derived from the payments shown; other ledger activity is not included."
-	truncationNote = " Older ledger history was not read, so totals may be incomplete."
-)
-
-func disclaimerNote(result *services.StatementResult) string {
-	for _, asset := range result.Summary.Assets {
-		if asset.Truncated {
-			return balancesNote + truncationNote
-		}
-	}
-	return balancesNote
 }
