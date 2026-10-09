@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
@@ -1510,4 +1512,45 @@ func Test_ExtractTenantNameFromRequest(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expectedTenant, tenantName)
 	})
+}
+
+func Test_RequireReportingEnabled(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	pool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer pool.Close()
+	models, err := data.NewModels(pool)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	handler := RequireReportingEnabled(models)(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+	}))
+
+	testCases := []struct {
+		name           string
+		enabled        *bool
+		expectedStatus int
+	}{
+		{name: "🔴 403 by default", enabled: nil, expectedStatus: http.StatusForbidden},
+		{name: "🔴 403 when reporting is disabled", enabled: utils.Ptr(false), expectedStatus: http.StatusForbidden},
+		{name: "🟢 passes when reporting is enabled", enabled: utils.Ptr(true), expectedStatus: http.StatusOK},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.enabled != nil {
+				require.NoError(t, models.Organizations.Update(ctx, &data.OrganizationUpdate{ReportingEnabled: tc.enabled}))
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/reports/statement", nil).WithContext(ctx)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.expectedStatus, rec.Code)
+			if tc.expectedStatus == http.StatusForbidden {
+				assert.JSONEq(t, `{"error":"reports are not enabled for this organization"}`, rec.Body.String())
+			}
+		})
+	}
 }

@@ -70,6 +70,9 @@ const (
 
 	// Exports
 	ReadExports APIKeyPermission = "read:exports"
+
+	// Reports
+	ReadReports APIKeyPermission = "read:reports"
 )
 
 // validPermissionsMap is the set of all valid permissions for the validation purposes
@@ -92,6 +95,7 @@ var validPermissionsMap = map[APIKeyPermission]struct{}{
 	WriteDistributionWallets: {},
 	ReadStatistics:           {},
 	ReadExports:              {},
+	ReadReports:              {},
 }
 
 type APIKeyPermissions []APIKeyPermission

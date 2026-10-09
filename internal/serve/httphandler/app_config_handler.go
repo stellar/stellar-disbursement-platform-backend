@@ -17,9 +17,10 @@ type AppConfigHandler struct {
 }
 
 type AppConfigResponse struct {
-	CAPTCHAType     string `json:"captcha_type"`
-	CAPTCHASiteKey  string `json:"captcha_site_key"`
-	CAPTCHADisabled bool   `json:"captcha_disabled"`
+	CAPTCHAType      string `json:"captcha_type"`
+	CAPTCHASiteKey   string `json:"captcha_site_key"`
+	CAPTCHADisabled  bool   `json:"captcha_disabled"`
+	ReportingEnabled bool   `json:"reporting_enabled"`
 }
 
 func (h AppConfigHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -30,9 +31,15 @@ func (h AppConfigHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
 	})
 
+	var reportingEnabled bool
+	if org, err := h.Models.Organizations.Get(ctx); err == nil && org.ReportingEnabled != nil {
+		reportingEnabled = *org.ReportingEnabled
+	}
+
 	httpjson.Render(w, AppConfigResponse{
-		CAPTCHAType:     h.CAPTCHAType.String(),
-		CAPTCHASiteKey:  h.ReCAPTCHASiteKey,
-		CAPTCHADisabled: captchaDisabled,
+		CAPTCHAType:      h.CAPTCHAType.String(),
+		CAPTCHASiteKey:   h.ReCAPTCHASiteKey,
+		CAPTCHADisabled:  captchaDisabled,
+		ReportingEnabled: reportingEnabled,
 	}, httpjson.JSON)
 }

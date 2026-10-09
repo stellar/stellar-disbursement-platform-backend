@@ -37,6 +37,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -753,6 +754,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
+		// Reports
+		{http.MethodGet, "/reports/statement"},
+		{http.MethodGet, "/reports/payment/1234"},
 		// Exports
 		{http.MethodGet, "/exports/disbursements"},
 		{http.MethodGet, "/exports/payments"},
@@ -921,4 +925,10 @@ func getConnectionPool(t *testing.T) db.DBConnectionPool {
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Close() })
 	return pool
+}
+
+func Test_ServeOptions_stellarExpertBaseURL(t *testing.T) {
+	assert.Equal(t, "https://stellar.expert/explorer/testnet/", ServeOptions{NetworkType: utils.TestnetNetworkType}.stellarExpertBaseURL())
+	assert.Equal(t, "https://stellar.expert/explorer/public/", ServeOptions{NetworkType: utils.PubnetNetworkType}.stellarExpertBaseURL())
+	assert.Equal(t, "https://explorer.example/", ServeOptions{NetworkType: utils.PubnetNetworkType, StellarExpertURL: "https://explorer.example//"}.stellarExpertBaseURL())
 }

@@ -1335,6 +1335,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
 				"captcha_disabled": null,
+				"reporting_enabled": false,
 				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
@@ -1379,6 +1380,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
 				"captcha_disabled": null,
+				"reporting_enabled": false,
 				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
@@ -1422,6 +1424,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
 				"captcha_disabled": null,
+				"reporting_enabled": false,
 				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
@@ -1467,6 +1470,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
 				"captcha_disabled": null,
+				"reporting_enabled": false,
 				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
@@ -1512,6 +1516,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
 				"captcha_disabled": null,
+				"reporting_enabled": false,
 				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)
@@ -1557,6 +1562,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"message_channel_priority": ["SMS", "EMAIL"],
 				"mfa_disabled": null,
 				"captcha_disabled": null,
+				"reporting_enabled": false,
 				"receiver_invitations_disabled": null
 			}
 		`, *currentTenant.BaseURL, *currentTenant.BaseURL, newDistAccountJSON(t, *currentTenant.DistributionAccountAddress), *currentTenant.DistributionAccountAddress)

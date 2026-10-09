@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Add Reports generation: a per-distribution account statement PDF (`GET /reports/statement`) and a per-payment transaction notice PDF (`GET /reports/payment/{id}`). [#1228](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1228)
+
 ### Changed
 
 - Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)

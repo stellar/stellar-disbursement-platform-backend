@@ -31,6 +31,8 @@ var readEndpointInventory = map[string]string{
 	"GET /exports/payments":                  "membership-filtered",
 	"GET /exports/receivers":                 "membership-filtered",
 	"GET /distribution-wallets/{id}/balance": "membership-filtered",
+	"GET /reports/statement":                 "membership-filtered",
+	"GET /reports/payment/{id}":              "membership-filtered",
 
 	// TENANT-SCOPED: identical cross-wallet data for every qualifying tenant role.
 	"GET /receivers/verification-types":          "tenant-scoped",

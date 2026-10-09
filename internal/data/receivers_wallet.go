@@ -548,6 +548,40 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	return &receiverWallets, nil
 }
 
+// GetByStellarAddress returns a receiver wallet (with Receiver and Wallet) by stellar address only.
+// If multiple receiver_wallets share the same address, one is returned deterministically (e.g. by id).
+// Use this for lookups that do not require client domain or memo (e.g. statement counterparty resolution).
+func (rw *ReceiverWalletModel) GetByStellarAddress(ctx context.Context, stellarAddress string) (*ReceiverWallet, error) {
+	if stellarAddress == "" {
+		return nil, ErrRecordNotFound
+	}
+	query := `
+		SELECT
+			` + ReceiverWalletColumnNames("rw", "") + `,
+			` + ReceiverColumnNames("r", "receiver") + `,
+			` + WalletColumnNames("w", "wallet", false) + `
+		FROM
+			receiver_wallets rw
+		JOIN
+			receivers r ON rw.receiver_id = r.id
+		JOIN
+			wallets w ON rw.wallet_id = w.id
+		WHERE
+			rw.stellar_address = $1
+		ORDER BY rw.id
+		LIMIT 1
+	`
+	var receiverWallet ReceiverWallet
+	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallet, query, stellarAddress)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("no receiver wallet found for stellar address: %w", ErrRecordNotFound)
+		}
+		return nil, fmt.Errorf("querying receiver wallet by stellar address: %w", err)
+	}
+	return &receiverWallet, nil
+}
+
 // RetryInvitationMessage sets null the invitation_sent_at of a receiver wallet.
 func (rw *ReceiverWalletModel) RetryInvitationMessage(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
