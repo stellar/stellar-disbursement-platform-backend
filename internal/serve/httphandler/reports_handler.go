@@ -90,7 +90,7 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 
 	var orgName string
 	var orgLogo []byte
-	if org, err := h.Models.Organizations.Get(ctx); err == nil {
+	if org, orgErr := h.Models.Organizations.Get(ctx); orgErr == nil {
 		orgName = org.Name
 		orgLogo = org.Logo
 	}
@@ -236,7 +236,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 	var orgName string
 	var orgLogo []byte
 	if h.Models != nil {
-		if org, err := h.Models.Organizations.Get(ctx); err == nil {
+		if org, orgErr := h.Models.Organizations.Get(ctx); orgErr == nil {
 			orgName = org.Name
 			orgLogo = org.Logo
 		}

@@ -2,9 +2,9 @@ package transaction
 
 import (
 	"github.com/jung-kurt/gofpdf/v2"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 )
 
 func drawDisbursementDetailRowAt(pdf *gofpdf.Fpdf, x, y float64, label, value string) {
