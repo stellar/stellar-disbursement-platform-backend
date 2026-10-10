@@ -3,6 +3,9 @@ package validators
 type Validator struct {
 	Errors     map[string]any
 	ErrorCodes []string
+	// MaxErrors, when > 0, caps how many errors are stored; further ones are counted in OmittedErrors instead.
+	MaxErrors     int
+	OmittedErrors int
 }
 
 func NewValidator() *Validator {
@@ -32,6 +35,10 @@ func (v *Validator) CheckError(err error, key, message string) *Validator {
 }
 
 func (v *Validator) AddError(key, message string) {
+	if v.MaxErrors > 0 && len(v.Errors) >= v.MaxErrors {
+		v.OmittedErrors++
+		return
+	}
 	v.Errors[key] = message
 }
 

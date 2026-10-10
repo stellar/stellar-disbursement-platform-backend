@@ -44,7 +44,11 @@ type DisbursementHandler struct {
 	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
-const DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
+const (
+	DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
+	maxCSVColumns                = 50
+	maxReportedCSVErrors         = 20
+)
 
 type PostDisbursementRequest struct {
 	Name                                string                       `json:"name"`
@@ -449,6 +453,10 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
+	if err := validateCSVDimensions(buf.Bytes()); err != nil {
+		return httperror.BadRequest(err.Error(), err, nil)
+	}
+
 	skipVerification := disbursement.Wallet != nil && disbursement.Wallet.Embedded && disbursement.VerificationField == ""
 	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, skipVerification); err != nil {
 		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
@@ -816,6 +824,7 @@ func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, r *http.R
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
 func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType data.RegistrationContactType, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(contactType, verificationField)
+	validator.MaxErrors = maxReportedCSVErrors
 
 	instructions := []*data.DisbursementInstruction{}
 	if err := gocsv.Unmarshal(reader, &instructions); err != nil {
@@ -836,11 +845,33 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 
 	validator.CheckForDuplicateContacts(instructions)
 
+	if validator.OmittedErrors > 0 {
+		validator.Errors["info"] = fmt.Sprintf("showing first %d errors; %d more were not included", maxReportedCSVErrors, validator.OmittedErrors)
+	}
+
 	if validator.HasErrors() {
 		return nil, validator
 	}
 
 	return sanitizedInstructions, nil
+}
+
+// validateCSVDimensions rejects CSVs with too many rows or columns before parsing, since parsing and validating
+// each field costs far more memory than its bytes in the file.
+func validateCSVDimensions(content []byte) error {
+	rows := 0
+	for line := range bytes.Lines(content) {
+		if len(bytes.TrimRight(line, "\r\n")) == 0 {
+			continue
+		}
+		if rows++; rows > data.MaxInstructionsPerDisbursement+1 { // +1 for the header
+			return fmt.Errorf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement)
+		}
+	}
+	if bytes.Count(content, []byte(",")) > (maxCSVColumns-1)*rows {
+		return fmt.Errorf("number of columns exceeds maximum of %d", maxCSVColumns)
+	}
+	return nil
 }
 
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
