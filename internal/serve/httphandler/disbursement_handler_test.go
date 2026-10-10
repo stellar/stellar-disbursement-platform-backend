@@ -1452,6 +1452,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
 		{
+			name:           "🔴 max columns exceeded",
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				append([]string{"email", "id", "amount", "verification"}, make([]string, maxCSVColumns-3)...),
+				append([]string{"foobar@test.com", "123456789", "100.5", "1990-01-01"}, make([]string, maxCSVColumns-3)...),
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "number of columns exceeds maximum of 50",
+		},
+		{
 			name:           "🔴 wallet address already in use by another receiver",
 			disbursementID: emailWalletDraftDisbursement.ID,
 			csvRecords: [][]string{
@@ -1482,6 +1492,50 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			assert.Contains(t, bodyStr, tc.expectedMessage)
 		})
 		authManagerMock.AssertExpectations(t)
+	}
+}
+
+func Test_parseInstructionsFromCSV_capsReportedErrors(t *testing.T) {
+	var csv bytes.Buffer
+	csv.WriteString("phone,verification\n")
+	for i := 0; i < 1000; i++ {
+		csv.WriteString(",\n")
+	}
+
+	_, v := parseInstructionsFromCSV(context.Background(), &csv, data.RegistrationContactTypePhone, data.VerificationTypeDateOfBirth)
+
+	require.True(t, v.HasErrors())
+	assert.Len(t, v.Errors, maxReportedCSVErrors+1) // the capped errors plus the "info" summary
+	assert.Positive(t, v.OmittedErrors)
+	assert.Contains(t, v.Errors["info"], fmt.Sprintf("showing first %d errors", maxReportedCSVErrors))
+}
+
+func Test_validateCSVDimensions(t *testing.T) {
+	const header = "phone,verification\n"
+	row := "+14155550000,1990-01-01\n"
+	testCases := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{name: "max rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement)},
+		{name: "blank lines are not rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement) + "\n\r\n"},
+		{name: "too many rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement+1), wantErr: "number of instructions exceeds maximum of 10000"},
+		{name: "rows of delimiters only", content: header + strings.Repeat(",\n", 2_000_000), wantErr: "number of instructions exceeds maximum of 10000"},
+		{name: "max columns", content: strings.Repeat("a,", maxCSVColumns-1) + "a\n"},
+		{name: "too many columns", content: strings.Repeat("a,", maxCSVColumns) + "a\n", wantErr: "number of columns exceeds maximum of 50"},
+		{name: "columns spread over quoted lines", content: header + strings.Repeat(`"`+strings.Repeat(",", 1000)+"\n"+`"`, 100), wantErr: "number of columns exceeds maximum of 50"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCSVDimensions([]byte(tc.content))
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.wantErr)
+			}
+		})
 	}
 }
 

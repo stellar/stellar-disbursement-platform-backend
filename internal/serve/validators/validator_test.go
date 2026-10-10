@@ -41,6 +41,16 @@ func Test_addError(t *testing.T) {
 	assert.Equal(t, validator.Errors["key2"], "error message 2")
 }
 
+func Test_addError_maxErrors(t *testing.T) {
+	validator := NewValidator()
+	validator.MaxErrors = 2
+	for i := 0; i < 5; i++ {
+		validator.AddError(fmt.Sprintf("key%d", i), "error message")
+	}
+	assert.Len(t, validator.Errors, 2)
+	assert.Equal(t, 3, validator.OmittedErrors)
+}
+
 func Test_Validator_CheckError(t *testing.T) {
 	testCases := []struct {
 		name           string
