@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bound Prometheus `method` metric label to an allowlist to prevent memory-exhaustion from unbounded label cardinality. [#1221](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1221)
 - Keep Owner flag in sync with Owner role. [#1222](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1222)
 - Reject tokens without a user claim on staff endpoints. [#1225](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1225)
+- Limit CSV dimensions before parsing. [#1229](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1229)
 
 ### Security and Dependencies
 
