@@ -3,7 +3,6 @@ package validators
 type Validator struct {
 	Errors     map[string]any
 	ErrorCodes []string
-	// MaxErrors, when > 0, caps how many errors are stored; further ones are counted in OmittedErrors instead.
 	MaxErrors     int
 	OmittedErrors int
 }

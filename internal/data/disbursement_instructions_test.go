@@ -135,11 +135,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            instructions,
-			Disbursement:            knownWalletDisbursement,
-			DisbursementUpdate:      knownWalletDisbursementUpdate(instructions),
-			MaxNumberOfInstructions: 10,
+			UserID:             "user-id",
+			Instructions:       instructions,
+			Disbursement:       knownWalletDisbursement,
+			DisbursementUpdate: knownWalletDisbursementUpdate(instructions),
 		})
 		assert.ErrorContains(t, err, "validating receiver wallet update: invalid stellar address")
 	})
@@ -158,11 +157,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 		update := knownWalletDisbursementUpdate(firstInstruction)
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            firstInstruction,
-			Disbursement:            knownWalletDisbursement,
-			DisbursementUpdate:      update,
-			MaxNumberOfInstructions: 10,
+			UserID:             "user-id",
+			Instructions:       firstInstruction,
+			Disbursement:       knownWalletDisbursement,
+			DisbursementUpdate: update,
 		})
 		require.NoError(t, err)
 
@@ -176,11 +174,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 		mismatchUpdate := knownWalletDisbursementUpdate(mismatchAddressInstruction)
 		err = di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            mismatchAddressInstruction,
-			Disbursement:            knownWalletDisbursement,
-			DisbursementUpdate:      mismatchUpdate,
-			MaxNumberOfInstructions: 10,
+			UserID:             "user-id",
+			Instructions:       mismatchAddressInstruction,
+			Disbursement:       knownWalletDisbursement,
+			DisbursementUpdate: mismatchUpdate,
 		})
 		assert.ErrorIs(t, err, ErrReceiverWalletAddressMismatch)
 	})
@@ -216,11 +213,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 			update := knownWalletDisbursementUpdate(instructions)
 			err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-				UserID:                  "user-id",
-				Instructions:            instructions,
-				Disbursement:            knownWalletDisbursement,
-				DisbursementUpdate:      update,
-				MaxNumberOfInstructions: 10,
+				UserID:             "user-id",
+				Instructions:       instructions,
+				Disbursement:       knownWalletDisbursement,
+				DisbursementUpdate: update,
 			})
 			require.NoError(t, err)
 
@@ -271,11 +267,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.NoError(t, err)
 
@@ -319,11 +314,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            emailInstructions,
-			Disbursement:            emailDisbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       emailInstructions,
+			Disbursement:       emailDisbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.NoError(t, err)
 
@@ -343,11 +337,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            emailDisbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       emailDisbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.ErrorContains(t, err, "has no contact information for contact type EMAIL")
 	})
@@ -367,11 +360,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            emailAndSMSInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       emailAndSMSInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		errorMsg := "processing receivers: resolving contact information for instruction with ID %s: phone and email are both provided"
 		assert.ErrorContains(t, err, fmt.Sprintf(errorMsg, emailAndSMSInstructions[0].ID))
@@ -383,21 +375,19 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.NoError(t, err)
 
 		smsInstruction1.VerificationValue = "1990-01-04"
 		err = di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.NoError(t, err)
 
@@ -442,11 +432,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.ErrorIs(t, err, ErrReceiverVerificationMismatch)
 
@@ -499,11 +488,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            newInstructions,
-			Disbursement:            readyDisbursement,
-			DisbursementUpdate:      readyDisbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       newInstructions,
+			Disbursement:       readyDisbursement,
+			DisbursementUpdate: readyDisbursementUpdate,
 		})
 		require.NoError(t, err)
 
@@ -542,11 +530,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		err = di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            newInstructions,
-			Disbursement:            readyDisbursement,
-			DisbursementUpdate:      readyDisbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       newInstructions,
+			Disbursement:       readyDisbursement,
+			DisbursementUpdate: readyDisbursementUpdate,
 		})
 		require.NoError(t, err)
 
@@ -566,30 +553,16 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.NotNil(t, receiverWallets[0].InvitationSentAt)
 	})
 
-	t.Run("failure - Too many instructions", func(t *testing.T) {
-		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
-
-		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: 2,
-		})
-		require.EqualError(t, err, "maximum number of instructions exceeded")
-	})
-
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
 		defer cleanup()
 		dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.NoError(t, err)
 
@@ -607,11 +580,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		// process instructions with mismatched verification values
 		smsInstruction3.VerificationValue = "1990-01-07"
 		err = di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
-			UserID:                  "user-id",
-			Instructions:            smsInstructions,
-			Disbursement:            disbursement,
-			DisbursementUpdate:      disbursementUpdate,
-			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+			UserID:             "user-id",
+			Instructions:       smsInstructions,
+			Disbursement:       disbursement,
+			DisbursementUpdate: disbursementUpdate,
 		})
 		require.Error(t, err)
 		assert.EqualError(t, err, "processing receiver verifications: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check instruction with ID 123456783")

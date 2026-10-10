@@ -1452,6 +1452,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
 		{
+			name:           "🔴 max columns exceeded",
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				append([]string{"email", "id", "amount", "verification"}, make([]string, maxCSVColumns-3)...),
+				append([]string{"foobar@test.com", "123456789", "100.5", "1990-01-01"}, make([]string, maxCSVColumns-3)...),
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "number of columns exceeds maximum of 50",
+		},
+		{
 			name:           "🔴 wallet address already in use by another receiver",
 			disbursementID: emailWalletDraftDisbursement.ID,
 			csvRecords: [][]string{

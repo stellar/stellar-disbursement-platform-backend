@@ -477,15 +477,12 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 	}
 
 	if err := d.Models.DisbursementInstructions.ProcessAll(ctx, dbTx, data.DisbursementInstructionsOpts{
-		UserID:                  authUser.ID,
-		Instructions:            instructions,
-		Disbursement:            disbursement,
-		DisbursementUpdate:      disbursementUpdate,
-		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+		UserID:             authUser.ID,
+		Instructions:       instructions,
+		Disbursement:       disbursement,
+		DisbursementUpdate: disbursementUpdate,
 	}); err != nil {
 		switch {
-		case errors.Is(err, data.ErrMaxInstructionsExceeded):
-			return httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil)
 		case errors.Is(err, data.ErrReceiverVerificationMismatch):
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
@@ -867,9 +864,9 @@ func validateCSVDimensions(content []byte) error {
 		if rows++; rows > data.MaxInstructionsPerDisbursement+1 { // +1 for the header
 			return fmt.Errorf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement)
 		}
-	}
-	if bytes.Count(content, []byte(",")) > (maxCSVColumns-1)*rows {
-		return fmt.Errorf("number of columns exceeds maximum of %d", maxCSVColumns)
+		if bytes.Count(line, []byte(",")) >= maxCSVColumns {
+			return fmt.Errorf("number of columns exceeds maximum of %d", maxCSVColumns)
+		}
 	}
 	return nil
 }
