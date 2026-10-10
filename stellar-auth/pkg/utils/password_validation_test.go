@@ -106,6 +106,16 @@ func Test_ValidatePassword(t *testing.T) {
 			errContains: []string{defaultErrMsg, "invalid character: password cannot contain any invalid characters ('Д')"},
 		},
 		{
+			name:        "invalid characters are reported once each",
+			input:       "!1Az   Bc Dd",
+			errContains: []string{defaultErrMsg, "invalid character: password cannot contain any invalid characters (' ')"},
+		},
+		{
+			name:        "over-length input reports only the length rule",
+			input:       strings.Repeat(" ", passwordMaxLength+4),
+			errContains: []string{defaultErrMsg, invalidLengthErrMsg},
+		},
+		{
 			name:        "only one criteria is missing: [lowercase]",
 			input:       "!1AZ?2BY.3CX",
 			errContains: []string{defaultErrMsg, missingLowercaseErrMsg},
