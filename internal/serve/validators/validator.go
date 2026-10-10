@@ -1,8 +1,8 @@
 package validators
 
 type Validator struct {
-	Errors     map[string]any
-	ErrorCodes []string
+	Errors        map[string]any
+	ErrorCodes    []string
 	MaxErrors     int
 	OmittedErrors int
 }
