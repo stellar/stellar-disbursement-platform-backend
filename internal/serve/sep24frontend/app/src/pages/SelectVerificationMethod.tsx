@@ -90,8 +90,8 @@ export const SelectVerificationMethod: FC = () => {
       const itiInit = intlTelInput(phoneInputRef.current, {
         loadUtils: () => import("intl-tel-input/utils"),
         separateDialCode: true,
-        // Excluding Cuba, Iran, North Korea, and Syria
-        excludeCountries: ["cu", "ir", "kp", "sy"],
+        // Excluding Cuba, Iran, and North Korea
+        excludeCountries: ["cu", "ir", "kp"],
         // Setting default country based on user's IP address
         initialCountry: "auto",
         // Get the country code from user's location
