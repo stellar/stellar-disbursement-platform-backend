@@ -337,7 +337,7 @@ func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error 
 }
 
 // handleSuccessfulTransaction will wrap up the job when the transaction has been successfully submitted to the network.
-// This method will only return an error if something goes wromg when handling the result and marking the transaction as SUCCESS.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as SUCCESS.
 func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction) error {
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
@@ -345,6 +345,21 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	}
 	if !hTxResp.Successful {
 		return fmt.Errorf("transaction was not successful for some reason")
+	}
+
+	// Record the hash that landed, preferring the outer fee-bump hash, falling back to top-level hash
+	landedHash := hTxResp.Hash
+	if hTxResp.FeeBumpTransaction != nil && hTxResp.FeeBumpTransaction.Hash != "" {
+		landedHash = hTxResp.FeeBumpTransaction.Hash
+	}
+	if landedHash != "" {
+		storedHash := &txJob.Transaction.StellarTransactionHash
+		if storedHash.String != "" && storedHash.String != landedHash {
+			log.Ctx(ctx).WithFields(log.F{"submitted_hash": storedHash.String, "landed_hash": landedHash}).
+				Warn("on-ledger hash differs from the submitted hash; the fee-bump wrapper was replaced")
+		}
+		storedHash.String = landedHash
+		storedHash.Valid = true
 	}
 
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
@@ -385,6 +400,18 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	txHash := txJob.Transaction.StellarTransactionHash.String
 	txDetail, err := tw.engine.HorizonClient.TransactionDetail(txHash)
 	hWrapperErr := utils.NewHorizonErrorWrapper(err)
+
+	// The inner transaction hash is stable and Horizon resolves it, so a 404 is only terminal if the inner hash is also absent.
+	if hWrapperErr != nil && hWrapperErr.IsNotFound() && txJob.Transaction.XDRSent.Valid {
+		if innerHash, ok := innerHashFromEnvelope(ctx, txJob.Transaction.XDRSent.String, tw.engine.SignatureService.NetworkPassphrase()); ok {
+			innerDetail, innerErr := tw.engine.HorizonClient.TransactionDetail(innerHash)
+			if innerWrapErr := utils.NewHorizonErrorWrapper(innerErr); innerErr == nil || !innerWrapErr.IsNotFound() {
+				log.Ctx(ctx).WithFields(log.F{"outer_hash": txHash, "inner_hash": innerHash}).
+					Info("outer hash not found on the ledger; adopting inner-transaction lookup result")
+				txDetail, err, hWrapperErr = innerDetail, innerErr, innerWrapErr
+			}
+		}
+	}
 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
@@ -713,4 +740,24 @@ func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *
 
 	// For other errors, return as-is without special handling
 	return err
+}
+
+// innerHashFromEnvelope returns the inner-transaction hash of a stored fee-bump envelope.
+// Returns ok=false for a non-fee-bump envelope or a decode/hash failure
+func innerHashFromEnvelope(ctx context.Context, envelopeB64, networkPassphrase string) (string, bool) {
+	gtx, err := txnbuild.TransactionFromXDR(envelopeB64)
+	if err != nil {
+		log.Ctx(ctx).Warnf("could not decode stored xdr_sent to check the inner transaction hash: %v", err)
+		return "", false
+	}
+	feeBump, ok := gtx.FeeBump()
+	if !ok {
+		return "", false
+	}
+	hash, err := feeBump.InnerTransaction().HashHex(networkPassphrase)
+	if err != nil {
+		log.Ctx(ctx).Warnf("could not hash the inner transaction of the stored fee-bump envelope: %v", err)
+		return "", false
+	}
+	return hash, true
 }
