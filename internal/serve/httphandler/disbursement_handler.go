@@ -856,8 +856,9 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 // validateCSVDimensions rejects CSVs with too many rows or columns before parsing, since parsing and validating
 // each field costs far more memory than its bytes in the file.
 func validateCSVDimensions(content []byte) error {
-	rows := 0
+	rows, lineNo := 0, 0
 	for line := range bytes.Lines(content) {
+		lineNo++
 		if len(bytes.TrimRight(line, "\r\n")) == 0 {
 			continue
 		}
@@ -865,7 +866,7 @@ func validateCSVDimensions(content []byte) error {
 			return fmt.Errorf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement)
 		}
 		if bytes.Count(line, []byte(",")) >= maxCSVColumns {
-			return fmt.Errorf("number of columns exceeds maximum of %d", maxCSVColumns)
+			return fmt.Errorf("number of commas in line %d exceeds maximum of %d (max %d columns)", lineNo, maxCSVColumns-1, maxCSVColumns)
 		}
 	}
 	return nil

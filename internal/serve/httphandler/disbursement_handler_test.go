@@ -1459,7 +1459,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				append([]string{"foobar@test.com", "123456789", "100.5", "1990-01-01"}, make([]string, maxCSVColumns-3)...),
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "number of columns exceeds maximum of 50",
+			expectedMessage: "number of commas in line 1 exceeds maximum of 49 (max 50 columns)",
 		},
 		{
 			name:           "🔴 wallet address already in use by another receiver",
@@ -1523,8 +1523,8 @@ func Test_validateCSVDimensions(t *testing.T) {
 		{name: "too many rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement+1), wantErr: "number of instructions exceeds maximum of 10000"},
 		{name: "rows of delimiters only", content: header + strings.Repeat(",\n", 2_000_000), wantErr: "number of instructions exceeds maximum of 10000"},
 		{name: "max columns", content: strings.Repeat("a,", maxCSVColumns-1) + "a\n"},
-		{name: "too many columns", content: strings.Repeat("a,", maxCSVColumns) + "a\n", wantErr: "number of columns exceeds maximum of 50"},
-		{name: "columns spread over quoted lines", content: header + strings.Repeat(`"`+strings.Repeat(",", 1000)+"\n"+`"`, 100), wantErr: "number of columns exceeds maximum of 50"},
+		{name: "too many columns", content: strings.Repeat("a,", maxCSVColumns) + "a\n", wantErr: "number of commas in line 1 exceeds maximum of 49 (max 50 columns)"},
+		{name: "columns spread over quoted lines", content: header + strings.Repeat(`"`+strings.Repeat(",", 1000)+"\n"+`"`, 100), wantErr: "number of commas in line 2 exceeds maximum of 49 (max 50 columns)"},
 	}
 
 	for _, tc := range testCases {
