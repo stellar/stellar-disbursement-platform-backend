@@ -61,17 +61,15 @@ func NewDisbursementInstructionModel(dbConnectionPool db.DBConnectionPool) *Disb
 }
 
 var (
-	ErrMaxInstructionsExceeded       = errors.New("maximum number of instructions exceeded")
 	ErrReceiverVerificationMismatch  = errors.New("receiver verification mismatch")
 	ErrReceiverWalletAddressMismatch = errors.New("receiver wallet address mismatch")
 )
 
 type DisbursementInstructionsOpts struct {
-	UserID                  string
-	Instructions            []*DisbursementInstruction
-	Disbursement            *Disbursement
-	DisbursementUpdate      *DisbursementUpdate
-	MaxNumberOfInstructions int
+	UserID             string
+	Instructions       []*DisbursementInstruction
+	Disbursement       *Disbursement
+	DisbursementUpdate *DisbursementUpdate
 }
 
 // ProcessAll Processes all disbursement instructions and persists the data to the database.
@@ -94,10 +92,6 @@ type DisbursementInstructionsOpts struct {
 //	|    |    |--- Delete all previously existing payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
 func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.DBTransaction, opts DisbursementInstructionsOpts) error {
-	if len(opts.Instructions) > opts.MaxNumberOfInstructions {
-		return ErrMaxInstructionsExceeded
-	}
-
 	// Step 1: Fetch all receivers by contact information (phone, email, etc.) and create missing ones
 	registrationContactType := opts.Disbursement.RegistrationContactType
 	receiversByIDMap, err := di.reconcileExistingReceiversWithInstructions(ctx, dbTx, opts.Instructions, registrationContactType.ReceiverContactType, opts.Disbursement.SourceWalletID)
