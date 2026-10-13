@@ -2104,6 +2104,11 @@ func Test_TransactionWorker_reconcileSubmittedTransaction_feeBumpInnerHash(t *te
 			shouldBePushedBackToQueue: true,
 		},
 		{
+			name:                      "outer 404 but inner found and failed on-chain -> push back for rebuild",
+			innerResponse:             horizon.Transaction{Successful: false},
+			shouldBePushedBackToQueue: true,
+		},
+		{
 			name:            "outer 404 and inner 429 -> unknown, return error and keep locked",
 			innerError:      horizonclient.Error{Problem: problem.P{Status: http.StatusTooManyRequests}},
 			wantErrContains: "unexpected error: horizon response error: StatusCode=429",

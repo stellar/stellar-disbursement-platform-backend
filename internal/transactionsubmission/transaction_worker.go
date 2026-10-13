@@ -353,8 +353,13 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		landedHash = hTxResp.FeeBumpTransaction.Hash
 	}
 	if landedHash != "" {
-		txJob.Transaction.StellarTransactionHash.String = landedHash
-		txJob.Transaction.StellarTransactionHash.Valid = true
+		storedHash := &txJob.Transaction.StellarTransactionHash
+		if storedHash.String != "" && storedHash.String != landedHash {
+			log.Ctx(ctx).WithFields(log.F{"submitted_hash": storedHash.String, "landed_hash": landedHash}).
+				Warn("on-ledger hash differs from the submitted hash; the fee-bump wrapper was replaced")
+		}
+		storedHash.String = landedHash
+		storedHash.Valid = true
 	}
 
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
