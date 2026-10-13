@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Strip caller headers and query string from RPC proxy requests. [#1224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1224)
 - Reject tokens without a user claim on staff endpoints. [#1225](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1225)
 - Limit CSV dimensions before parsing. [#1229](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1229)
+- Bound password validation errors on over-length input. [#1230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1230)
 
 ### Security and Dependencies
 
