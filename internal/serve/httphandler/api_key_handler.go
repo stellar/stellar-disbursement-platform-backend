@@ -101,6 +101,16 @@ func (h APIKeyHandler) grantableWallets(ctx context.Context, alreadyHeld []strin
 	return withinReach(scope), nil
 }
 
+// managementScope bounds which keys this caller may list, read, edit or delete: an API key reaches only keys
+// whose scope it covers. A signed-in user (nil) is unbounded.
+func managementScope(ctx context.Context) []string {
+	if actingKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		// WalletScope is never nil: an unscoped key reaches only unscoped keys, not everything.
+		return actingKey.WalletScope()
+	}
+	return nil
+}
+
 type UpdateAPIKeyRequest struct {
 	Permissions []data.APIKeyPermission `json:"permissions"`
 	AllowedIPs  any                     `json:"allowed_ips,omitempty"` // Can be a string or array of strings
@@ -197,7 +207,7 @@ func (h APIKeyHandler) GetAPIKeyByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key, err := h.Models.APIKeys.GetByID(ctx, keyID, userID)
+	key, err := h.Models.APIKeys.GetByID(ctx, keyID, userID, managementScope(ctx))
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
@@ -219,7 +229,7 @@ func (h APIKeyHandler) GetAllAPIKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKeys, err := h.Models.APIKeys.GetAll(ctx, userID)
+	apiKeys, err := h.Models.APIKeys.GetAll(ctx, userID, managementScope(ctx))
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to retrieve API keys", err, nil).Render(w)
 		return
@@ -264,10 +274,10 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Omitting the field leaves the key's scope untouched, so there is nothing to authorize.
+	scope := managementScope(ctx)
 	var walletIDs []string
 	if req.DistributionWalletIDs != nil {
-		current, getErr := h.Models.APIKeys.GetByID(ctx, keyID, userID)
+		current, getErr := h.Models.APIKeys.GetByID(ctx, keyID, userID, scope)
 		if getErr != nil {
 			if errors.Is(getErr, data.ErrRecordNotFound) {
 				httperror.NotFound("API key not found", nil, nil).Render(w)
@@ -292,7 +302,7 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	updated, err := h.Models.APIKeys.Update(ctx, keyID, userID, req.Permissions, ips, walletIDs)
+	updated, err := h.Models.APIKeys.Update(ctx, keyID, userID, scope, req.Permissions, ips, walletIDs)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
@@ -322,7 +332,7 @@ func (h APIKeyHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Models.APIKeys.Delete(ctx, keyID, userID); err != nil {
+	if err := h.Models.APIKeys.Delete(ctx, keyID, userID, managementScope(ctx)); err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
 		} else {

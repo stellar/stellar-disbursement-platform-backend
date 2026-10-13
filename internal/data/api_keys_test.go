@@ -227,7 +227,7 @@ func Test_APIKeyModel_GetAll_SortsByCreatedAtDesc(t *testing.T) {
 		creator,
 	)
 
-	keys, err := models.APIKeys.GetAll(ctx, creator)
+	keys, err := models.APIKeys.GetAll(ctx, creator, nil)
 	require.NoError(t, err)
 
 	require.Len(t, keys, 3)
@@ -271,7 +271,7 @@ func Test_APIKeyModel_GetByID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := models.APIKeys.GetByID(ctx, tc.id, tc.creatorID)
+			got, err := models.APIKeys.GetByID(ctx, tc.id, tc.creatorID, nil)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -321,7 +321,7 @@ func Test_APIKeyModel_Delete(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := models.APIKeys.Delete(ctx, tc.id, tc.creatorID)
+			err := models.APIKeys.Delete(ctx, tc.id, tc.creatorID, nil)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -399,7 +399,7 @@ func Test_APIKeyModel_Update(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			updated, err := models.APIKeys.Update(ctx, tc.id, tc.creatorID, tc.perms, tc.ips, nil)
+			updated, err := models.APIKeys.Update(ctx, tc.id, tc.creatorID, nil, tc.perms, tc.ips, nil)
 			if tc.wantErr != nil {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -420,6 +420,93 @@ func Test_APIKeyModel_Update(t *testing.T) {
 				updated.UpdatedAt.Equal(updated.CreatedAt))
 		})
 	}
+}
+
+// Test_APIKeyModel_ManagementScope covers the reach of a management call: nil (a signed-in user) lifts the
+// restriction, otherwise a key is reachable only when the caller's scope contains its own; one table, four methods.
+func Test_APIKeyModel_ManagementScope(t *testing.T) {
+	t.Parallel()
+
+	pool := getConnectionPool(t)
+	models, err := NewModels(pool)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	const (
+		creator = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+		walletA = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a"
+		walletB = "0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b"
+	)
+
+	insert := func(name string, scope []string) *APIKey {
+		key, insertErr := models.APIKeys.Insert(ctx, name, []APIKeyPermission{ReadPayments}, nil, scope, nil, creator)
+		require.NoError(t, insertErr)
+		return key
+	}
+	keyA := insert("scope A", []string{walletA})
+	keyB := insert("scope B", []string{walletB})
+	keyAB := insert("scope A+B", []string{walletA, walletB})
+	keyNone := insert("no scope", []string{})
+
+	cases := []struct {
+		name          string
+		withinWallets []string
+		reachable     []*APIKey
+		unreachable   []*APIKey
+	}{
+		{"nil lifts the restriction", nil, []*APIKey{keyA, keyB, keyAB, keyNone}, nil},
+		{"{A} reaches A and the unscoped key", []string{walletA}, []*APIKey{keyA, keyNone}, []*APIKey{keyB, keyAB}},
+		{"{A,B} reaches everything the creator made", []string{walletA, walletB}, []*APIKey{keyA, keyB, keyAB, keyNone}, nil},
+		{"{} reaches only the unscoped key", []string{}, []*APIKey{keyNone}, []*APIKey{keyA, keyB, keyAB}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			listed, listErr := models.APIKeys.GetAll(ctx, creator, tc.withinWallets)
+			require.NoError(t, listErr)
+			listedIDs := make([]string, 0, len(listed))
+			for _, k := range listed {
+				listedIDs = append(listedIDs, k.ID)
+			}
+
+			for _, k := range tc.reachable {
+				assert.Contains(t, listedIDs, k.ID, "%s should be listed", k.Name)
+				got, getErr := models.APIKeys.GetByID(ctx, k.ID, creator, tc.withinWallets)
+				require.NoError(t, getErr, "%s should be readable", k.Name)
+				assert.Equal(t, k.ID, got.ID)
+			}
+			for _, k := range tc.unreachable {
+				assert.NotContains(t, listedIDs, k.ID, "%s should not be listed", k.Name)
+				_, getErr := models.APIKeys.GetByID(ctx, k.ID, creator, tc.withinWallets)
+				assert.ErrorIs(t, getErr, ErrRecordNotFound, "%s should not be readable", k.Name)
+
+				_, updateErr := models.APIKeys.Update(ctx, k.ID, creator, tc.withinWallets, APIKeyPermissions{WriteAll}, []string{}, nil)
+				assert.ErrorIs(t, updateErr, ErrRecordNotFound, "%s should not be updatable", k.Name)
+				deleteErr := models.APIKeys.Delete(ctx, k.ID, creator, tc.withinWallets)
+				assert.ErrorIs(t, deleteErr, ErrRecordNotFound, "%s should not be deletable", k.Name)
+
+				// The refused write must have left the row exactly as it was.
+				after, afterErr := models.APIKeys.GetByID(ctx, k.ID, creator, nil)
+				require.NoError(t, afterErr)
+				assert.Equal(t, APIKeyPermissions{ReadPayments}, after.Permissions)
+				assert.Equal(t, k.DistributionWalletIDs, after.DistributionWalletIDs)
+				assert.Equal(t, k.UpdatedAt, after.UpdatedAt)
+			}
+		})
+	}
+
+	t.Run("a reachable key is updated and deleted", func(t *testing.T) {
+		victim := insert("reachable", []string{walletA})
+
+		updated, updateErr := models.APIKeys.Update(ctx, victim.ID, creator, []string{walletA}, APIKeyPermissions{ReadStatistics}, []string{}, nil)
+		require.NoError(t, updateErr)
+		assert.Equal(t, APIKeyPermissions{ReadStatistics}, updated.Permissions)
+		assert.Equal(t, victim.DistributionWalletIDs, updated.DistributionWalletIDs, "an omitted scope stays as it was")
+
+		require.NoError(t, models.APIKeys.Delete(ctx, victim.ID, creator, []string{walletA}))
+		_, getErr := models.APIKeys.GetByID(ctx, victim.ID, creator, nil)
+		assert.ErrorIs(t, getErr, ErrRecordNotFound)
+	})
 }
 
 func Test_APIKeyModel_ValidateRawKeyAndUpdateLastUsed(t *testing.T) {
@@ -563,7 +650,7 @@ func Test_APIKeyModel_ValidateRawKeyAndUpdateLastUsed(t *testing.T) {
 			// Get initial last_used_at value
 			var initialLastUsedAt *time.Time
 			if tc.wantID != "" {
-				key, err := models.APIKeys.GetByID(ctx, tc.wantID, creator)
+				key, err := models.APIKeys.GetByID(ctx, tc.wantID, creator, nil)
 				require.NoError(t, err)
 				initialLastUsedAt = key.LastUsedAt
 			}
@@ -578,7 +665,7 @@ func Test_APIKeyModel_ValidateRawKeyAndUpdateLastUsed(t *testing.T) {
 
 				// Verify last_used_at was NOT updated for invalid keys
 				if tc.wantID != "" {
-					key, getErr := models.APIKeys.GetByID(ctx, tc.wantID, creator)
+					key, getErr := models.APIKeys.GetByID(ctx, tc.wantID, creator, nil)
 					require.NoError(t, getErr)
 					assert.Equal(t, initialLastUsedAt, key.LastUsedAt, "last_used_at should not be updated for invalid keys")
 				}
