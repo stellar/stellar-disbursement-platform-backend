@@ -22,6 +22,7 @@ func Test_ValidatePassword(t *testing.T) {
 		missingUppercaseErrMsg   = "uppercase: password must contain at least one uppercase letter"
 		missingDigitErrMsg       = "digit: password must contain at least one numberical digit"
 		missingSpecialCharErrMsg = "special character: password must contain at least one special character"
+		validPrefix              = "!1Az?2By.3Cx" // meets every rule; padded with 'x' to reach the length boundary
 	)
 
 	allErrMessages := []string{
@@ -106,6 +107,16 @@ func Test_ValidatePassword(t *testing.T) {
 			errContains: []string{defaultErrMsg, "invalid character: password cannot contain any invalid characters ('Д')"},
 		},
 		{
+			name:        "invalid characters are reported once each",
+			input:       "!1Az   Bc Dd",
+			errContains: []string{defaultErrMsg, "invalid character: password cannot contain any invalid characters (' ')"},
+		},
+		{
+			name:        "over-length input reports only the length rule",
+			input:       strings.Repeat(" ", passwordMaxLength+4),
+			errContains: []string{defaultErrMsg, invalidLengthErrMsg},
+		},
+		{
 			name:        "only one criteria is missing: [lowercase]",
 			input:       "!1AZ?2BY.3CX",
 			errContains: []string{defaultErrMsg, missingLowercaseErrMsg},
@@ -139,6 +150,16 @@ func Test_ValidatePassword(t *testing.T) {
 			name:        "🎉 All criteria was met (inverted order)!",
 			input:       "xC3.yB2?zA1!",
 			errContains: nil,
+		},
+		{
+			name:        "🎉 All criteria was met at the maximum length",
+			input:       validPrefix + strings.Repeat("x", passwordMaxLength-len(validPrefix)),
+			errContains: nil,
+		},
+		{
+			name:        "one byte over the maximum length reports only the length rule",
+			input:       validPrefix + strings.Repeat("x", passwordMaxLength-len(validPrefix)+1),
+			errContains: []string{defaultErrMsg, invalidLengthErrMsg},
 		},
 	}
 
