@@ -2028,6 +2028,156 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 	}
 }
 
+// buildFeeBumpEnvelope returns a signed fee-bump envelope plus its outer and inner transaction hashes,
+// all computed under network.TestNetworkPassphrase (the passphrase getTransactionWorkerInstance uses).
+func buildFeeBumpEnvelope(t *testing.T) (envB64, outerHash, innerHash string) {
+	t.Helper()
+	src, feeAcc, dest := keypair.MustRandom(), keypair.MustRandom(), keypair.MustRandom()
+
+	inner, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+		SourceAccount:        &txnbuild.SimpleAccount{AccountID: src.Address(), Sequence: 1},
+		IncrementSequenceNum: true,
+		Operations: []txnbuild.Operation{&txnbuild.Payment{
+			Destination: dest.Address(),
+			Amount:      "10",
+			Asset:       txnbuild.NativeAsset{},
+		}},
+		BaseFee:       txnbuild.MinBaseFee * 100,
+		Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(300)},
+	})
+	require.NoError(t, err)
+	inner, err = inner.Sign(network.TestNetworkPassphrase, src)
+	require.NoError(t, err)
+	innerHash, err = inner.HashHex(network.TestNetworkPassphrase)
+	require.NoError(t, err)
+
+	feeBump, err := txnbuild.NewFeeBumpTransaction(txnbuild.FeeBumpTransactionParams{
+		Inner:      inner,
+		FeeAccount: feeAcc.Address(),
+		BaseFee:    txnbuild.MinBaseFee * 100,
+	})
+	require.NoError(t, err)
+	feeBump, err = feeBump.Sign(network.TestNetworkPassphrase, feeAcc)
+	require.NoError(t, err)
+	outerHash, err = feeBump.HashHex(network.TestNetworkPassphrase)
+	require.NoError(t, err)
+	envB64, err = feeBump.Base64()
+	require.NoError(t, err)
+	return envB64, outerHash, innerHash
+}
+
+// Reconcile keys off the inner transaction hash when the stored (outer fee-bump) hash 404s, so a
+// fee-bump replacement can no longer be mistaken for a failed payment.
+func Test_TransactionWorker_reconcileSubmittedTransaction_feeBumpInnerHash(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	const currentLedger = 1
+	const lockedToLedger = 2
+	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+	// The outer hash of the envelope that actually landed (the replacement), as Horizon returns it.
+	const landedOuterHash = "1111111111111111111111111111111111111111111111111111111111111111"
+
+	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
+	require.NotEmpty(t, transactionWorker)
+
+	testCases := []struct {
+		name                       string
+		innerResponse              horizon.Transaction
+		innerError                 error
+		wantErrContains            string
+		shouldBeMarkedAsSuccessful bool
+		shouldBePushedBackToQueue  bool
+	}{
+		{
+			name:                       "outer 404 but inner hash resolves -> SUCCESS, record the landed outer hash",
+			innerResponse:              horizon.Transaction{Successful: true, FeeBumpTransaction: &horizon.FeeBumpTransaction{Hash: landedOuterHash}, ResultXdr: resultXDR},
+			shouldBeMarkedAsSuccessful: true,
+		},
+		{
+			name:                      "outer 404 and inner 404 -> genuinely absent, push back for rebuild",
+			innerError:                horizonclient.Error{Problem: problem.P{Status: http.StatusNotFound}},
+			shouldBePushedBackToQueue: true,
+		},
+		{
+			name:            "outer 404 and inner 429 -> unknown, return error and keep locked",
+			innerError:      horizonclient.Error{Problem: problem.P{Status: http.StatusTooManyRequests}},
+			wantErrContains: "unexpected error: horizon response error: StatusCode=429",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			envB64, outerHash, innerHash := buildFeeBumpEnvelope(t)
+
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+			tx, updateErr := transactionWorker.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, outerHash, envB64, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+			require.NoError(t, updateErr)
+			txJob.Transaction = *tx
+
+			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedger, nil).Once()
+			transactionWorker.engine.LedgerNumberTracker = mockLedgerNumberTracker
+
+			// The stored (outer) hash always 404s here; the inner hash carries the real outcome.
+			hMock := &horizonclient.MockClient{}
+			hMock.On("TransactionDetail", outerHash).Return(horizon.Transaction{}, horizonclient.Error{Problem: problem.P{Status: http.StatusNotFound}}).Once()
+			hMock.On("TransactionDetail", innerHash).Return(tc.innerResponse, tc.innerError).Once()
+			transactionWorker.engine.HorizonClient = hMock
+
+			txHandler := &MockTransactionHandler{}
+			txHandler.On("MonitorTransactionProcessingSuccess", ctx, mock.Anything, mock.Anything).Return().Maybe()
+			txHandler.On("MonitorTransactionReconciliationSuccess", ctx, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+			txHandler.On("MonitorTransactionReconciliationFailure", ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+			transactionWorker.txHandler = txHandler
+
+			err = transactionWorker.reconcileSubmittedTransaction(ctx, &txJob)
+			if tc.wantErrContains != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tc.shouldBeMarkedAsSuccessful {
+				got, getErr := transactionWorker.txModel.Get(ctx, txJob.Transaction.ID)
+				require.NoError(t, getErr)
+				assert.Equal(t, store.TransactionStatusSuccess, got.Status)
+				assert.False(t, got.IsLocked(int32(currentLedger)))
+				// The stored hash is the outer hash that landed, not the displaced outer hash we submitted.
+				assert.Equal(t, landedOuterHash, got.StellarTransactionHash.String)
+				assert.NotEqual(t, outerHash, got.StellarTransactionHash.String)
+				// The SUCCESS status_history snapshot records the same landed hash as the column.
+				require.NotEmpty(t, got.StatusHistory)
+				lastEntry := got.StatusHistory[len(got.StatusHistory)-1]
+				assert.Equal(t, string(store.TransactionStatusSuccess), lastEntry.Status)
+				assert.Equal(t, landedOuterHash, lastEntry.StellarTransactionHash)
+
+				chAcc, chErr := transactionWorker.chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+				require.NoError(t, chErr)
+				assert.False(t, chAcc.IsLocked(int32(currentLedger)))
+			}
+
+			if tc.shouldBePushedBackToQueue {
+				got, getErr := transactionWorker.txModel.Get(ctx, txJob.Transaction.ID)
+				require.NoError(t, getErr)
+				assert.Equal(t, store.TransactionStatusProcessing, got.Status)
+				assert.False(t, got.IsLocked(int32(currentLedger)))
+			}
+
+			mockLedgerNumberTracker.AssertExpectations(t)
+			hMock.AssertExpectations(t)
+		})
+	}
+}
+
 func Test_TransactionWorker_validateJob(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()

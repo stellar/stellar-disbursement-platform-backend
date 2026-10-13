@@ -337,7 +337,7 @@ func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error 
 }
 
 // handleSuccessfulTransaction will wrap up the job when the transaction has been successfully submitted to the network.
-// This method will only return an error if something goes wromg when handling the result and marking the transaction as SUCCESS.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as SUCCESS.
 func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction) error {
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
@@ -345,6 +345,16 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	}
 	if !hTxResp.Successful {
 		return fmt.Errorf("transaction was not successful for some reason")
+	}
+
+	// Record the hash that landed, preferring the outer fee-bump hash, falling back to top-level hash
+	landedHash := hTxResp.Hash
+	if hTxResp.FeeBumpTransaction != nil && hTxResp.FeeBumpTransaction.Hash != "" {
+		landedHash = hTxResp.FeeBumpTransaction.Hash
+	}
+	if landedHash != "" {
+		txJob.Transaction.StellarTransactionHash.String = landedHash
+		txJob.Transaction.StellarTransactionHash.Valid = true
 	}
 
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
