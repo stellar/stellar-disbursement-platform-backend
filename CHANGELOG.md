@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
 - Restore tenant-wide access for Developer role: developers are excluded from the distribution account membership system, and developer-minted API keys carry the same privileges as Owner-minted. [#1223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1223)
+- Allow editing receiver contact details while the receiver has pending payments. [#1237](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1237)
 
 ### Fixed
 
