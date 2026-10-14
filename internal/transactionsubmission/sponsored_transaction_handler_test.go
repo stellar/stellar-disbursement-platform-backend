@@ -347,7 +347,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "sponsored operation cannot require authorization from channel account")
+			assert.Contains(t, err.Error(), "sponsored operation can only be authorized by the caller's embedded wallet account")
 			assert.Nil(t, tx)
 		})
 
@@ -410,7 +410,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "sponsored operation cannot require authorization from distribution account")
+			assert.Contains(t, err.Error(), "sponsored operation can only be authorized by the caller's embedded wallet account")
 			assert.Nil(t, tx)
 		})
 
@@ -476,7 +476,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "sponsored operation cannot require authorization from channel account")
+			assert.Contains(t, err.Error(), "sponsored operation can only be authorized by the caller's embedded wallet account")
 			assert.Nil(t, tx)
 		})
 
@@ -542,11 +542,11 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "sponsored operation cannot require authorization from distribution account")
+			assert.Contains(t, err.Error(), "sponsored operation can only be authorized by the caller's embedded wallet account")
 			assert.Nil(t, tx)
 		})
 
-		t.Run("accepts operation requiring auth from other accounts", func(t *testing.T) {
+		t.Run("rejects operation requiring auth from other accounts", func(t *testing.T) {
 			otherAccount := "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
 			otherAccountID := xdr.MustAddress(otherAccount)
 			authEntry := xdr.SorobanAuthorizationEntry{
@@ -591,21 +591,6 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 			require.NoError(t, err)
 			opXDR := base64.StdEncoding.EncodeToString(opXDRBytes)
 
-			simulationResponse := protocol.SimulateTransactionResponse{
-				Error:              "",
-				TransactionDataXDR: "AAAAAAAAAAUAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAABgAAAAFDEqQxRKsWsubOpgtPPKXSsdhcWDpfu/jRwXKpUugxhQAAABQAAAABAAAABgAAAAGBhvDmuHDARIUDYKVFokPXfBrz+6tx3N4D7hMpL1AiBwAAABQAAAABAAAAB1uPeA45/uPdYS9GdAZXx37bjezG+3vn4JqEwlyjIRGmAAAAB9nC+GOHmV4+xAZQ4T0I434wH3LKi+db6CM9hlRZhRZgAAAAAgAAAAYAAAAAAAAAAI6zjC5RtJsxMAzXJfbm813ySujUwQVm4r2uHtkav62tAAAAFXCHgz/4M7a3AAAAAAAAAAYAAAABQxKkMUSrFrLmzqYLTzyl0rHYXFg6X7v40cFyqVLoMYUAAAAVNIwhp30FbW4AAAAAAB8NxwAAEgAAAACUAAAAAAAY7m4=",
-				MinResourceFee:     50,
-			}
-
-			rpcClient := &mocks.MockRPCClient{}
-			rpcClient.On("SimulateTransaction", mock.Anything, mock.Anything).Return(&stellar.SimulationResult{Response: simulationResponse}, (*stellar.SimulationError)(nil))
-
-			monitorSvc := tssMonitor.TSSMonitorService{
-				Client: &sdpMonitor.MockMonitorClient{},
-			}
-			handler, err := NewSponsoredTransactionHandler(engine, rpcClient, monitorSvc)
-			require.NoError(t, err)
-
 			txJob := &TxJob{
 				Transaction: store.Transaction{
 					Sponsored: store.Sponsored{
@@ -619,15 +604,14 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 				LockedUntilLedgerNumber: 12345,
 			}
 
-			tx, err := handler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
-			require.NoError(t, err)
-			assert.NotNil(t, tx)
-
-			rpcClient.AssertExpectations(t)
+			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "can only be authorized by the caller's embedded wallet account")
+			assert.Nil(t, tx)
 		})
 
-		t.Run("accepts operation with contract auth", func(t *testing.T) {
-			authContractIDBytes := strkey.MustDecode(strkey.VersionByteContract, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
+		t.Run("accepts operation authorized by the caller's own wallet contract", func(t *testing.T) {
+			authContractIDBytes := strkey.MustDecode(strkey.VersionByteContract, sponsoredAccount)
 			var authContractID xdr.Hash
 			copy(authContractID[:], authContractIDBytes)
 
@@ -708,6 +692,46 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 			rpcClient.AssertExpectations(t)
 		})
 
+		t.Run("rejects operation authorized by a foreign contract", func(t *testing.T) {
+			foreignIDBytes := strkey.MustDecode(strkey.VersionByteContract, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
+			var foreignID xdr.Hash
+			copy(foreignID[:], foreignIDBytes)
+			authEntry := xdr.SorobanAuthorizationEntry{
+				Credentials: xdr.SorobanCredentials{
+					Type: xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
+					Address: &xdr.SorobanAddressCredentials{
+						Address:                   xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: (*xdr.ContractId)(&foreignID)},
+						Nonce:                     1,
+						SignatureExpirationLedger: 100,
+						Signature:                 xdr.ScVal{Type: xdr.ScValTypeScvVoid},
+					},
+				},
+				RootInvocation: xdr.SorobanAuthorizedInvocation{
+					Function: xdr.SorobanAuthorizedFunction{
+						Type:       xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn,
+						ContractFn: &xdr.InvokeContractArgs{ContractAddress: contractAddress, FunctionName: functionSymbol, Args: []xdr.ScVal{}},
+					},
+					SubInvocations: []xdr.SorobanAuthorizedInvocation{},
+				},
+			}
+			op := xdr.InvokeHostFunctionOp{
+				HostFunction: xdr.HostFunction{Type: xdr.HostFunctionTypeHostFunctionTypeInvokeContract, InvokeContract: &xdr.InvokeContractArgs{ContractAddress: contractAddress, FunctionName: functionSymbol, Args: []xdr.ScVal{}}},
+				Auth:         []xdr.SorobanAuthorizationEntry{authEntry},
+			}
+			opXDRBytes, err := op.MarshalBinary()
+			require.NoError(t, err)
+			txJob := &TxJob{
+				Transaction:             store.Transaction{Sponsored: store.Sponsored{SponsoredAccount: sponsoredAccount, SponsoredOperationXDR: base64.StdEncoding.EncodeToString(opXDRBytes)}},
+				ChannelAccount:          store.ChannelAccount{PublicKey: channelAccount},
+				LockedUntilLedgerNumber: 12345,
+			}
+
+			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "can only be authorized by the caller's embedded wallet account")
+			assert.Nil(t, tx)
+		})
+
 		t.Run("rejects operation with invalid auth credentials type", func(t *testing.T) {
 			authEntry := xdr.SorobanAuthorizationEntry{
 				Credentials: xdr.SorobanCredentials{
@@ -757,7 +781,7 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 
 			tx, err := sponsoredHandler.BuildInnerTransaction(ctx, txJob, 100, distributionAccount)
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid auth credentials type")
+			assert.Contains(t, err.Error(), "credentials must be of address type")
 			assert.Nil(t, tx)
 		})
 	})

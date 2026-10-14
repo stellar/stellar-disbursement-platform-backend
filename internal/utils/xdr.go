@@ -81,6 +81,28 @@ func ExtractArgsMap(args xdr.ScVec) (map[string]string, error) {
 	return result, nil
 }
 
+// ValidateAuthEntriesFromContract requires every authorization entry to carry address credentials
+// for contractAddress, so no other account or contract authorizes the operation.
+func ValidateAuthEntriesFromContract(entries []xdr.SorobanAuthorizationEntry, contractAddress string) error {
+	for _, entry := range entries {
+		if entry.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress || entry.Credentials.Address == nil {
+			return fmt.Errorf("authorization entry credentials must be of address type")
+		}
+		address := entry.Credentials.Address.Address
+		if address.Type != xdr.ScAddressTypeScAddressTypeContract || address.ContractId == nil {
+			return fmt.Errorf("authorization entry address must be a contract")
+		}
+		encoded, err := strkey.Encode(strkey.VersionByteContract, address.ContractId[:])
+		if err != nil {
+			return fmt.Errorf("encoding authorization entry address: %w", err)
+		}
+		if encoded != contractAddress {
+			return fmt.Errorf("authorization entry address must be %s", contractAddress)
+		}
+	}
+	return nil
+}
+
 // BuildAuthorizationPayload produces the hash payload Soroban expects for signature verification.
 func BuildAuthorizationPayload(entry xdr.SorobanAuthorizationEntry, networkPassphrase string) ([32]byte, error) {
 	var zero [32]byte
