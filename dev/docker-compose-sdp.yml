@@ -16,7 +16,7 @@ services:
       context: ../
       dockerfile: Dockerfile.development
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:${PORT:-8000}:${PORT:-8000}"
       - "127.0.0.1:${METRICS_PORT:-8002}:${METRICS_PORT:-8002}"
       - "127.0.0.1:${ADMIN_PORT:-8003}:${ADMIN_PORT:-8003}"
       - "127.0.0.1:2345:2345"
@@ -116,7 +116,7 @@ services:
       context: .
       dockerfile: Dockerfile-demo-wallet
     ports:
-      - "4000:80"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:4000:80"
     volumes:
       - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
 
