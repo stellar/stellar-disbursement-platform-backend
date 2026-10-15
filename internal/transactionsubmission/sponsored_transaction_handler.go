@@ -84,51 +84,10 @@ func (h *SponsoredTransactionHandler) BuildInnerTransaction(ctx context.Context,
 		return nil, fmt.Errorf("invoke contract operation is missing contract details")
 	}
 
-	if len(operation.Auth) != 0 {
-		channelAccountID := xdr.MustAddress(txJob.ChannelAccount.PublicKey)
-		distributionAccountID := xdr.MustAddress(distributionAccount)
-
-		for _, auth := range operation.Auth {
-			if auth.Credentials.Type != xdr.SorobanCredentialsTypeSorobanCredentialsAddress {
-				return nil, fmt.Errorf("invalid auth credentials type")
-			}
-			if auth.Credentials.Address == nil {
-				return nil, fmt.Errorf("auth credentials address cannot be nil")
-			}
-
-			authAddress := auth.Credentials.Address.Address
-			switch authAddress.Type {
-			case xdr.ScAddressTypeScAddressTypeAccount:
-				if authAddress.AccountId == nil {
-					return nil, fmt.Errorf("auth credentials account ID cannot be nil")
-				}
-				authAccountID := *authAddress.AccountId
-
-				// Ensure the inner operation doesn't require auth from infrastructure accounts.
-				if authAccountID.Equals(channelAccountID) {
-					return nil, fmt.Errorf("sponsored operation cannot require authorization from channel account")
-				}
-				if authAccountID.Equals(distributionAccountID) {
-					return nil, fmt.Errorf("sponsored operation cannot require authorization from distribution account")
-				}
-			case xdr.ScAddressTypeScAddressTypeMuxedAccount:
-				if authAddress.MuxedAccount == nil {
-					return nil, fmt.Errorf("auth credentials muxed account cannot be nil")
-				}
-
-				// For muxed auth, compare the underlying ed25519 key.
-				authMuxedEd25519 := authAddress.MuxedAccount.Ed25519
-				if authMuxedEd25519 == channelAccountID.MustEd25519() {
-					return nil, fmt.Errorf("sponsored operation cannot require authorization from channel account")
-				}
-				if authMuxedEd25519 == distributionAccountID.MustEd25519() {
-					return nil, fmt.Errorf("sponsored operation cannot require authorization from distribution account")
-				}
-			case xdr.ScAddressTypeScAddressTypeContract:
-			case xdr.ScAddressTypeScAddressTypeClaimableBalance:
-			case xdr.ScAddressTypeScAddressTypeLiquidityPool:
-			}
-		}
+	// Only the caller's own embedded wallet may authorize a sponsored operation: any other authorizer
+	// would have the tenant pay for code or accounts outside its product.
+	if err = tssUtils.ValidateAuthEntriesFromContract(operation.Auth, txJob.Transaction.Sponsored.SponsoredAccount); err != nil {
+		return nil, fmt.Errorf("sponsored operation can only be authorized by the caller's embedded wallet account: %w", err)
 	}
 
 	sponsoredOperation := &txnbuild.InvokeHostFunction{
