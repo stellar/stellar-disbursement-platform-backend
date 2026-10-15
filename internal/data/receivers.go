@@ -225,25 +225,6 @@ func (r *ReceiverModel) InScopeIDs(ctx context.Context, sqlExec db.SQLExecuter, 
 	return inScope, nil
 }
 
-// HasNonTerminalPayments reports whether the receiver is still owed money on any payment.
-func (r *ReceiverModel) HasNonTerminalPayments(ctx context.Context, sqlExec db.SQLExecuter, receiverID string) (bool, error) {
-	const q = `
-		SELECT EXISTS (
-			SELECT 1
-			  FROM payments
-			 WHERE receiver_id = $1
-			   AND status = ANY($2)
-		)
-	`
-
-	var exists bool
-	if err := sqlExec.GetContext(ctx, &exists, q, receiverID, pq.Array(PaymentNonTerminalStatuses())); err != nil {
-		return false, fmt.Errorf("checking non-terminal payments for receiver %q: %w", receiverID, err)
-	}
-
-	return exists, nil
-}
-
 // Get returns a RECEIVER matching the given ID, with tenant-wide payment counters.
 func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Receiver, error) {
 	return r.GetWithStatsScope(ctx, sqlExec, id, nil)
