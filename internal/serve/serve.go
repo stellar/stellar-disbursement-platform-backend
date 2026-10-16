@@ -69,6 +69,7 @@ type ServeOptions struct {
 	Port                           int
 	Version                        string
 	InstanceName                   string
+	StellarExpertURL               string
 	MonitorService                 monitor.MonitorServiceInterface
 	MtnDBConnectionPool            db.DBConnectionPool
 	AdminDBConnectionPool          db.DBConnectionPool
@@ -787,6 +788,29 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			NetworkType:                 o.NetworkType,
 		}.Get)
 
+		reportsService := services.NewReportsService(
+			o.SubmitterEngine.HorizonClient,
+			o.DistributionAccountService,
+			o.Models,
+		)
+		reportsHandler := httphandler.ReportsHandler{
+			ReportsService:       reportsService,
+			Models:               o.Models,
+			DBConnectionPool:     o.MtnDBConnectionPool,
+			HorizonClient:        o.SubmitterEngine.HorizonClient,
+			AuthManager:          authManager,
+			StellarExpertBaseURL: o.stellarExpertBaseURL(),
+		}
+		// Reports follow the payment read rules: business roles at the route, membership scope in the
+		// handlers, and nothing at all while the organization has reporting switched off.
+		r.With(
+			middleware.RequirePermission(data.ReadReports, middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...)),
+			middleware.RequireReportingEnabled(o.Models),
+		).Group(func(r chi.Router) {
+			r.Get("/reports/statement", reportsHandler.GetStatementExport)
+			r.Get("/reports/payment/{id}", reportsHandler.GetPaymentExport)
+		})
+
 		exportHandler := httphandler.ExportHandler{
 			Models:      o.Models,
 			AuthManager: authManager,
@@ -1069,4 +1093,16 @@ func staticFileServer(r chi.Router, fileSystem fs.FS) {
 		fs := http.StripPrefix(pathPrefix, http.FileServer(http.FS(fileSystem)))
 		fs.ServeHTTP(w, r)
 	})
+}
+
+// stellarExpertBaseURL returns the explorer base URL the report PDFs link to, with a trailing slash.
+func (opts ServeOptions) stellarExpertBaseURL() string {
+	u := strings.TrimRight(opts.StellarExpertURL, "/")
+	if u == "" {
+		u = "https://stellar.expert/explorer/testnet"
+		if opts.NetworkType == utils.PubnetNetworkType {
+			u = "https://stellar.expert/explorer/public"
+		}
+	}
+	return u + "/"
 }

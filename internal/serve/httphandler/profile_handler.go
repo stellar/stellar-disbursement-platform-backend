@@ -53,6 +53,7 @@ type PatchOrganizationProfileRequest struct {
 	WebhookURL                          *string `json:"webhook_url"`
 	MFADisabled                         *bool   `json:"mfa_disabled"`
 	CAPTCHADisabled                     *bool   `json:"captcha_disabled"`
+	ReportingEnabled                    *bool   `json:"reporting_enabled"`
 	ReceiverInvitationsDisabled         *bool   `json:"receiver_invitations_disabled"`
 }
 
@@ -198,6 +199,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		WebhookURL:                           reqBody.WebhookURL,
 		MFADisabled:                          reqBody.MFADisabled,
 		CAPTCHADisabled:                      reqBody.CAPTCHADisabled,
+		ReportingEnabled:                     reqBody.ReportingEnabled,
 		ReceiverInvitationsDisabled:          reqBody.ReceiverInvitationsDisabled,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
@@ -385,6 +387,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"message_channel_priority":                 org.MessageChannelPriority,
 		"mfa_disabled":                             org.MFADisabled,
 		"captcha_disabled":                         org.CAPTCHADisabled,
+		"reporting_enabled":                        org.ReportingEnabled,
 		"receiver_invitations_disabled":            org.ReceiverInvitationsDisabled,
 	}
 
