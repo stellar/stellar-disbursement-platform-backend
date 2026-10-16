@@ -12,7 +12,7 @@ import {
 
 import { useTranslation } from "react-i18next";
 import intlTelInput, { Iti } from "intl-tel-input";
-import { ru, en } from "intl-tel-input/i18n";
+import { en, es, pt, ru } from "intl-tel-input/i18n";
 
 import ReCaptcha from "react-google-recaptcha";
 
@@ -84,6 +84,9 @@ export const SelectVerificationMethod: FC = () => {
     const intlTelInputDropdownLang: any = {
       en,
       ua: ru,
+      es,
+      ru,
+      pt,
     };
 
     if (phoneInputRef?.current) {
