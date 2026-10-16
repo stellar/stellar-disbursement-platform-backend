@@ -1,0 +1,64 @@
+# Development stack: builds the backend from this checkout, runs the API under the Delve debugger (localhost:2345),
+# and uses the frontend edge build plus the demo wallet.
+services:
+  db:
+    extends:
+      file: docker-compose-sdp.yml
+      service: db
+  sdp-api:
+    extends:
+      file: docker-compose-sdp.yml
+      service: sdp-api
+    image: stellar/sdp-v2:development
+    build:
+      context: ../
+      dockerfile: Dockerfile.development
+    ports:
+      - "127.0.0.1:2345:2345"
+    # Same steps as sdp-api in docker-compose-sdp.yml, but serves under Delve.
+    command:
+      - sh
+      - -c
+      - |
+        sleep 5
+        ./stellar-disbursement-platform db admin migrate up
+        ./stellar-disbursement-platform db tss migrate up
+        ./stellar-disbursement-platform db auth migrate up --all
+        ./stellar-disbursement-platform db sdp migrate up --all
+        ./stellar-disbursement-platform db setup-for-network --all
+        echo "starting dlv stellar-disbursement-platform"
+        exec /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
+    depends_on:
+      db:
+        condition: service_started
+  sdp-tss:
+    extends:
+      file: docker-compose-tss.yml
+      service: sdp-tss
+    image: stellar/sdp-v2:development
+    build:
+      context: ../
+      dockerfile: Dockerfile.development
+    depends_on:
+      - db
+      - sdp-api
+  sdp-frontend:
+    extends:
+      file: docker-compose-frontend.yml
+      service: sdp-frontend
+    image: stellar/stellar-disbursement-platform-frontend:edge
+    depends_on:
+      - db
+      - sdp-api
+  demo-wallet:
+    build:
+      context: .
+      dockerfile: Dockerfile-demo-wallet
+    ports:
+      - "${SDP_BIND_ADDR:-127.0.0.1}:4000:80"
+    volumes:
+      - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
+volumes:
+  postgres-db:
+    name: ${COMPOSE_PROJECT_NAME}_postgres-db
+    driver: local
