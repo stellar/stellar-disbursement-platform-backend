@@ -6,3 +6,7 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ['sdp-api:8002']
+  - job_name: 'tss'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['sdp-tss:9002']
