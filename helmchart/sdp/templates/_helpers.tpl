@@ -125,13 +125,6 @@ http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
 
 
 {{/*
-TSS port
-*/}}
-{{- define "tss.port" -}}
-{{- .Values.tss.route.port | default "9000" }}
-{{- end }}
-
-{{/*
 TSS Metrics port
 */}}
 {{- define "tss.metricsPort" -}}

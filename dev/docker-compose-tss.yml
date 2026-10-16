@@ -6,7 +6,7 @@ services:
       context: ../
       dockerfile: Dockerfile
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:${TSS_METRICS_PORT:-9002}:${TSS_METRICS_PORT:-9002}"
     environment:
       DATABASE_URL: postgres://postgres@db:5432/${DATABASE_NAME:-sdp_mtn}?sslmode=disable
       NETWORK_PASSPHRASE: ${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
