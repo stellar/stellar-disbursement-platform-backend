@@ -360,6 +360,8 @@ The setup wizard launches the local environment (Docker Compose), initializes te
 - `sdp-frontend`: SDP frontend service running on port `3000`.
 - `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
 
+All ports are published on `127.0.0.1`, so they are reachable from this machine only. To reach the API, dashboard and demo wallet from another machine, set `SDP_BIND_ADDR=0.0.0.0` in your `.env`, and change `API_URL` in `env-config-<network>.js`, `BASE_URL` and `SDP_UI_BASE_URL` to the host's address; otherwise the dashboard and the links the SDP sends still point at `localhost`. For anything beyond testing, keep `SDP_BIND_ADDR=127.0.0.1` and put a TLS reverse proxy in front of the API and dashboard instead.
+
 ### Remote Debugging
 
 To help collaborators debug remotely against the Docker containers, the environment started with the setup wizard also launches a development version of the Dockerfile (`Dockerfile-development`). This builds and runs a debug Docker container for the SDP. A sample [launch.json](./sample/launch.json) is provided.
@@ -407,16 +409,18 @@ The SDP supports monitoring via Prometheus and Grafana.
 
 #### Start Prometheus and Grafana containers
 
-The containers can be started by running the following command from the `dev` directory:
+Start the SDP first. The containers can then be started by running the following command from the `dev` directory. Note that Prometheus joins the SDP's Docker network to scrape `sdp-api`, so set `SDP_NETWORK` to that network, `<compose project>_default`.
 
 ```sh
-docker compose -p sdp-multi-tenant -f docker-compose-monitoring.yml up -d
+SDP_NETWORK=sdp_default docker compose -p sdp-monitoring -f docker-compose-monitoring.yml up -d
 ```
+
+>Note: If you later recreate the SDP stack (`docker compose down` and `up`), re-run this command with `--force-recreate` so Prometheus reattaches to the new network.
 
 This will start the following services:
 
-- `prometheus`: Prometheus service running on port `9090`.
-- `grafana`: Grafana service running on port `3002`.
+- `prometheus`: Prometheus service running on `127.0.0.1:9090`.
+- `grafana`: Grafana service running on `127.0.0.1:3002`.
 
 #### Load the SDP Grafana Dashboard
 
