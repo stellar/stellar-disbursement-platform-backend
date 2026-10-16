@@ -7,7 +7,7 @@ services:
       POSTGRES_DB: ${DATABASE_NAME:-sdp_mtn}
       PGDATA: /data/postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-db:/data/postgres
   sdp-api:
@@ -16,10 +16,10 @@ services:
       context: ../
       dockerfile: Dockerfile.development
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
-      - "${METRICS_PORT:-8002}:${METRICS_PORT:-8002}"
-      - "${ADMIN_PORT:-8003}:${ADMIN_PORT:-8003}"
-      - "2345:2345"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:${PORT:-8000}:${PORT:-8000}"
+      - "127.0.0.1:${METRICS_PORT:-8002}:${METRICS_PORT:-8002}"
+      - "127.0.0.1:${ADMIN_PORT:-8003}:${ADMIN_PORT:-8003}"
+      - "127.0.0.1:2345:2345"
     environment:
       BASE_URL: ${BASE_URL:-http://localhost:8000}
       SDP_UI_BASE_URL: ${SDP_UI_BASE_URL:-http://localhost:3000}
@@ -116,7 +116,7 @@ services:
       context: .
       dockerfile: Dockerfile-demo-wallet
     ports:
-      - "4000:80"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:4000:80"
     volumes:
       - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
 
