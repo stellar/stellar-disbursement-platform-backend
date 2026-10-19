@@ -6,9 +6,11 @@ import locale_ua from "@/locales/ua/global.json";
 import locale_es from "@/locales/es/global.json";
 import locale_ru from "@/locales/ru/global.json";
 import locale_ht from "@/locales/ht/global.json";
+import locale_pt from "@/locales/pt/global.json";
 
 i18next.use(initReactI18next).init({
   debug: true,
+  fallbackLng: "en",
   resources: {
     en: {
       translation: locale_en,
@@ -24,6 +26,9 @@ i18next.use(initReactI18next).init({
     },
     ht: {
       translation: locale_ht,
-    }
+    },
+    pt: {
+      translation: locale_pt,
+    },
   },
 });
