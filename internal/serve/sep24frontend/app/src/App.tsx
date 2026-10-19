@@ -161,7 +161,7 @@ const App: FC = () => {
             }}
           >
             <option value="en">English</option>
-            <option value="ua">Українська</option>
+            <option value="uk">Українська</option>
             <option value="es">Español</option>
             <option value="ru">Русский</option>
             <option value="ht">Kreyòl Ayisyen</option>
