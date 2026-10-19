@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/tools/sdp-setup/internal/config"
 	"github.com/stellar/stellar-disbursement-platform-backend/tools/sdp-setup/internal/ui"
 )
@@ -36,18 +37,26 @@ func NewService(cfg config.Config) (*Service, error) {
 		}
 	}
 
-	files := []string{"docker-compose.yml"}
-	if cfg.UseHTTPS {
-		files = append(files, "docker-compose-https-frontend.yml")
-	}
-
 	return &Service{
 		cfg: cfg,
 		executor: &DefaultExecutor{
 			cfg: cfg,
 		},
-		files: files,
+		files: composeFiles(cfg),
 	}, nil
+}
+
+// composeFiles picks the Compose stack: testnet gets the development stack (local build, debugger, demo wallet),
+// anything else gets the release stack (published images). The HTTPS proxy is added on top when enabled.
+func composeFiles(cfg config.Config) []string {
+	files := []string{"docker-compose.yml"}
+	if utils.NetworkType(cfg.NetworkType).IsTestnet() {
+		files = []string{"docker-compose-dev.yml"}
+	}
+	if cfg.UseHTTPS {
+		files = append(files, "docker-compose-https-frontend.yml")
+	}
+	return files
 }
 
 // Preflight checks for required tools and running docker daemon.

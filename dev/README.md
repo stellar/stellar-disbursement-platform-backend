@@ -132,19 +132,27 @@ The setup wizard will:
 
 For existing configurations, you can launch directly by selecting from available `.env` files in the `dev/` directory.
 
+The wizard runs the development stack (`docker-compose-dev.yml`) for testnet setups and the release stack (`docker-compose.yml`) for mainnet setups.
+
 #### Option 2: Using Docker Compose Directly
 
-If you already have a configured `.env` file, you can start the services directly:
+If you already have a configured `.env` file, start one of the two stacks from the `dev` directory.
+
+Development stack: builds the backend from this checkout, runs the API under the Delve debugger (`localhost:2345`), and uses the dashboard `edge` build plus the demo wallet:
+
+```sh
+cd dev
+docker compose -f docker-compose-dev.yml up -d --build
+```
+
+Release stack: runs the published images pinned by `SDP_VERSION` and `SDP_FRONTEND_VERSION`, with no debugger or demo wallet:
 
 ```sh
 cd dev
 docker compose up -d
 ```
 
-To stop the services:
-```sh
-docker compose down
-```
+To stop the services, run `down` with the same file, e.g. `docker compose -f docker-compose-dev.yml down`.
 
 #### Option 3: Running Locally with Go (Development)
 
@@ -196,6 +204,8 @@ The setup wizard automatically handles mainnet configuration when you select "pu
    - `HORIZON_URL=https://horizon.stellar.org`
    - `DATABASE_NAME=sdp_mainnet` (separate database for isolation)
    - `DISABLE_MFA=false` (MFA enforced for mainnet)
+
+   > Note: The setup wizard does not configure the rest of the environment variables. Be sure to set these explicitly in your mainnet `.env` file. **Do not leave default values for secrets**. See the [Configuration Guide](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) for more details on environment variables.
 
 2. **Account Requirements**:
    - **Distribution Account**: Must be funded with sufficient XLM for creating channel accounts, distribution accounts for different tenants, and transaction fees
@@ -358,20 +368,24 @@ The setup wizard launches the local environment (Docker Compose), initializes te
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
-- `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
+- `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000` (development stack only).
+
+All ports are published on `127.0.0.1`, so they are reachable from this machine only. To reach the API, dashboard and demo wallet from another machine, set `SDP_BIND_ADDR=0.0.0.0` in your `.env`, and change `API_URL` in `env-config-<network>.js`, `BASE_URL` and `SDP_UI_BASE_URL` to the host's address; otherwise the dashboard and the links the SDP sends still point at `localhost`. For anything beyond testing, keep `SDP_BIND_ADDR=127.0.0.1` and put a TLS reverse proxy in front of the API and dashboard instead.
 
 ### Remote Debugging
 
-To help collaborators debug remotely against the Docker containers, the environment started with the setup wizard also launches a development version of the Dockerfile (`Dockerfile-development`). This builds and runs a debug Docker container for the SDP. A sample [launch.json](./sample/launch.json) is provided.
+To help collaborators debug remotely against the Docker containers, the development stack (`docker-compose-dev.yml`) started by the setup wizard (when testnet is selected) builds a debug image from `Dockerfile.development`. This runs the API under the Delve debugger, listening on `127.0.0.1:2345`. A sample [launch.json](./sample/launch.json) is provided.
 
 Follow these steps to debug remotely using VS Code or IntelliJ GoLang:
 
 #### Ensure Docker Containers are Running:
 
-Make sure the Docker containers are up and running using the setup wizard:
+Make sure the development stack is running, either through the setup wizard with a testnet setup or directly:
 
 ```sh
 make setup
+# or
+cd dev && docker compose -f docker-compose-dev.yml up -d --build
 ```
 
 #### Using VS Code:
@@ -407,16 +421,18 @@ The SDP supports monitoring via Prometheus and Grafana.
 
 #### Start Prometheus and Grafana containers
 
-The containers can be started by running the following command from the `dev` directory:
+Start the SDP first. The containers can then be started by running the following command from the `dev` directory. Note that Prometheus joins the SDP's Docker network to scrape `sdp-api`, so set `SDP_NETWORK` to that network, `<compose project>_default`.
 
 ```sh
-docker compose -p sdp-multi-tenant -f docker-compose-monitoring.yml up -d
+SDP_NETWORK=sdp_default docker compose -p sdp-monitoring -f docker-compose-monitoring.yml up -d
 ```
+
+>Note: If you later recreate the SDP stack (`docker compose down` and `up`), re-run this command with `--force-recreate` so Prometheus reattaches to the new network.
 
 This will start the following services:
 
-- `prometheus`: Prometheus service running on port `9090`.
-- `grafana`: Grafana service running on port `3002`.
+- `prometheus`: Prometheus service running on `127.0.0.1:9090`.
+- `grafana`: Grafana service running on `127.0.0.1:3002`.
 
 #### Load the SDP Grafana Dashboard
 
@@ -437,7 +453,7 @@ A sample [Postman collection](./sample/SDP.postman_collection.json) is available
 
 Making payments requires transaction fees that are paid in XLM from the distribution account. Payments will start failing if the distribution account does not have enough XLM to pay for these fees. To check this:
 
-- Find the distribution account public key in `dev/docker-compose.yml` under the variable `DISTRIBUTION_PUBLIC_KEY`
+- Find the distribution account public key in your setup's `.env` file (e.g. `dev/.env`) under the variable `DISTRIBUTION_PUBLIC_KEY`
 - Access [https://horizon-testnet.stellar.org/accounts/:accountId](https://horizon-testnet.stellar.org/accounts/GARGKDIDH7WMKV5WWPK4BH4CKEQIZGWUCA4EUXCY5VICHTHLEBXVNVMW) in your browser and check the balance.
 - You could also check the balance using [demo wallet](https://demo-wallet.stellar.org/account?secretKey=YOUR_SECRET_KEY)
 - If the balance is indeed low, here are some of the options to add additional XLM to the distribution account:

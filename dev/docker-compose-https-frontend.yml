@@ -1,14 +1,10 @@
 services:
-  sdp-frontend:
-    extends:
-      file: docker-compose-frontend.yml
-      service: sdp-frontend
   sdp-frontend-proxy:
     image: nginx:1.25-alpine
     depends_on:
       - sdp-frontend
     ports:
-      - "3443:443"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:3443:443"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

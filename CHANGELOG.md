@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bind sponsored transaction authorization to the caller's embedded wallet. [#1236](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1236)
 - Publish TSS metrics on `TSS_METRICS_PORT` (default `9002`) in Docker Compose. [#1239](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1239)
 - Show English instead of raw translation keys in the SEP-24 webview when the device language is unsupported, and respect the saved language. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
+- Split Docker Compose into release and development stacks. [#1243](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1243)
 
 ### Security and Dependencies
 
@@ -48,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Verify the SEP-10 `client_domain` signature against the operation source account. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
 - Return `400 Bad Request` instead of `500` when a `client_domain` signing key cannot be resolved. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
 - Harden URL shortener against enumeration: increase shortcode entropy and rate-limit GET /r/{code} per client IP. [#1204](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1204)
+- Publish Docker Compose ports on `127.0.0.1` by default. [#1238](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1238)
 
 ## [7.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.1...7.0.0))
 
