@@ -27,6 +27,7 @@ type FooterConfig struct {
 
 // SetupFooter sets the PDF footer function.
 func SetupFooter(pdf *gofpdf.Fpdf, cfg FooterConfig) {
+	pdf.AliasNbPages("") // {nb} in the footer becomes the page total when the document closes
 	pdf.SetFooterFunc(func() {
 		pdf.SetY(cfg.PageHeight - cfg.MarginBottom)
 		pdf.Ln(cfg.FooterMarginTop)
@@ -59,7 +60,7 @@ func SetupFooter(pdf *gofpdf.Fpdf, cfg FooterConfig) {
 		pdf.SetXY(xTextStart, pdf.GetY())
 		pdf.CellFormat(0, cfg.FooterLineHeight, disclaimerTextLine2, "", 1, "L", false, 0, "")
 		pdf.Ln(cfg.FooterDisclaimerToPageGap * 0.5)
-		pdf.CellFormat(0, cfg.FooterLineHeight, fmt.Sprintf("Page %d of %d", pdf.PageNo(), pdf.PageCount()), "", 0, "R", false, 0, "")
+		pdf.CellFormat(0, cfg.FooterLineHeight, fmt.Sprintf("Page %d of {nb}", pdf.PageNo()), "", 0, "R", false, 0, "")
 		pdf.SetTextColor(0, 0, 0)
 	})
 }

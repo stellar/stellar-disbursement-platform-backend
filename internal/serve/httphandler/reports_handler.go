@@ -235,11 +235,9 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 
 	var orgName string
 	var orgLogo []byte
-	if h.Models != nil {
-		if org, orgErr := h.Models.Organizations.Get(ctx); orgErr == nil {
-			orgName = org.Name
-			orgLogo = org.Logo
-		}
+	if org, orgErr := h.Models.Organizations.Get(ctx); orgErr == nil {
+		orgName = org.Name
+		orgLogo = org.Logo
 	}
 
 	// The sender is the account the payment was actually sent from: recorded on success and kept

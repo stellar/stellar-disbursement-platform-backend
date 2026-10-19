@@ -1,6 +1,9 @@
 package transaction
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +15,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-// TestBuildPDF renders one notice per layout path and checks each builds. The row content itself
-// is pinned by TestDetailRows; the PDF bytes are not inspected.
+// TestBuildPDF renders one notice per layout path and checks each builds and embeds the logo only when
+// it can be read. The row content itself is pinned by TestDetailRows.
 func TestBuildPDF(t *testing.T) {
 	payoutType := data.CircleTransactionTypePayout
 	minimal := &data.Payment{
@@ -42,6 +45,8 @@ func TestBuildPDF(t *testing.T) {
 		DisbursementApprovedByUserName: "Bob", DisbursementApprovedByTimestamp: "Jan 2, 2026 · 10:00:00 UTC",
 	}
 	longNotes := strings.Repeat("x", 500)
+	var logo bytes.Buffer
+	require.NoError(t, png.Encode(&logo, image.NewRGBA(image.Rect(0, 0, 1, 1))))
 	emojiEnrichment := &Enrichment{SenderName: "Stellar Aid 🚀", SenderAccountName: "Main 🌸", DisbursementCreatedByUserName: "Alice 😀", DisbursementCreatedByTimestamp: "Jan 1, 2026"}
 
 	testCases := []struct {
@@ -50,11 +55,13 @@ func TestBuildPDF(t *testing.T) {
 		enrichment *Enrichment
 		notes      *string
 		logo       []byte
+		wantLogo   bool
 	}{
 		{name: "minimal draft payment, no enrichment"},
 		{name: "success payment with every section filled", payment: full, enrichment: enrichment},
 		{name: "internal notes at the maximum length", payment: full, enrichment: enrichment, notes: &longNotes},
-		{name: "organization logo", logo: []byte{0x89, 0x50, 0x4E, 0x47}},
+		{name: "organization logo", logo: logo.Bytes(), wantLogo: true},
+		{name: "unreadable logo is left out", logo: []byte{0x89, 0x50, 0x4E, 0x47}},
 		{name: "emoji in names", payment: full, enrichment: emojiEnrichment},
 	}
 	for _, tc := range testCases {
@@ -66,6 +73,7 @@ func TestBuildPDF(t *testing.T) {
 			pdfBytes, err := BuildPDF(payment, "Test Organization", tc.logo, tc.enrichment, tc.notes, "example.com")
 			require.NoError(t, err)
 			assert.Greater(t, len(pdfBytes), 1000)
+			assert.Equal(t, tc.wantLogo, bytes.Contains(pdfBytes, []byte("/Subtype /Image")))
 		})
 	}
 }

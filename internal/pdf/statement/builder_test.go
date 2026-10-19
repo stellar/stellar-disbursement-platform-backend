@@ -1,6 +1,9 @@
 package statement
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"testing"
 	"time"
 
@@ -26,12 +29,15 @@ func TestBuildPDF(t *testing.T) {
 	emojiCredit.CounterpartyName = "Donor 🌸"
 	notReconciled := xlm("0.0000000", credit)
 	notReconciled.Reconciled = false
+	var logo bytes.Buffer
+	require.NoError(t, png.Encode(&logo, image.NewRGBA(image.Rect(0, 0, 1, 1))))
 
 	testCases := []struct {
-		name   string
-		result *services.StatementResult
-		logo   []byte
-		org    string
+		name     string
+		result   *services.StatementResult
+		logo     []byte
+		wantLogo bool
+		org      string
 	}{
 		{name: "credit and debit rows", result: statement("GABC", xlm("0.0000000", credit, debit))},
 		{name: "no transactions", result: statement("GABC", xlm("0.0000000"))},
@@ -39,7 +45,8 @@ func TestBuildPDF(t *testing.T) {
 		{name: "stellar: prefix on the account", result: statement("stellar:GABC", xlm("0.0000000", credit))},
 		{name: "unparseable beginning balance still renders", result: statement("GABC", xlm("invalid-balance", credit))},
 		{name: "not reconciled", result: statement("GABC", notReconciled)},
-		{name: "organization logo", result: statement("GABC", xlm("0.0000000")), logo: []byte{0x89, 0x50, 0x4E, 0x47}},
+		{name: "organization logo", result: statement("GABC", xlm("0.0000000")), logo: logo.Bytes(), wantLogo: true},
+		{name: "unreadable logo is left out", result: statement("GABC", xlm("0.0000000")), logo: []byte{0x89, 0x50, 0x4E, 0x47}},
 		{name: "emoji in names", result: statement("GABC", xlm("0.0000000", emojiCredit)), org: "Stellar Aid 🚀"},
 	}
 	from, to := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC)
@@ -52,6 +59,7 @@ func TestBuildPDF(t *testing.T) {
 			pdfBytes, err := BuildPDF(tc.result, from, to, org, tc.logo, "example.com", "https://stellar.expert/explorer/testnet/")
 			require.NoError(t, err)
 			assert.Greater(t, len(pdfBytes), 1000)
+			assert.Equal(t, tc.wantLogo, bytes.Contains(pdfBytes, []byte("/Subtype /Image")))
 		})
 	}
 }

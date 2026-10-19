@@ -14,9 +14,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-// BuildPDF generates a multi-page PDF from a StatementResult and returns the bytes.
-// BuildPDF renders the statement. stellarExpertBaseURL (with trailing slash) is where account and
-// transaction links point.
+// BuildPDF renders the statement as a multi-page PDF. stellarExpertBaseURL (with trailing slash) is
+// where account and transaction links point.
 func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte, operatedByBaseURL, stellarExpertBaseURL string) ([]byte, error) {
 	pdfDoc := gofpdf.New("P", "mm", "A4", "")
 
@@ -25,7 +24,6 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	pdfDoc.AddUTF8FontFromBytes("Inter", "M", shared.InterMediumFont)
 	pdfDoc.AddUTF8FontFromBytes("Inter", "emi", shared.InterSemiBoldFont)
 	pdfDoc.AddUTF8FontFromBytes("GoogleSansCode", "", shared.GoogleSansCodeRegularFont)
-	pdfDoc.AddUTF8FontFromBytes("GoogleSansCode", "U", shared.GoogleSansCodeRegularFont)
 
 	pdfDoc.SetMargins(marginLR, marginTop, marginLR)
 	pdfDoc.SetAutoPageBreak(true, marginBottom)
@@ -74,6 +72,20 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 	drawSummaryTable(pdfDoc, result)
 
 	pageBottom := pageHeight - marginBottom
+	newPage := func() {
+		pdfDoc.AddPage()
+		shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
+			OrganizationName:      organizationName,
+			OrganizationLogo:      organizationLogo,
+			StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
+			AccountAddress:        account,
+			AccountAddressDisplay: utils.TruncateString(accountAddr, 5),
+			StellarExpertBaseURL:  stellarExpertBaseURL,
+			OperatedByBaseURL:     operatedByBaseURL,
+		})
+		shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
+		drawTxTableHeader(pdfDoc)
+	}
 	for _, asset := range result.Summary.Assets {
 		if len(asset.Transactions) == 0 {
 			continue
@@ -92,40 +104,12 @@ func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, orga
 		transactions := asset.Transactions
 		for i := range transactions {
 			if pdfDoc.GetY()+txDataRowHeight > pageBottom {
-				pdfDoc.AddPage()
-				if pdfDoc.PageNo() > 1 {
-					shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-						OrganizationName:      organizationName,
-						OrganizationLogo:      organizationLogo,
-						StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
-						TitleSection:          nil,
-						AccountAddress:        account,
-						AccountAddressDisplay: utils.TruncateString(accountAddr, 5),
-						StellarExpertBaseURL:  stellarExpertBaseURL,
-						OperatedByBaseURL:     operatedByBaseURL,
-					})
-					shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
-				}
-				drawTxTableHeader(pdfDoc)
+				newPage()
 			}
 			runningBalance = drawTxRow(pdfDoc, &transactions[i], asset.Code, runningBalance, stellarExpertBaseURL)
 		}
 		if pdfDoc.GetY()+txDataRowHeight > pageBottom {
-			pdfDoc.AddPage()
-			if pdfDoc.PageNo() > 1 {
-				shared.DrawHeader(pdfDoc, headerLayout, &shared.HeaderParams{
-					OrganizationName:      organizationName,
-					OrganizationLogo:      organizationLogo,
-					StatementPeriod:       &shared.StatementPeriod{From: fromDate, To: toDate},
-					TitleSection:          nil,
-					AccountAddress:        account,
-					AccountAddressDisplay: utils.TruncateString(accountAddr, 5),
-					StellarExpertBaseURL:  stellarExpertBaseURL,
-					OperatedByBaseURL:     operatedByBaseURL,
-				})
-				shared.DrawHeaderSeparatorLine(pdfDoc, headerLayout, miniHeaderSeparatorBottomMargin)
-			}
-			drawTxTableHeader(pdfDoc)
+			newPage()
 		}
 		drawTotalsRowForAsset(pdfDoc, &asset)
 		pdfDoc.Ln(sectionBottomMargin)

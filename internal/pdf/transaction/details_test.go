@@ -75,27 +75,6 @@ func TestWalletAddressValueLines(t *testing.T) {
 	}
 }
 
-func TestEnrichmentValue(t *testing.T) {
-	e := &Enrichment{SenderName: "Alice", FeeCharged: "0.01 XLM"}
-
-	t.Run("ok false returns empty", func(t *testing.T) {
-		got := enrichmentValue(nil, false, "x")
-		assert.Empty(t, got)
-	})
-
-	t.Run("e nil returns empty", func(t *testing.T) {
-		got := enrichmentValue(nil, true, "x")
-		assert.Empty(t, got)
-	})
-
-	t.Run("ok true and e set returns value", func(t *testing.T) {
-		got := enrichmentValue(e, true, e.SenderName)
-		assert.Equal(t, "Alice", got)
-		got = enrichmentValue(e, true, e.FeeCharged)
-		assert.Equal(t, "0.01 XLM", got)
-	})
-}
-
 func TestMemoForDisplay(t *testing.T) {
 	const testDBMemo = "db-memo"
 	withMemo := &data.Payment{ReceiverWallet: &data.ReceiverWallet{StellarMemo: testDBMemo}}

@@ -242,7 +242,7 @@ func DrawHeaderSeparatorLine(pdf *gofpdf.Fpdf, layout *HeaderLayout, bottomMargi
 }
 
 func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.ImageInfoType) {
-	_, format, err := image.Decode(bytes.NewReader(logoBytes))
+	_, format, err := image.DecodeConfig(bytes.NewReader(logoBytes))
 	if err != nil {
 		return "", nil
 	}

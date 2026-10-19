@@ -35,8 +35,6 @@ func orDash(s string) string {
 	return s
 }
 
-// truncateWithEllipsis returns s truncated to maxChars runes with "..." appended if truncated.
-
 // splitWalletAddressLines splits an address into lines of at most walletAddressBreakChars characters.
 func splitWalletAddressLines(addr string) []string {
 	if addr == "" {
@@ -211,13 +209,6 @@ func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enric
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.Ln(bottomMargin)
-}
-
-func enrichmentValue(e *Enrichment, ok bool, v string) string {
-	if !ok || e == nil {
-		return ""
-	}
-	return v
 }
 
 func memoForDisplay(p *data.Payment, e *Enrichment) string {

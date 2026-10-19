@@ -21,7 +21,6 @@ func BuildPDF(payment *data.Payment, organizationName string, organizationLogo [
 	pdfDoc.AddUTF8FontFromBytes("Inter", "emi", shared.InterSemiBoldFont)
 	pdfDoc.AddUTF8FontFromBytes("Inter", "I", shared.InterItalicFont)
 	pdfDoc.AddUTF8FontFromBytes("GoogleSansCode", "", shared.GoogleSansCodeRegularFont)
-	pdfDoc.AddUTF8FontFromBytes("GoogleSansCode", "U", shared.GoogleSansCodeRegularFont)
 
 	pdfDoc.SetMargins(marginLR, marginTop, marginLR)
 	pdfDoc.SetAutoPageBreak(true, marginBottom)
