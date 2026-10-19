@@ -1,13 +1,13 @@
 package transaction
 
 import (
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 )
 
-func drawDisbursementDetailRowAt(pdf *gofpdf.Fpdf, x, y float64, label, value string) {
+func drawDisbursementDetailRowAt(pdf *fpdf.Fpdf, x, y float64, label, value string) {
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.SetTextColor(detailLabelColor[0], detailLabelColor[1], detailLabelColor[2])
 	pdf.SetXY(x, y)
@@ -18,7 +18,7 @@ func drawDisbursementDetailRowAt(pdf *gofpdf.Fpdf, x, y float64, label, value st
 	pdf.CellFormat(0, detailValueLineHeight, value, "", 0, "L", false, 0, "")
 }
 
-func drawDisbursementDetailCreatedApprovedAt(pdf *gofpdf.Fpdf, x, y float64, label, userName, timestamp string) {
+func drawDisbursementDetailCreatedApprovedAt(pdf *fpdf.Fpdf, x, y float64, label, userName, timestamp string) {
 	pdf.SetFont("Inter", "", bodyFontSize)
 	pdf.SetTextColor(detailLabelColor[0], detailLabelColor[1], detailLabelColor[2])
 	pdf.SetXY(x, y)
@@ -40,7 +40,7 @@ func drawDisbursementDetailCreatedApprovedAt(pdf *gofpdf.Fpdf, x, y float64, lab
 }
 
 // drawDisbursementDetailsSection draws the "Disbursement Details" section when payment is a disbursement.
-func drawDisbursementDetailsSection(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enrichment) {
+func drawDisbursementDetailsSection(pdf *fpdf.Fpdf, payment *data.Payment, enrichment *Enrichment) {
 	if payment.Disbursement == nil {
 		return
 	}

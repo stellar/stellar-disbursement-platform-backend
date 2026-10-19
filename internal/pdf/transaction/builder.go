@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
@@ -13,7 +13,7 @@ import (
 // BuildPDF generates a single-page Transaction Notice PDF from a payment and returns the bytes.
 // enrichment can be nil; internalNotes is optional (grey area omitted when empty).
 func BuildPDF(payment *data.Payment, organizationName string, organizationLogo []byte, enrichment *Enrichment, internalNotes *string, operatedByBaseURL string) ([]byte, error) {
-	pdfDoc := gofpdf.New("P", "mm", "A4", "")
+	pdfDoc := fpdf.New("P", "mm", "A4", "")
 
 	pdfDoc.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
 	pdfDoc.AddUTF8FontFromBytes("Inter", "B", shared.InterBoldFont)

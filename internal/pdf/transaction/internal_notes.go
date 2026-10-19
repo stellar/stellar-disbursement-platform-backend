@@ -5,7 +5,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 
 // drawInternalNotes draws the grey area above the footer when internalNotes is non-empty.
 // The note section is anchored at the bottom and grows upward as more lines are added.
-func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
+func drawInternalNotes(pdf *fpdf.Fpdf, internalNotes string) {
 	if internalNotes == "" {
 		return
 	}
@@ -73,7 +73,7 @@ func drawInternalNotes(pdf *gofpdf.Fpdf, internalNotes string) {
 }
 
 // splitNoteIntoLines splits the note into display lines: explicit newlines first, then wrapping to textWidth.
-func splitNoteIntoLines(pdf *gofpdf.Fpdf, notes string, textWidth float64) []string {
+func splitNoteIntoLines(pdf *fpdf.Fpdf, notes string, textWidth float64) []string {
 	paragraphs := strings.Split(notes, "\n")
 	var lines []string
 	for _, para := range paragraphs {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 	"github.com/shopspring/decimal"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
@@ -17,7 +17,7 @@ import (
 // BuildPDF renders the statement as a multi-page PDF. stellarExpertBaseURL (with trailing slash) is
 // where account and transaction links point.
 func BuildPDF(result *services.StatementResult, fromDate, toDate time.Time, organizationName string, organizationLogo []byte, operatedByBaseURL, stellarExpertBaseURL string) ([]byte, error) {
-	pdfDoc := gofpdf.New("P", "mm", "A4", "")
+	pdfDoc := fpdf.New("P", "mm", "A4", "")
 
 	pdfDoc.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
 	pdfDoc.AddUTF8FontFromBytes("Inter", "B", shared.InterBoldFont)

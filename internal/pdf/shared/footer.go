@@ -3,7 +3,7 @@ package shared
 import (
 	"fmt"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 )
 
 const footerDisclaimerMaintainedBy = "maintained by the Stellar Disbursement Platform"
@@ -26,7 +26,7 @@ type FooterConfig struct {
 }
 
 // SetupFooter sets the PDF footer function.
-func SetupFooter(pdf *gofpdf.Fpdf, cfg FooterConfig) {
+func SetupFooter(pdf *fpdf.Fpdf, cfg FooterConfig) {
 	pdf.AliasNbPages("") // {nb} in the footer becomes the page total when the document closes
 	pdf.SetFooterFunc(func() {
 		pdf.SetY(cfg.PageHeight - cfg.MarginBottom)

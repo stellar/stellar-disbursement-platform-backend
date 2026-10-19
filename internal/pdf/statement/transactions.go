@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 	"github.com/shopspring/decimal"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
@@ -18,7 +18,7 @@ func breakHeaderWords(s string) string {
 	return strings.ReplaceAll(s, " ", "\n")
 }
 
-func drawTxTableHeader(pdf *gofpdf.Fpdf) {
+func drawTxTableHeader(pdf *fpdf.Fpdf) {
 	pdf.SetFont("Inter", "emi", tableHeaderSize)
 	pdf.SetTextColor(headerAndTotalsColor[0], headerAndTotalsColor[1], headerAndTotalsColor[2])
 	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
@@ -63,7 +63,7 @@ func drawTxTableHeader(pdf *gofpdf.Fpdf) {
 	pdf.SetFont("Inter", "", bodyFontSize)
 }
 
-func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode string, runningBalance decimal.Decimal, stellarExpertBaseURL string) decimal.Decimal {
+func drawTxRow(pdf *fpdf.Fpdf, tx *services.StatementTransaction, assetCode string, runningBalance decimal.Decimal, stellarExpertBaseURL string) decimal.Decimal {
 	var dateLine1, dateLine2 string
 	dateStr := tx.UpdatedAt
 	if dateStr == "" {
@@ -270,7 +270,7 @@ func drawTxRow(pdf *gofpdf.Fpdf, tx *services.StatementTransaction, assetCode st
 	return runningBalance
 }
 
-func drawTotalsRowForAsset(pdf *gofpdf.Fpdf, asset *services.StatementAssetSummary) {
+func drawTotalsRowForAsset(pdf *fpdf.Fpdf, asset *services.StatementAssetSummary) {
 	pdf.SetFillColor(totalsRowBgColor[0], totalsRowBgColor[1], totalsRowBgColor[2])
 	pdf.SetDrawColor(headerBorderColor[0], headerBorderColor[1], headerBorderColor[2])
 	pdf.SetLineWidth(0.53)

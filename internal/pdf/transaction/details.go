@@ -1,7 +1,7 @@
 package transaction
 
 import (
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
@@ -114,7 +114,7 @@ func detailRows(payment *data.Payment, enrichment *Enrichment) (left, right []de
 }
 
 // drawDetailsTable draws the Transaction Details section.
-func drawDetailsTable(pdf *gofpdf.Fpdf, payment *data.Payment, enrichment *Enrichment, bottomMargin float64) {
+func drawDetailsTable(pdf *fpdf.Fpdf, payment *data.Payment, enrichment *Enrichment, bottomMargin float64) {
 	pdf.SetFont("Inter", "B", sectionTitleSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
 	pdf.CellFormat(0, 8, "Transaction Details", "", 1, "L", false, 0, "")

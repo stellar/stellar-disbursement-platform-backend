@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 )
 
 const logoMaxHeight = 10.0
@@ -70,7 +70,7 @@ type HeaderParams struct {
 // DrawHeader draws the full header: logo + left column (org name; if AccountAddress set, add account address line);
 // right column ("Generated on"; if StatementPeriod set, add "Statement Period" + dates);
 // if TitleSection set, draw REPORT + Title + label/value (underlined+link when TitleURL set); does not draw separator.
-func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
+func DrawHeader(pdf *fpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 	xLeft := pdf.GetX()
 	yStart := pdf.GetY()
 	contentWidth := layout.TableWidth
@@ -89,7 +89,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 				imgW = imgW * (logoMaxHeight / imgH)
 				imgH = logoMaxHeight
 			}
-			pdf.ImageOptions(imgName, xLeft+layout.LogoOffsetX, yStart, imgW, imgH, false, gofpdf.ImageOptions{}, 0, "")
+			pdf.ImageOptions(imgName, xLeft+layout.LogoOffsetX, yStart, imgW, imgH, false, fpdf.ImageOptions{}, 0, "")
 			logoWidth = imgW + layout.LogoOffsetX
 			yLeftBottom = yStart + imgH + layout.HeaderLogoToOrgNameGap
 		}
@@ -230,7 +230,7 @@ func DrawHeader(pdf *gofpdf.Fpdf, layout *HeaderLayout, params *HeaderParams) {
 }
 
 // DrawHeaderSeparatorLine draws the horizontal line and advances by bottomMargin.
-func DrawHeaderSeparatorLine(pdf *gofpdf.Fpdf, layout *HeaderLayout, bottomMargin float64) {
+func DrawHeaderSeparatorLine(pdf *fpdf.Fpdf, layout *HeaderLayout, bottomMargin float64) {
 	pdf.SetDrawColor(layout.DefaultBorderColor[0], layout.DefaultBorderColor[1], layout.DefaultBorderColor[2])
 	pdf.SetLineWidth(layout.HeaderSeparatorLineWidth)
 	y := pdf.GetY()
@@ -241,7 +241,7 @@ func DrawHeaderSeparatorLine(pdf *gofpdf.Fpdf, layout *HeaderLayout, bottomMargi
 	pdf.SetDrawColor(0, 0, 0)
 }
 
-func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.ImageInfoType) {
+func registerLogoImage(pdf *fpdf.Fpdf, logoBytes []byte) (string, *fpdf.ImageInfoType) {
 	_, format, err := image.DecodeConfig(bytes.NewReader(logoBytes))
 	if err != nil {
 		return "", nil
@@ -255,7 +255,7 @@ func registerLogoImage(pdf *gofpdf.Fpdf, logoBytes []byte) (string, *gofpdf.Imag
 	default:
 		return "", nil
 	}
-	opts := gofpdf.ImageOptions{ImageType: imageType}
+	opts := fpdf.ImageOptions{ImageType: imageType}
 	info := pdf.RegisterImageOptionsReader("orglogo", opts, bytes.NewReader(logoBytes))
 	if info == nil {
 		return "", nil

@@ -3,13 +3,13 @@ package statement
 import (
 	"strings"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 )
 
-func drawSummaryTable(pdf *gofpdf.Fpdf, result *services.StatementResult) {
+func drawSummaryTable(pdf *fpdf.Fpdf, result *services.StatementResult) {
 	pdf.SetFont("Inter", "B", sectionTitleSize)
 	pdf.SetTextColor(sectionTitleColor[0], sectionTitleColor[1], sectionTitleColor[2])
 	pdf.CellFormat(0, 8, "Account Summary", "", 1, "L", false, 0, "")

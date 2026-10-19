@@ -1,7 +1,7 @@
 package statement
 
 import (
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 )
 
 type amountCellOpts struct {
@@ -18,7 +18,7 @@ type amountCellArgs struct {
 	opts         amountCellOpts
 }
 
-func drawAmountWithCurrency(pdf *gofpdf.Fpdf, a amountCellArgs) {
+func drawAmountWithCurrency(pdf *fpdf.Fpdf, a amountCellArgs) {
 	x, y, w, h := a.x, a.y, a.w, a.h
 	opts := a.opts
 	pdf.SetXY(x, y)

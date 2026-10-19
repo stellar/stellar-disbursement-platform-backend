@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jung-kurt/gofpdf/v2"
+	"codeberg.org/go-pdf/fpdf"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/pdf/shared"
 )
 
 func TestSplitNoteIntoLines(t *testing.T) {
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.AddUTF8FontFromBytes("Inter", "", shared.InterRegularFont)
 	pdf.SetFont("Inter", "", bodyFontSize)
 
