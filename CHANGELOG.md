@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Reconcile submitted transactions by inner tx hash. [#1234](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1234)
 - Bind sponsored transaction authorization to the caller's embedded wallet. [#1236](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1236)
 - Publish TSS metrics on `TSS_METRICS_PORT` (default `9002`) in Docker Compose. [#1239](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1239)
+- Split Docker Compose into release and development stacks. [#1243](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1243)
 
 ### Security and Dependencies
 
