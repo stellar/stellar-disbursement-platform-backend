@@ -191,12 +191,34 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 	}
 }
 
+// RequireReportingEnabled rejects report requests while the organization's reporting_enabled flag is off.
+func RequireReportingEnabled(models *data.Models) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			ctx := req.Context()
+
+			org, err := models.Organizations.Get(ctx)
+			if err != nil {
+				httperror.InternalError(ctx, "Cannot retrieve organization", err, nil).Render(rw)
+				return
+			}
+			if org.ReportingEnabled == nil || !*org.ReportingEnabled {
+				httperror.Forbidden("reports are not enabled for this organization", nil, nil).Render(rw)
+				return
+			}
+
+			next.ServeHTTP(rw, req)
+		})
+	}
+}
+
 func CorsMiddleware(corsAllowedOrigins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		cors := cors.New(cors.Options{
 			AllowedOrigins: corsAllowedOrigins,
 			AllowedHeaders: []string{"*"},
 			AllowedMethods: []string{"GET", "PUT", "POST", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+			ExposedHeaders: []string{"Content-Disposition"},
 		})
 
 		return cors.Handler(next)

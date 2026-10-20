@@ -46,6 +46,7 @@ type Organization struct {
 	MFADisabled                 *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
 	CAPTCHADisabled             *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
 	ReceiverInvitationsDisabled *bool                  `json:"receiver_invitations_disabled" db:"receiver_invitations_disabled"`
+	ReportingEnabled            *bool                  `json:"reporting_enabled" db:"reporting_enabled"`
 	// WebhookURL is the tenant-configured destination for outbox event delivery;
 	// delivery is skipped when unset.
 	WebhookURL *string `json:"webhook_url,omitempty" db:"webhook_url"`
@@ -76,6 +77,8 @@ type OrganizationUpdate struct {
 	MFADisabled     *bool `json:",omitempty"`
 	CAPTCHADisabled *bool `json:",omitempty"`
 
+	// Reporting
+	ReportingEnabled            *bool `json:",omitempty"`
 	ReceiverInvitationsDisabled *bool `json:",omitempty"`
 }
 
@@ -280,6 +283,11 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.CAPTCHADisabled != nil {
 		fields = append(fields, "captcha_disabled = ?")
 		args = append(args, *ou.CAPTCHADisabled)
+	}
+
+	if ou.ReportingEnabled != nil {
+		fields = append(fields, "reporting_enabled = ?")
+		args = append(args, *ou.ReportingEnabled)
 	}
 
 	if ou.ReceiverInvitationsDisabled != nil {

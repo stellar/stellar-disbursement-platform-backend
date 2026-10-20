@@ -3,6 +3,7 @@ module github.com/stellar/stellar-disbursement-platform-backend
 go 1.26.0
 
 require (
+	codeberg.org/go-pdf/fpdf v0.12.0
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/aws/aws-sdk-go-v2 v1.47.0
