@@ -27,6 +27,8 @@ const (
 var (
 	ErrStatementAccountNotStellar = errors.New("statement is only supported for Stellar distribution accounts")
 	ErrStatementAssetNotFound     = errors.New("asset not found for account")
+	ErrStatementPeriodTooLong     = errors.New("statement period has more payments than one scan reads")
+	ErrStatementPeriodTooOld      = errors.New("account has more payments since the statement period than one scan reads")
 )
 
 // ReportsServiceInterface defines the interface for generating account statements (used by reports handler).
@@ -55,10 +57,7 @@ type StatementAssetSummary struct {
 	EndingBalance    string `json:"ending_balance"`
 	// Reconciled is false when the counted payments cannot explain the current balance (the
 	// derived beginning balance went negative), which means uncounted ledger activity exists.
-	Reconciled bool `json:"reconciled"`
-	// Truncated is true when the ledger scan hit MaxStatementPaymentsPages before reaching the
-	// period start, so older payments are missing from the totals.
-	Truncated    bool                   `json:"truncated"`
+	Reconciled   bool                   `json:"reconciled"`
 	Transactions []StatementTransaction `json:"transactions"`
 }
 
@@ -151,7 +150,7 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 		currentBalances = append(currentBalances, currentBalance)
 	}
 
-	activity, truncated, err := s.scanPayments(ctx, account.Address, walletID, held, fromStart, toEnd)
+	activity, err := s.scanPayments(ctx, account.Address, walletID, held, fromStart, toEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +177,6 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 			TotalDebits:      formatStellarAmount(a.debits),
 			EndingBalance:    formatStellarAmount(endingBalance),
 			Reconciled:       reconciled,
-			Truncated:        truncated,
 			Transactions:     a.transactions,
 		})
 	}
@@ -224,17 +222,17 @@ type assetActivity struct {
 }
 
 // scanPayments reads the account's payments once, newest first, down to the start of the period, and splits them
-// per asset into the period's lines and totals and the totals after it. truncated: the page cap came first.
+// per asset into the period's lines and totals and the totals after it. Hitting the page cap first is an error.
 func (s *ReportsService) scanPayments(
 	ctx context.Context,
 	accountAddress, walletID string,
 	assets []*data.Asset,
 	fromStart, toEnd time.Time,
-) (activity []assetActivity, truncated bool, err error) {
+) ([]assetActivity, error) {
 	if len(assets) == 0 {
-		return nil, false, nil
+		return nil, nil
 	}
-	activity = make([]assetActivity, len(assets))
+	activity := make([]assetActivity, len(assets))
 
 	req := horizonclient.OperationRequest{
 		ForAccount: accountAddress,
@@ -242,29 +240,36 @@ func (s *ReportsService) scanPayments(
 		Limit:      StatementPaymentsPageLimit,
 	}
 
-	truncated = true // cleared once the scan reaches the period start or the end of history
-	for pageCount := 0; pageCount < MaxStatementPaymentsPages; pageCount++ {
+	complete, inPeriod := false, false
+	for pageCount := 0; pageCount < MaxStatementPaymentsPages && !complete; pageCount++ {
 		page, err := s.HorizonClient.Payments(req)
 		if err != nil {
-			return nil, false, fmt.Errorf("fetching payments: %w", err)
+			return nil, fmt.Errorf("fetching payments: %w", err)
 		}
 
 		reachedStart, err := s.scanPaymentPage(ctx, page, accountAddress, walletID, assets, fromStart, toEnd, activity)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		cursor := getNextPaymentsPageCursor(page)
-		if reachedStart || !s.shouldContinuePaymentsPagination(page) || cursor == "" {
-			truncated = false
-			break
+		complete = reachedStart || !s.shouldContinuePaymentsPagination(page) || cursor == ""
+		if records := page.Embedded.Records; len(records) > 0 && !records[len(records)-1].GetBase().LedgerCloseTime.After(toEnd) {
+			inPeriod = true // the page's oldest payment falls inside the period
 		}
 		req.Cursor = cursor
+	}
+	// The scan hit MaxStatementPaymentsPages before the period start, so the statement would be incomplete.
+	if !complete {
+		if inPeriod {
+			return nil, ErrStatementPeriodTooLong
+		}
+		return nil, ErrStatementPeriodTooOld
 	}
 
 	for i := range activity {
 		slices.Reverse(activity[i].transactions) // chronological for display
 	}
-	return activity, truncated, nil
+	return activity, nil
 }
 
 func (s *ReportsService) scanPaymentPage(

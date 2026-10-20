@@ -169,7 +169,6 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		assert.False(t, summary.Reconciled)
 		assert.Equal(t, "0.0000000", summary.BeginningBalance)
 		assert.Equal(t, "500.0000000", summary.TotalCredits)
-		assert.False(t, summary.Truncated)
 	})
 
 	t.Run("balances account for debits and for activity after the period", func(t *testing.T) {
@@ -199,7 +198,7 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		assert.Equal(t, []string{"credit", "debit"}, []string{summary.Transactions[0].Type, summary.Transactions[1].Type})
 	})
 
-	t.Run("hitting the page cap inside the period marks the statement truncated", func(t *testing.T) {
+	t.Run("hitting the page cap inside the period refuses the statement as too long", func(t *testing.T) {
 		horizonClient := &horizonclient.MockClient{}
 		distSvc := mocks.NewMockDistributionAccountService(t)
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("1000000"), nil).Once()
@@ -209,15 +208,11 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		}
 		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(fullPage...), nil).Times(MaxStatementPaymentsPages)
 
-		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
-		require.NoError(t, err)
-		summary := result.Summary.Assets[0]
-		assert.True(t, summary.Truncated)
-		assert.True(t, summary.Reconciled)
-		assert.Len(t, summary.Transactions, StatementPaymentsPageLimit*MaxStatementPaymentsPages)
+		_, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
+		assert.ErrorIs(t, err, ErrStatementPeriodTooLong)
 	})
 
-	t.Run("hitting the page cap after the period also marks the statement truncated", func(t *testing.T) {
+	t.Run("hitting the page cap before reaching the period refuses the statement as too old", func(t *testing.T) {
 		horizonClient := &horizonclient.MockClient{}
 		distSvc := mocks.NewMockDistributionAccountService(t)
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("1000000"), nil).Once()
@@ -227,10 +222,8 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		}
 		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(later...), nil).Times(MaxStatementPaymentsPages)
 
-		result, err := NewReportsService(horizonClient, distSvc, &data.Models{}).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
-		require.NoError(t, err, "payments after the period are only summed, so the empty models are never touched")
-		assert.True(t, result.Summary.Assets[0].Truncated, "the period was never reached")
-		assert.Empty(t, result.Summary.Assets[0].Transactions)
+		_, err := NewReportsService(horizonClient, distSvc, &data.Models{}).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
+		assert.ErrorIs(t, err, ErrStatementPeriodTooOld, "payments after the period are only summed, so the empty models are never touched")
 	})
 
 	t.Run("one scan covers every asset", func(t *testing.T) {

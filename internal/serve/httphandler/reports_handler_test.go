@@ -177,18 +177,22 @@ func TestReportsHandlerGetStatementExport(t *testing.T) {
 		svc.AssertExpectations(t)
 	})
 
-	t.Run("service errors map to 404 for a missing asset and 500 otherwise", func(t *testing.T) {
+	t.Run("service errors map to 400 for an incomplete scan, 404 for a missing asset and 500 otherwise", func(t *testing.T) {
 		for _, tc := range []struct {
-			err    error
-			status int
+			err     error
+			status  int
+			message string
 		}{
-			{services.ErrStatementAssetNotFound, http.StatusNotFound},
-			{errors.New("horizon down"), http.StatusInternalServerError},
+			{services.ErrStatementPeriodTooLong, http.StatusBadRequest, errStatementPeriodTooLong},
+			{services.ErrStatementPeriodTooOld, http.StatusBadRequest, errStatementPeriodTooOld},
+			{services.ErrStatementAssetNotFound, http.StatusNotFound, "asset not found for account"},
+			{errors.New("horizon down"), http.StatusInternalServerError, ""},
 		} {
 			svc := &mockReportsService{}
 			svc.On("GetStatement", mock.Anything, mock.Anything, walletBID, "", mock.Anything, mock.Anything).Return(nil, tc.err).Once()
 			rr := do(svc, call{userID: owner.ID, walletHeader: walletBID, query: query})
 			assert.Equal(t, tc.status, rr.Code)
+			assert.Contains(t, rr.Body.String(), tc.message)
 		}
 	})
 }

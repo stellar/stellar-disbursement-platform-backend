@@ -31,6 +31,8 @@ const (
 	errStatementOnlySupportedForStellar = "Statement is only supported for Stellar distribution accounts"
 	errStatementNotForSharedAccount     = "Statements are not available for tenants on the shared host distribution account"
 	errStatementAccountNotProvisioned   = "The distribution account has not been provisioned yet"
+	errStatementPeriodTooLong           = "This period has too many ledger payments for one statement; choose a shorter period"
+	errStatementPeriodTooOld            = "The account has made too many ledger payments since this period for a statement this far back"
 	internalNotesMaxLength              = 500
 	disbursementTimestampFormat         = "Jan 2, 2006 · 15:04:05 UTC"
 )
@@ -77,6 +79,12 @@ func (h ReportsHandler) GetStatementExport(w http.ResponseWriter, r *http.Reques
 			return
 		case errors.Is(err, services.ErrStatementAssetNotFound):
 			httperror.NotFound("asset not found for account", err, nil).Render(w)
+			return
+		case errors.Is(err, services.ErrStatementPeriodTooLong):
+			httperror.BadRequest(errStatementPeriodTooLong, err, nil).Render(w)
+			return
+		case errors.Is(err, services.ErrStatementPeriodTooOld):
+			httperror.BadRequest(errStatementPeriodTooOld, err, nil).Render(w)
 			return
 		default:
 			httperror.InternalError(ctx, "Cannot retrieve statement", err, nil).Render(w)
