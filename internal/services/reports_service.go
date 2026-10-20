@@ -384,9 +384,14 @@ func (s *ReportsService) statementLine(
 	txHash := op.GetTransactionHash()
 	createdAtStr := op.GetBase().LedgerCloseTime.UTC().Format(time.RFC3339)
 
-	dbPayment, err := s.Models.Payment.GetSuccessfulByStellarTransaction(ctx, s.Models.DBConnectionPool, walletID, txHash, payment.opID)
-	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
-		return StatementTransaction{}, fmt.Errorf("finding the SDP payment for transaction %s: %w", txHash, err)
+	// Credit rows print only the sender's address, and no SDP payment is a credit, so they look nothing up.
+	var dbPayment *data.Payment
+	var err error
+	if payment.debit {
+		dbPayment, err = s.Models.Payment.GetSuccessfulByStellarTransaction(ctx, s.Models.DBConnectionPool, walletID, txHash, payment.opID)
+		if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+			return StatementTransaction{}, fmt.Errorf("finding the SDP payment for transaction %s: %w", txHash, err)
+		}
 	}
 
 	updatedAtStr := createdAtStr
@@ -405,7 +410,8 @@ func (s *ReportsService) statementLine(
 	if payment.debit {
 		txType, counterparty = "debit", payment.to
 	}
-	if counterpartyName == "" {
+	// Credits skip this lookup too: their rows never print a name.
+	if counterpartyName == "" && payment.debit {
 		if counterpartyName, err = s.counterpartyLabel(ctx, counterparty, labels); err != nil {
 			return StatementTransaction{}, err
 		}

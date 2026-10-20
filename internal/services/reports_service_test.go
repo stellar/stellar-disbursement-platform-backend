@@ -341,7 +341,7 @@ func TestReportsService_counterpartyLabel(t *testing.T) {
 
 		op := operations.Payment{From: "GSOMEONE", To: known, Amount: "1", Asset: base.Asset{Type: "native"}}
 		op.Base.TransactionHash = "tx-1"
-		_, err = service.statementLine(failing, op, statementPayment{from: "GSOMEONE", to: known, amountStr: "1"}, "wallet-1", map[string]string{})
+		_, err = service.statementLine(failing, op, statementPayment{from: "GSOMEONE", to: known, amountStr: "1", debit: true}, "wallet-1", map[string]string{})
 		require.Error(t, err)
 	})
 }
