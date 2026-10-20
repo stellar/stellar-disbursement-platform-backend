@@ -112,7 +112,7 @@ services:
       context: ../../../
       dockerfile: Dockerfile
     ports:
-      - "9000:9000"
+      - "9002:9002"
     environment:
       QUEUE_POLLING_INTERVAL: "6"
       DATABASE_URL: postgres://postgres@db:5432/e2e-sdp?sslmode=disable

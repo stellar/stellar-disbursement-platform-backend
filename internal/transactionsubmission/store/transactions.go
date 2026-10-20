@@ -366,12 +366,13 @@ func (t *TransactionModel) UpdateStatusToSuccess(ctx context.Context, tx Transac
 			SET
 				status = $1,
 				completed_at = NOW(),
-				status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), $1::transaction_status, NULL, stellar_transaction_hash, xdr_sent, xdr_received))
+				stellar_transaction_hash = COALESCE(NULLIF($2, ''), stellar_transaction_hash),
+				status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), $1::transaction_status, NULL, COALESCE(NULLIF($2, ''), stellar_transaction_hash), xdr_sent, xdr_received))
 			WHERE
-				id = $2
+				id = $3
 			RETURNING
 				` + TransactionColumnNames("", "")
-	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.ID)
+	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.StellarTransactionHash, tx.ID)
 	if err != nil {
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusSuccess: %w", err)
 	}

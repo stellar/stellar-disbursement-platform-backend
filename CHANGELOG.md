@@ -9,11 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Add Reports generation: a per-distribution account statement PDF (`GET /reports/statement`) and a per-payment transaction notice PDF (`GET /reports/payment/{id}`). [#1228](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1228)
+- Portuguese translations for the SEP-24 webview. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
 
 ### Changed
 
 - Reject bridge opt-in with a `customer_id` another tenant already holds. [#1216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1216)
 - Restore tenant-wide access for Developer role: developers are excluded from the distribution account membership system, and developer-minted API keys carry the same privileges as Owner-minted. [#1223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1223)
+- Allow editing receiver contact details while the receiver has pending payments. [#1237](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1237)
 
 ### Fixed
 
@@ -30,7 +32,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Stop insufficient-balance errors from reporting a 0.00 shortfall. [#1219](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1219)
 - Bound Prometheus `method` metric label to an allowlist to prevent memory-exhaustion from unbounded label cardinality. [#1221](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1221)
 - Keep Owner flag in sync with Owner role. [#1222](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1222)
+- Strip caller headers and query string from RPC proxy requests. [#1224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1224)
 - Reject tokens without a user claim on staff endpoints. [#1225](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1225)
+- Limit CSV dimensions before parsing. [#1229](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1229)
+- Bound password validation errors on over-length input. [#1230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1230)
+- Reconcile submitted transactions by inner tx hash. [#1234](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1234)
+- Bind sponsored transaction authorization to the caller's embedded wallet. [#1236](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1236)
+- Publish TSS metrics on `TSS_METRICS_PORT` (default `9002`) in Docker Compose. [#1239](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1239)
+- Show English instead of raw translation keys in the SEP-24 webview when the device language is unsupported, and respect the saved language. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
+- Detect Ukrainian devices in the SEP-24 webview by using the `uk` language code instead of the `ua` country code, and show Ukrainian country names in the phone number picker. [#1241](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1241)
 
 ### Security and Dependencies
 

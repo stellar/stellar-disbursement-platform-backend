@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -88,6 +89,12 @@ func GetPasswordValidatorInstance() (*PasswordValidator, error) {
 
 // ValidatePassword returns an error if the password does not meet the requirements.
 func (pv *PasswordValidator) ValidatePassword(input string) *ValidatePasswordError {
+	lengthErrMsg := fmt.Sprintf("password length must be between %d and %d characters", passwordMinLength, passwordMaxLength)
+	// Over-length input is already invalid, so don't scan a potentially huge body to list its characters.
+	if len(input) > passwordMaxLength {
+		return &ValidatePasswordError{FailedValidationsMap: map[string]string{"length": lengthErrMsg}}
+	}
+
 	var (
 		hasLength          bool
 		hasLower           bool
@@ -97,7 +104,7 @@ func (pv *PasswordValidator) ValidatePassword(input string) *ValidatePasswordErr
 		invalidCharacteres []string
 	)
 
-	if len(input) >= passwordMinLength && len(input) <= passwordMaxLength {
+	if len(input) >= passwordMinLength {
 		hasLength = true
 	}
 
@@ -112,7 +119,9 @@ func (pv *PasswordValidator) ValidatePassword(input string) *ValidatePasswordErr
 		case unicode.IsPunct(c) || unicode.IsSymbol(c):
 			hasSpecial = true
 		default:
-			invalidCharacteres = append(invalidCharacteres, string(c))
+			if !slices.Contains(invalidCharacteres, string(c)) {
+				invalidCharacteres = append(invalidCharacteres, string(c))
+			}
 		}
 	}
 
@@ -133,7 +142,7 @@ func (pv *PasswordValidator) ValidatePassword(input string) *ValidatePasswordErr
 		failedValidations["invalid character"] = fmt.Sprintf("password cannot contain any invalid characters ('%s')", strings.Join(invalidCharacteres, "', '"))
 	}
 	if !hasLength {
-		failedValidations["length"] = fmt.Sprintf("password length must be between %d and %d characters", passwordMinLength, passwordMaxLength)
+		failedValidations["length"] = lengthErrMsg
 	}
 
 	if len(failedValidations) == 0 {

@@ -239,6 +239,73 @@ func Test_ValidateAndDecodeBase64XDR(t *testing.T) {
 	}
 }
 
+func Test_ValidateAuthEntriesFromContract(t *testing.T) {
+	const wallet = "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT"
+	accountID := xdr.MustAddress(keypair.MustRandom().Address())
+	addressEntry := func(address xdr.ScAddress) xdr.SorobanAuthorizationEntry {
+		return xdr.SorobanAuthorizationEntry{Credentials: xdr.SorobanCredentials{
+			Type:    xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
+			Address: &xdr.SorobanAddressCredentials{Address: address},
+		}}
+	}
+	contractEntry := func(contractAddress string) xdr.SorobanAuthorizationEntry {
+		var contractID xdr.ContractId
+		copy(contractID[:], strkey.MustDecode(strkey.VersionByteContract, contractAddress))
+		return addressEntry(xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &contractID})
+	}
+
+	testCases := []struct {
+		name        string
+		entries     []xdr.SorobanAuthorizationEntry
+		expectError string
+	}{
+		{
+			name: "no entries",
+		},
+		{
+			name:    "entry from the contract",
+			entries: []xdr.SorobanAuthorizationEntry{contractEntry(wallet)},
+		},
+		{
+			name:        "source account credentials",
+			entries:     []xdr.SorobanAuthorizationEntry{{Credentials: xdr.SorobanCredentials{Type: xdr.SorobanCredentialsTypeSorobanCredentialsSourceAccount}}},
+			expectError: "credentials must be of address type",
+		},
+		{
+			name:        "stellar account",
+			entries:     []xdr.SorobanAuthorizationEntry{addressEntry(xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeAccount, AccountId: &accountID})},
+			expectError: "address must be a contract",
+		},
+		{
+			name:        "claimable balance",
+			entries:     []xdr.SorobanAuthorizationEntry{addressEntry(xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeClaimableBalance, ClaimableBalanceId: &xdr.ClaimableBalanceId{Type: xdr.ClaimableBalanceIdTypeClaimableBalanceIdTypeV0, V0: &xdr.Hash{}}})},
+			expectError: "address must be a contract",
+		},
+		{
+			name:        "other contract",
+			entries:     []xdr.SorobanAuthorizationEntry{contractEntry("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")},
+			expectError: "address must be " + wallet,
+		},
+		{
+			name:        "one good entry then a foreign one",
+			entries:     []xdr.SorobanAuthorizationEntry{contractEntry(wallet), contractEntry("CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")},
+			expectError: "address must be " + wallet,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateAuthEntriesFromContract(tc.entries, wallet)
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func newTestAuthEntry(t *testing.T, account string) xdr.SorobanAuthorizationEntry {
 	t.Helper()
 

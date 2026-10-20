@@ -112,6 +112,24 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		require.Contains(t, buf.String(), "[ResetUserPassword] - Successfully reset password for user with token go...en")
 	})
 
+	t.Run("Should bound the response for an oversized password", func(t *testing.T) {
+		requestBody := `{"password":"` + strings.Repeat(" ", 1<<20) + `","reset_token":"x"}`
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequest(method, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		expectedBody := `{"error": "The request was invalid in some way.", "extras": {"length": "password length must be between 12 and 36 characters"}}`
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, expectedBody, string(respBody))
+	})
+
 	t.Run("Should return an error with an invalid token", func(t *testing.T) {
 		requestBody := `{"password":"!1Az?2By.3Cx","reset_token":"badtoken"}`
 
