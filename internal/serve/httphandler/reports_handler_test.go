@@ -5,11 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/keypair"
+	hProtocol "github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -285,6 +288,65 @@ func TestReportsHandlerGetPaymentExport(t *testing.T) {
 		})
 		assert.Equal(t, http.StatusOK, doAs(owner.ID, paymentA.ID).Code)
 	})
+
+	t.Run("noticeEnrichment: sender account, Horizon fee and memo, disbursement history", func(t *testing.T) {
+		horizonMock := &horizonclient.MockClient{}
+		horizonMock.On("TransactionDetail", "tx-ok").Return(hProtocol.Transaction{FeeCharged: 200, Memo: "memo-1"}, nil).Once()
+		horizonMock.On("TransactionDetail", "tx-down").Return(hProtocol.Transaction{}, errors.New("horizon down")).Once()
+		defer horizonMock.AssertExpectations(t)
+		hh := h
+		hh.HorizonClient = horizonMock
+		history := data.DisbursementStatusHistory{
+			{Status: data.DraftDisbursementStatus, Timestamp: time.Date(2026, 1, 9, 10, 0, 0, 0, time.UTC)},
+			{Status: data.StartedDisbursementStatus, Timestamp: time.Date(2026, 1, 10, 14, 30, 0, 0, time.UTC)},
+		}
+		paymentWith := func(txHash, senderAddress string) *data.Payment {
+			p := *paymentA
+			p.StellarTransactionID, p.SenderAddress = txHash, senderAddress
+			p.Disbursement = &data.Disbursement{StatusHistory: history}
+			return &p
+		}
+
+		e, err := hh.noticeEnrichment(ctx, paymentWith("tx-ok", ""), "Stellar Aid")
+		require.NoError(t, err)
+		assert.Equal(t, "Stellar Aid", e.SenderName)
+		assert.Equal(t, walletA.Name, e.SenderAccountName)
+		assert.Equal(t, addrA, e.SenderAccountAddress, "falls back to the account's current address")
+		assert.Equal(t, "0.0000200 XLM", e.FeeCharged)
+		assert.Equal(t, "memo-1", e.MemoText)
+		assert.Equal(t, "Jan 9, 2026 · 10:00:00 UTC", e.DisbursementCreatedByTimestamp)
+		assert.Equal(t, "Jan 10, 2026 · 14:30:00 UTC", e.DisbursementApprovedByTimestamp)
+
+		e, err = hh.noticeEnrichment(ctx, paymentWith("tx-down", "GSENTFROMROTATEDACCOUNT"), "Stellar Aid")
+		require.NoError(t, err, "a Horizon failure leaves the fee blank instead of failing the notice")
+		assert.Equal(t, "GSENTFROMROTATEDACCOUNT", e.SenderAccountAddress, "the recorded sender wins")
+		assert.Empty(t, e.FeeCharged)
+		assert.Empty(t, e.MemoText)
+
+		e, err = hh.noticeEnrichment(ctx, paymentWith("", ""), "Stellar Aid")
+		require.NoError(t, err, "no transaction yet: Horizon is not asked")
+		assert.Empty(t, e.FeeCharged)
+	})
+}
+
+func Test_noticeInternalNotes(t *testing.T) {
+	cjk500 := strings.Repeat("支", 500)
+	testCases := map[string]struct {
+		raw  string
+		want *string
+	}{
+		"empty":                    {"", nil},
+		"only whitespace":          {"  \n\t ", nil},
+		"trimmed":                  {"  checked by finance  ", utils.Ptr("checked by finance")},
+		"500 characters kept":      {cjk500, utils.Ptr(cjk500)},
+		"cut at 500 characters":    {cjk500 + "支支", utils.Ptr(cjk500)},
+		"trimmed before being cut": {"   " + cjk500 + "   ", utils.Ptr(cjk500)},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.want, noticeInternalNotes(tc.raw))
+		})
+	}
 }
 
 func Test_populateDisbursementCreatedApprovedBy(t *testing.T) {

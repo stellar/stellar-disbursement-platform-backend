@@ -224,14 +224,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		payment.ReceiverWallet.Receiver.ExternalID = receiver.ExternalID
 	}
 
-	internalNotes := strings.TrimSpace(r.URL.Query().Get("internal_notes"))
-	if utf8.RuneCountInString(internalNotes) > internalNotesMaxLength {
-		internalNotes = string([]rune(internalNotes)[:internalNotesMaxLength])
-	}
-	var internalNotesPtr *string
-	if internalNotes != "" {
-		internalNotesPtr = &internalNotes
-	}
+	internalNotes := noticeInternalNotes(r.URL.Query().Get("internal_notes"))
 
 	var orgName string
 	var orgLogo []byte
@@ -240,12 +233,48 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 		orgLogo = org.Logo
 	}
 
+	enrichment, err := h.noticeEnrichment(ctx, payment, orgName)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot retrieve payment source account", err, nil).Render(w)
+		return
+	}
+
+	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotes, operatedBy(ctx))
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot generate transaction notice PDF", err, nil).Render(w)
+		return
+	}
+
+	filename := fmt.Sprintf("transaction_notice_%s.pdf", paymentID)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Length", strconv.Itoa(len(pdfBytes)))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	if _, err := w.Write(pdfBytes); err != nil {
+		log.Ctx(ctx).Errorf("writing transaction notice PDF response: %v", err)
+		return
+	}
+}
+
+// noticeInternalNotes trims the caller's note and cuts it to internalNotesMaxLength characters; nil when empty.
+func noticeInternalNotes(raw string) *string {
+	notes := strings.TrimSpace(raw)
+	if utf8.RuneCountInString(notes) > internalNotesMaxLength {
+		notes = string([]rune(notes)[:internalNotesMaxLength])
+	}
+	if notes == "" {
+		return nil
+	}
+	return &notes
+}
+
+// noticeEnrichment gathers what the notice shows beyond the payment: the sender account, the fee and memo
+// from Horizon, and who created and approved the disbursement.
+func (h ReportsHandler) noticeEnrichment(ctx context.Context, payment *data.Payment, orgName string) (*transaction.Enrichment, error) {
 	// The sender is the account the payment was actually sent from: recorded on success and kept
 	// through a later rotation. Until then, the source account's current address (none for Circle).
 	sourceWallet, err := h.Models.DistributionWallets.Get(ctx, h.DBConnectionPool, payment.SourceWalletID)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve payment source account", err, nil).Render(w)
-		return
+		return nil, fmt.Errorf("retrieving payment source account: %w", err)
 	}
 	senderAccountAddress := payment.SenderAddress
 	if senderAccountAddress == "" && sourceWallet.Address != nil {
@@ -285,21 +314,7 @@ func (h ReportsHandler) GetPaymentExport(w http.ResponseWriter, r *http.Request)
 	if payment.Type == data.PaymentTypeDisbursement && payment.Disbursement != nil && len(payment.Disbursement.StatusHistory) > 0 {
 		populateDisbursementCreatedApprovedBy(ctx, h.AuthManager, payment.Disbursement.StatusHistory, enrichment)
 	}
-
-	pdfBytes, err := transaction.BuildPDF(payment, orgName, orgLogo, enrichment, internalNotesPtr, operatedBy(ctx))
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot generate transaction notice PDF", err, nil).Render(w)
-		return
-	}
-
-	filename := fmt.Sprintf("transaction_notice_%s.pdf", paymentID)
-	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Length", strconv.Itoa(len(pdfBytes)))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	if _, err := w.Write(pdfBytes); err != nil {
-		log.Ctx(ctx).Errorf("writing transaction notice PDF response: %v", err)
-		return
-	}
+	return enrichment, nil
 }
 
 // populateDisbursementCreatedApprovedBy fills enrichment with Created by / Approved by from the disbursement's status_history.

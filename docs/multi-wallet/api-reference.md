@@ -178,6 +178,11 @@ Naming an account the caller has no access to reaches nothing.
 On reads it is optional. If sent, results cover that account; if omitted, they cover every account
 the caller can reach.
 
+One read is the exception: `GET /reports/statement` covers exactly one account. Without the header it
+uses the only account the caller can reach, and returns `400` if the caller can reach several; archived
+accounts can be named. `GET /reports/payment/{id}` needs no header, since the payment names its own
+account.
+
 On writes that send funds or create records against an account, it names the source account and is
 **required** once a tenant has more than one active account — `POST /disbursements`, `POST /payments`,
 `POST /receivers`, and asset/trustline writes return `400` without it. Single-account tenants are
