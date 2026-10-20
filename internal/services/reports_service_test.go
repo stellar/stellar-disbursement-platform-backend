@@ -77,11 +77,11 @@ func TestReportsServiceGetStatement(t *testing.T) {
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).
 			Return(decimal.RequireFromString("100.0000000"), nil).Once()
 
-		// Mock Payments - empty page (called twice: once for transactions, once for totals)
+		// Mock Payments - one scan, empty history
 		var emptyPaymentsPage operations.OperationsPage
 		emptyPaymentsPage.Embedded.Records = []operations.Operation{}
 		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).
-			Return(emptyPaymentsPage, nil).Twice()
+			Return(emptyPaymentsPage, nil).Once()
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
@@ -113,11 +113,11 @@ func TestReportsServiceGetStatement(t *testing.T) {
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).
 			Return(decimal.RequireFromString("100.0000000"), nil).Once()
 
-		// Mock Payments - empty page (called twice: once for transactions, once for totals)
+		// Mock Payments - one scan, empty history
 		var emptyPaymentsPage operations.OperationsPage
 		emptyPaymentsPage.Embedded.Records = []operations.Operation{}
 		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).
-			Return(emptyPaymentsPage, nil).Twice()
+			Return(emptyPaymentsPage, nil).Once()
 
 		service := NewReportsService(horizonClient, distSvc, models)
 
@@ -141,12 +141,15 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 	models, err := data.NewModels(dbPool)
 	require.NoError(t, err)
 
-	creditOp := func(id, amount string) operations.Payment {
-		op := operations.Payment{From: "GSOMEONE", To: accountAddress, Amount: amount, Asset: base.Asset{Type: "native"}}
+	paymentOp := func(id, from, to, amount string, at time.Time) operations.Payment {
+		op := operations.Payment{From: from, To: to, Amount: amount, Asset: base.Asset{Type: "native"}}
 		op.Base.ID = id
 		op.Base.PT = id
-		op.Base.LedgerCloseTime = time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+		op.Base.LedgerCloseTime = at
 		return op
+	}
+	creditOp := func(id, amount string) operations.Payment {
+		return paymentOp(id, "GSOMEONE", accountAddress, amount, time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC))
 	}
 	pageOf := func(ops ...operations.Operation) operations.OperationsPage {
 		var page operations.OperationsPage
@@ -159,7 +162,6 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		distSvc := mocks.NewMockDistributionAccountService(t)
 		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("100"), nil).Once()
 		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(creditOp("1", "500")), nil).Once()
-		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(), nil).Once()
 
 		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
 		require.NoError(t, err)
@@ -168,6 +170,33 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		assert.Equal(t, "0.0000000", summary.BeginningBalance)
 		assert.Equal(t, "500.0000000", summary.TotalCredits)
 		assert.False(t, summary.Truncated)
+	})
+
+	t.Run("balances account for debits and for activity after the period", func(t *testing.T) {
+		day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 12, 0, 0, 0, time.UTC) }
+		horizonClient := &horizonclient.MockClient{}
+		distSvc := mocks.NewMockDistributionAccountService(t)
+		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("1000"), nil).Once()
+		// Newest first, as Horizon returns them. Every scan sees the same history, however many there are.
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(
+			paymentOp("5", "GSOMEONE", accountAddress, "300", day(time.February, 10)),
+			paymentOp("4", accountAddress, "GRECEIVER", "50", day(time.February, 5)),
+			paymentOp("3", accountAddress, "GRECEIVER", "40", day(time.January, 20)),
+			paymentOp("2", "GSOMEONE", accountAddress, "100", day(time.January, 15)),
+			paymentOp("1", "GSOMEONE", accountAddress, "999", time.Date(2025, time.December, 20, 12, 0, 0, 0, time.UTC)),
+		), nil)
+
+		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
+		require.NoError(t, err)
+		summary := result.Summary.Assets[0]
+		// Ending = today 1000 - later credit 300 + later debit 50; beginning = ending - 100 credited + 40 debited.
+		assert.Equal(t, "750.0000000", summary.EndingBalance)
+		assert.Equal(t, "690.0000000", summary.BeginningBalance)
+		assert.Equal(t, "100.0000000", summary.TotalCredits)
+		assert.Equal(t, "40.0000000", summary.TotalDebits)
+		assert.True(t, summary.Reconciled)
+		require.Len(t, summary.Transactions, 2, "only the period's payments are listed")
+		assert.Equal(t, []string{"credit", "debit"}, []string{summary.Transactions[0].Type, summary.Transactions[1].Type})
 	})
 
 	t.Run("hitting the page cap inside the period marks the statement truncated", func(t *testing.T) {
@@ -179,7 +208,6 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 			fullPage = append(fullPage, creditOp(fmt.Sprintf("op-%d", i), "1"))
 		}
 		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(fullPage...), nil).Times(MaxStatementPaymentsPages)
-		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(), nil).Once()
 
 		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
 		require.NoError(t, err)
@@ -187,6 +215,43 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 		assert.True(t, summary.Truncated)
 		assert.True(t, summary.Reconciled)
 		assert.Len(t, summary.Transactions, StatementPaymentsPageLimit*MaxStatementPaymentsPages)
+	})
+
+	t.Run("hitting the page cap after the period also marks the statement truncated", func(t *testing.T) {
+		horizonClient := &horizonclient.MockClient{}
+		distSvc := mocks.NewMockDistributionAccountService(t)
+		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("1000000"), nil).Once()
+		later := make([]operations.Operation, 0, StatementPaymentsPageLimit)
+		for i := 0; i < StatementPaymentsPageLimit; i++ {
+			later = append(later, paymentOp(fmt.Sprintf("op-%d", i), "GSOMEONE", accountAddress, "1", time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)))
+		}
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(later...), nil).Times(MaxStatementPaymentsPages)
+
+		result, err := NewReportsService(horizonClient, distSvc, &data.Models{}).GetStatement(ctx, &stellarAccount, "wallet-1", "XLM", fromDate, toDate)
+		require.NoError(t, err, "payments after the period are only summed, so the empty models are never touched")
+		assert.True(t, result.Summary.Assets[0].Truncated, "the period was never reached")
+		assert.Empty(t, result.Summary.Assets[0].Transactions)
+	})
+
+	t.Run("one scan covers every asset", func(t *testing.T) {
+		usdc := data.Asset{Code: "USDC", Issuer: "GUSDCISSUER"}
+		horizonClient := &horizonclient.MockClient{}
+		defer horizonClient.AssertExpectations(t)
+		distSvc := mocks.NewMockDistributionAccountService(t)
+		distSvc.On("GetBalances", ctx, &stellarAccount).Return(map[data.Asset]decimal.Decimal{xlmAsset: decimal.Zero, usdc: decimal.Zero}, nil).Once()
+		distSvc.On("GetBalance", ctx, &stellarAccount, xlmAsset).Return(decimal.RequireFromString("10"), nil).Once()
+		distSvc.On("GetBalance", ctx, &stellarAccount, usdc).Return(decimal.RequireFromString("20"), nil).Once()
+		usdcCredit := paymentOp("2", "GSOMEONE", accountAddress, "5", time.Date(2026, 1, 16, 12, 0, 0, 0, time.UTC))
+		usdcCredit.Asset = base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "GUSDCISSUER"}
+		horizonClient.On("Payments", mock.AnythingOfType("horizonclient.OperationRequest")).Return(pageOf(usdcCredit, creditOp("1", "3")), nil).Once()
+
+		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "", fromDate, toDate)
+		require.NoError(t, err)
+		credits := map[string]string{}
+		for _, a := range result.Summary.Assets {
+			credits[a.Code] = a.TotalCredits
+		}
+		assert.Equal(t, map[string]string{"XLM": "3.0000000", "USDC": "5.0000000"}, credits)
 	})
 }
 
