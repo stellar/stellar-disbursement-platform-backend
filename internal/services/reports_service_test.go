@@ -240,11 +240,11 @@ func TestReportsServiceGetStatement_reconciliationAndTruncation(t *testing.T) {
 
 		result, err := NewReportsService(horizonClient, distSvc, models).GetStatement(ctx, &stellarAccount, "wallet-1", "", fromDate, toDate)
 		require.NoError(t, err)
-		credits := map[string]string{}
+		var credits []string
 		for _, a := range result.Summary.Assets {
-			credits[a.Code] = a.TotalCredits
+			credits = append(credits, a.Code+" "+a.TotalCredits)
 		}
-		assert.Equal(t, map[string]string{"XLM": "3.0000000", "USDC": "5.0000000"}, credits)
+		assert.Equal(t, []string{"USDC 5.0000000", "XLM 3.0000000"}, credits, "sorted by code, whatever order the balances map gives")
 	})
 }
 

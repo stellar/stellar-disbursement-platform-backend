@@ -1,6 +1,7 @@
 package services
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -133,6 +134,10 @@ func (s *ReportsService) GetStatement(ctx context.Context, account *schema.Trans
 			asset := a
 			assetsToProcess = append(assetsToProcess, &asset)
 		}
+		// Map order is random; sort so every download lists the assets the same way.
+		slices.SortFunc(assetsToProcess, func(a, b *data.Asset) int {
+			return cmp.Or(cmp.Compare(a.Code, b.Code), cmp.Compare(a.Issuer, b.Issuer))
+		})
 	}
 
 	// Balances first: an asset the account no longer holds is left out of the statement and of the scan.
