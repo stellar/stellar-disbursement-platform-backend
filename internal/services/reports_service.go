@@ -233,6 +233,7 @@ func (s *ReportsService) scanPayments(
 		return nil, nil
 	}
 	activity := make([]assetActivity, len(assets))
+	labels := map[string]string{} // counterparty address -> receiver external ID, for this statement
 
 	req := horizonclient.OperationRequest{
 		ForAccount: accountAddress,
@@ -247,7 +248,7 @@ func (s *ReportsService) scanPayments(
 			return nil, fmt.Errorf("fetching payments: %w", err)
 		}
 
-		reachedStart, err := s.scanPaymentPage(ctx, page, accountAddress, walletID, assets, fromStart, toEnd, activity)
+		reachedStart, err := s.scanPaymentPage(ctx, page, accountAddress, walletID, assets, fromStart, toEnd, activity, labels)
 		if err != nil {
 			return nil, err
 		}
@@ -279,6 +280,7 @@ func (s *ReportsService) scanPaymentPage(
 	assets []*data.Asset,
 	fromStart, toEnd time.Time,
 	activity []assetActivity,
+	labels map[string]string,
 ) (reachedStart bool, err error) {
 	for _, op := range page.Embedded.Records {
 		createdAt := op.GetBase().LedgerCloseTime
@@ -305,7 +307,11 @@ func (s *ReportsService) scanPaymentPage(
 			continue
 		}
 
-		a.transactions = append(a.transactions, s.statementLine(ctx, op, payment, walletID))
+		line, err := s.statementLine(ctx, op, payment, walletID, labels)
+		if err != nil {
+			return false, err
+		}
+		a.transactions = append(a.transactions, line)
 		if payment.debit {
 			a.debits = a.debits.Add(payment.amount)
 		} else {
@@ -363,13 +369,19 @@ func matchStatementPayment(op operations.Operation, accountAddress string, asset
 }
 
 // statementLine builds the statement row for a payment in the period, labelled from the SDP's own records.
-func (s *ReportsService) statementLine(ctx context.Context, op operations.Operation, payment statementPayment, walletID string) StatementTransaction {
+func (s *ReportsService) statementLine(
+	ctx context.Context,
+	op operations.Operation,
+	payment statementPayment,
+	walletID string,
+	labels map[string]string,
+) (StatementTransaction, error) {
 	txHash := op.GetTransactionHash()
 	createdAtStr := op.GetBase().LedgerCloseTime.UTC().Format(time.RFC3339)
 
 	dbPayment, err := s.Models.Payment.GetSuccessfulByStellarTransaction(ctx, s.Models.DBConnectionPool, walletID, txHash, payment.opID)
-	if err != nil {
-		dbPayment = nil
+	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+		return StatementTransaction{}, fmt.Errorf("finding the SDP payment for transaction %s: %w", txHash, err)
 	}
 
 	updatedAtStr := createdAtStr
@@ -384,16 +396,14 @@ func (s *ReportsService) statementLine(ctx context.Context, op operations.Operat
 		}
 		externalPaymentID = dbPayment.ExternalPaymentID
 	}
-	if counterpartyName == "" {
-		counterpartyName = s.resolveCounterparty(ctx, payment.from)
-		if counterpartyName == "" {
-			counterpartyName = s.resolveCounterparty(ctx, payment.to)
-		}
-	}
-
 	txType, counterparty := "credit", payment.from
 	if payment.debit {
 		txType, counterparty = "debit", payment.to
+	}
+	if counterpartyName == "" {
+		if counterpartyName, err = s.counterpartyLabel(ctx, counterparty, labels); err != nil {
+			return StatementTransaction{}, err
+		}
 	}
 
 	return StatementTransaction{
@@ -405,7 +415,7 @@ func (s *ReportsService) statementLine(ctx context.Context, op operations.Operat
 		CounterpartyAddress: counterparty,
 		CounterpartyName:    counterpartyName,
 		ExternalPaymentID:   externalPaymentID,
-	}
+	}, nil
 }
 
 // extractPaymentOperation returns (from, to, amount, destination asset, operation ID, true) for
@@ -437,12 +447,22 @@ func assetMatchesHorizonAsset(asset *data.Asset, h base.Asset) bool {
 	return asset.Code == h.Code && (asset.Issuer == h.Issuer || (asset.Issuer == "" && h.Issuer == ""))
 }
 
-func (s *ReportsService) resolveCounterparty(ctx context.Context, stellarAddress string) string {
-	rw, err := s.Models.ReceiverWallet.GetByStellarAddress(ctx, stellarAddress)
-	if err != nil {
-		return ""
+// counterpartyLabel returns the external ID of the receiver holding address, or "" when none does. Answers are kept
+// in labels, so a counterparty that appears on many rows is looked up once.
+func (s *ReportsService) counterpartyLabel(ctx context.Context, address string, labels map[string]string) (string, error) {
+	if label, ok := labels[address]; ok {
+		return label, nil
 	}
-	return rw.Receiver.ExternalID
+	rw, err := s.Models.ReceiverWallet.GetByStellarAddress(ctx, address)
+	switch {
+	case errors.Is(err, data.ErrRecordNotFound):
+		labels[address] = ""
+	case err != nil:
+		return "", fmt.Errorf("finding the receiver for %s: %w", address, err)
+	default:
+		labels[address] = rw.Receiver.ExternalID
+	}
+	return labels[address], nil
 }
 
 func formatStellarAmount(d decimal.Decimal) string {

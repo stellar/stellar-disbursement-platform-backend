@@ -295,39 +295,54 @@ func TestReportsService_resolveAsset(t *testing.T) {
 	})
 }
 
-func TestReportsService_resolveCounterparty(t *testing.T) {
+func TestReportsService_counterpartyLabel(t *testing.T) {
 	ctx := context.Background()
-	horizonClient := &horizonclient.MockClient{}
-	distSvc := mocks.NewMockDistributionAccountService(t)
 	dbPool := testutils.GetDBConnectionPool(t)
 	models, err := data.NewModels(dbPool)
 	require.NoError(t, err)
+	service := NewReportsService(&horizonclient.MockClient{}, mocks.NewMockDistributionAccountService(t), models)
 
-	service := NewReportsService(horizonClient, distSvc, models)
+	receiver := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{ExternalID: "test-receiver-123"})
+	wallet := data.CreateWalletFixture(t, ctx, dbPool, "Test Wallet", "https://test.com", "test.com", "test://")
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	known := keypair.MustRandom().Address()
+	_, err = dbPool.ExecContext(ctx, `UPDATE receiver_wallets SET stellar_address = $1 WHERE id = $2`, known, receiverWallet.ID)
+	require.NoError(t, err)
 
-	t.Run("returns empty string when wallet not found", func(t *testing.T) {
-		address := keypair.MustRandom().Address()
-		result := service.resolveCounterparty(ctx, address)
-
-		assert.Empty(t, result)
+	t.Run("labels a receiver's address and remembers the answer", func(t *testing.T) {
+		labels := map[string]string{}
+		label, err := service.counterpartyLabel(ctx, known, labels)
+		require.NoError(t, err)
+		assert.Equal(t, "test-receiver-123", label)
+		assert.Equal(t, map[string]string{known: "test-receiver-123"}, labels)
 	})
 
-	t.Run("returns receiver external ID when wallet found", func(t *testing.T) {
-		receiver := data.CreateReceiverFixture(t, ctx, dbPool, &data.Receiver{
-			ExternalID: "test-receiver-123",
-		})
-		wallet := data.CreateWalletFixture(t, ctx, dbPool, "Test Wallet", "https://test.com", "test.com", "test://")
-		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-
-		// Update receiver wallet with stellar address
-		stellarAddress := keypair.MustRandom().Address()
-		updateQuery := `UPDATE receiver_wallets SET stellar_address = $1 WHERE id = $2`
-		_, err := dbPool.ExecContext(ctx, updateQuery, stellarAddress, receiverWallet.ID)
+	t.Run("an unknown address has no label, and that is remembered too", func(t *testing.T) {
+		unknown := keypair.MustRandom().Address()
+		labels := map[string]string{}
+		label, err := service.counterpartyLabel(ctx, unknown, labels)
 		require.NoError(t, err)
+		assert.Empty(t, label)
+		assert.Contains(t, labels, unknown)
+	})
 
-		result := service.resolveCounterparty(ctx, stellarAddress)
+	t.Run("a remembered address is not looked up again", func(t *testing.T) {
+		noDB := NewReportsService(&horizonclient.MockClient{}, mocks.NewMockDistributionAccountService(t), &data.Models{})
+		label, err := noDB.counterpartyLabel(ctx, known, map[string]string{known: "cached"})
+		require.NoError(t, err)
+		assert.Equal(t, "cached", label)
+	})
 
-		assert.Equal(t, "test-receiver-123", result)
+	t.Run("database failures fail the statement instead of dropping labels", func(t *testing.T) {
+		failing, cancel := context.WithCancel(ctx)
+		cancel()
+		_, err := service.counterpartyLabel(failing, keypair.MustRandom().Address(), map[string]string{})
+		require.Error(t, err)
+
+		op := operations.Payment{From: "GSOMEONE", To: known, Amount: "1", Asset: base.Asset{Type: "native"}}
+		op.Base.TransactionHash = "tx-1"
+		_, err = service.statementLine(failing, op, statementPayment{from: "GSOMEONE", to: known, amountStr: "1"}, "wallet-1", map[string]string{})
+		require.Error(t, err)
 	})
 }
 
