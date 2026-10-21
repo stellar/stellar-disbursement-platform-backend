@@ -123,6 +123,7 @@ func Test_PaymentManagementService_CancelPayment(t *testing.T) {
 		// scheduler side: lock the row the way SendBatchPayments does
 		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 		require.NoError(t, err)
+		defer func() { _ = dbTx.Rollback() }() // releases the lock if an assertion fails before Commit
 		batch, err := models.Payment.GetBatchForUpdate(ctx, dbTx, 10)
 		require.NoError(t, err)
 		var locked *data.Payment
@@ -133,14 +134,15 @@ func Test_PaymentManagementService_CancelPayment(t *testing.T) {
 		}
 		require.NotNil(t, locked, "raced payment should be in the locked batch")
 
-		// cancel side: reads READY, then blocks on the locked row
+		// cancel side: reads READY, then its UPDATE must block on the locked row
 		cancelErr := make(chan error, 1)
 		go func() { cancelErr <- service.CancelPayment(ctx, racedPayment.ID) }()
-		select {
-		case err = <-cancelErr:
-			require.FailNow(t, "cancel should be waiting for the row lock", "got %v", err)
-		case <-time.After(300 * time.Millisecond):
-		}
+		require.Eventually(t, func() bool {
+			var waiting int
+			qErr := dbConnectionPool.GetContext(ctx, &waiting, `SELECT count(*) FROM pg_stat_activity
+				WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%UPDATE payments%'`)
+			return qErr == nil && waiting == 1
+		}, 5*time.Second, 50*time.Millisecond, "cancel's UPDATE should be waiting on the row lock")
 
 		// scheduler commits PENDING, releasing the lock
 		numUpdated, err := models.Payment.UpdateStatuses(ctx, dbTx, []*data.Payment{locked}, data.PendingPaymentStatus)
