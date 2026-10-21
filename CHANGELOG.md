@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Limit CSV dimensions before parsing. [#1229](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1229)
 - Bound password validation errors on over-length input. [#1230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1230)
 - Reconcile submitted transactions by inner tx hash. [#1234](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1234)
+- Scope API-key management to the acting key's distribution accounts. [#1235](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1235)
 - Bind sponsored transaction authorization to the caller's embedded wallet. [#1236](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1236)
 - Publish TSS metrics on `TSS_METRICS_PORT` (default `9002`) in Docker Compose. [#1239](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1239)
 - Show English instead of raw translation keys in the SEP-24 webview when the device language is unsupported, and respect the saved language. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)

@@ -194,3 +194,9 @@ unaffected, and an API key scoped to exactly one account may omit it.
 and the key responses). Omitting it on creation inherits the accounts its creator can reach at that
 moment; the resolved IDs are stored on the key, so accounts added afterwards are not included. For an
 Owner or Developer that is every active account. An empty array grants no account access at all.
+
+API key management is also bounded by the acting key's own scope: `GET /api-keys` lists only the
+keys created by the same user whose `distribution_wallet_ids` are all within the acting key's, and
+`GET`, `PATCH` and `DELETE /api-keys/{id}` return `404` for any other key. A key therefore cannot
+raise the permissions of, re-scope, or remove a sibling that reaches an account the key itself
+cannot.
