@@ -162,6 +162,69 @@ func Test_SponsoredTransactionHandler_CreateSponsoredTransaction(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
 	})
 
+	t.Run("returns bad request when operation is authorized by a foreign contract", func(t *testing.T) {
+		const walletAddress = "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT"
+		handler := SponsoredTransactionHandler{EmbeddedWalletService: mocks.NewMockEmbeddedWalletService(t)}
+
+		asset := data.Asset{Code: "USDC", Issuer: keypair.MustRandom().Address()}
+		foreignContract := scContractAddress(t, "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC")
+		operationXDR, _ := buildInvokeHostFunctionXDRWithAuth(t, asset, addressCredentials(foreignContract))
+
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{OperationXDR: operationXDR})
+		require.NoError(t, err)
+
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), walletAddress)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handler.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "must be authorized only by the caller's embedded wallet")
+	})
+
+	t.Run("successfully creates sponsored transaction authorized by the caller's wallet", func(t *testing.T) {
+		dbConnectionPool := testutils.GetDBConnectionPool(t)
+		models, err := data.NewModels(dbConnectionPool)
+		require.NoError(t, err)
+
+		embeddedWallet := data.CreateWalletFixture(t, context.Background(), dbConnectionPool, "embedded-wallet", "https://example.com", "embedded.example.com", "embedded://")
+		data.MakeWalletEmbedded(t, context.Background(), dbConnectionPool, embeddedWallet.ID)
+
+		asset := data.CreateAssetFixture(t, context.Background(), dbConnectionPool, "USDC", keypair.MustRandom().Address())
+		data.CreateWalletAssets(t, context.Background(), dbConnectionPool, embeddedWallet.ID, []string{asset.ID})
+
+		walletService := mocks.NewMockEmbeddedWalletService(t)
+		handlerWithModels := SponsoredTransactionHandler{
+			EmbeddedWalletService: walletService,
+			Models:                models,
+			NetworkPassphrase:     network.TestNetworkPassphrase,
+		}
+
+		const walletAddress = "CDTY3P6OVY3SMZXR3DZA667NAXFECA6A3AOZXEU33DD2ACBY43CIKDPT"
+		operationXDR, _ := buildInvokeHostFunctionXDRWithAuth(t, *asset, addressCredentials(scContractAddress(t, walletAddress)))
+
+		requestBody, err := json.Marshal(CreateSponsoredTransactionRequest{OperationXDR: operationXDR})
+		require.NoError(t, err)
+
+		ctx := sdpcontext.SetWalletContractAddressInContext(context.Background(), walletAddress)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/sponsored-transactions", strings.NewReader(string(requestBody)))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		walletService.On("SponsorTransaction", mock.Anything, walletAddress, operationXDR).Return("tx-id", nil).Once()
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handlerWithModels.CreateSponsoredTransaction).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusAccepted, rr.Result().StatusCode)
+		var respBody CreateSponsoredTransactionResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &respBody))
+		assert.Equal(t, "tx-id", respBody.ID)
+	})
+
 	t.Run("returns bad request when simulation fails", func(t *testing.T) {
 		dbConnectionPool := testutils.GetDBConnectionPool(t)
 		models, err := data.NewModels(dbConnectionPool)
@@ -520,4 +583,41 @@ func buildInvokeHostFunctionXDR(t *testing.T, asset data.Asset) (string, string)
 	require.NoError(t, err)
 
 	return operationXDR, contractAddress
+}
+
+// buildInvokeHostFunctionXDRWithAuth builds a transfer op on asset's SAC with one auth entry using
+// the given credentials; returns the op XDR and the SAC address.
+func buildInvokeHostFunctionXDRWithAuth(t *testing.T, asset data.Asset, credentials xdr.SorobanCredentials) (string, string) {
+	t.Helper()
+
+	baseXDR, sacAddress := buildInvokeHostFunctionXDR(t, asset)
+	var op xdr.InvokeHostFunctionOp
+	require.NoError(t, xdr.SafeUnmarshalBase64(baseXDR, &op))
+
+	op.Auth = []xdr.SorobanAuthorizationEntry{{
+		Credentials: credentials,
+		RootInvocation: xdr.SorobanAuthorizedInvocation{
+			Function: xdr.SorobanAuthorizedFunction{Type: xdr.SorobanAuthorizedFunctionTypeSorobanAuthorizedFunctionTypeContractFn, ContractFn: op.HostFunction.InvokeContract},
+		},
+	}}
+
+	operationXDR, err := xdr.MarshalBase64(op)
+	require.NoError(t, err)
+
+	return operationXDR, sacAddress
+}
+
+func addressCredentials(address xdr.ScAddress) xdr.SorobanCredentials {
+	return xdr.SorobanCredentials{
+		Type:    xdr.SorobanCredentialsTypeSorobanCredentialsAddress,
+		Address: &xdr.SorobanAddressCredentials{Address: address, Signature: xdr.ScVal{Type: xdr.ScValTypeScvVoid}},
+	}
+}
+
+func scContractAddress(t *testing.T, contractAddress string) xdr.ScAddress {
+	t.Helper()
+
+	var contractID xdr.ContractId
+	copy(contractID[:], strkey.MustDecode(strkey.VersionByteContract, contractAddress))
+	return xdr.ScAddress{Type: xdr.ScAddressTypeScAddressTypeContract, ContractId: &contractID}
 }

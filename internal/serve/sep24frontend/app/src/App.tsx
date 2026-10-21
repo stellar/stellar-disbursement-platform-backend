@@ -51,11 +51,13 @@ const App: FC = () => {
     // Get saved language from local storage if it exists.
     const savedLang = localStorageSavedLanguage.get();
 
-    setLanguage(
-      savedLang || SUPPORTED_LANGUAGES.includes(detectedLang)
-        ? detectedLang
-        : "en"
-    );
+    if (savedLang && SUPPORTED_LANGUAGES.includes(savedLang)) {
+      setLanguage(savedLang);
+    } else if (SUPPORTED_LANGUAGES.includes(detectedLang)) {
+      setLanguage(detectedLang);
+    } else {
+      setLanguage("en");
+    }
   }, []);
 
   useEffect(() => {
@@ -150,6 +152,7 @@ const App: FC = () => {
           <Select
             fieldSize="sm"
             id="language"
+            value={language}
             onChange={(e) => {
               const lang = e.target.value;
 
@@ -158,10 +161,11 @@ const App: FC = () => {
             }}
           >
             <option value="en">English</option>
-            <option value="ua">Українська</option>
+            <option value="uk">Українська</option>
             <option value="es">Español</option>
             <option value="ru">Русский</option>
             <option value="ht">Kreyòl Ayisyen</option>
+            <option value="pt">Português</option>
           </Select>
         </Box>
 

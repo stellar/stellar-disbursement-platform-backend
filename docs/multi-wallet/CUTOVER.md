@@ -113,7 +113,6 @@ For API integrators:
 - The payment response field `circle_transfer_request_id` is **renamed to `circle_transaction_id`**, and a new `circle_transaction_type` field (`PAYOUT` or `TRANSFER`) says which Circle API produced it. The old field only ever held Transfers API IDs and was always absent for tenants on the Payouts API; the new one carries whichever ID applies. Affects `GET /payments` and `GET /payments/{id}`.
     - `GET /exports/payments` is also affected: the column `CircleTransferRequestID` is renamed to `CircleTransactionID`, and a `CircleTransactionType` column is added.
 - `PATCH /receivers/{receiver_id}/wallets/{receiver_wallet_id}` returns `404` instead of `400` when the receiver wallet belongs to a different receiver. Clients matching on the old error message will break.
-- `PATCH /receivers/{id}` returns `409` when contact details are changed while the receiver has payments in flight.
 - `GET /statistics` groups payment amounts by asset issuer as well as code, and each entry gains `asset_issuer`. A tenant holding two issuers of the same asset code now sees two entries with the same `asset_code` where it previously saw one merged entry.
 - `disbursement_status` gains a `CANCELED` value. Clients that switch exhaustively on status need to handle it.
 

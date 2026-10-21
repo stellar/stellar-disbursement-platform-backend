@@ -427,12 +427,8 @@ tss:
   enabled: true
 
   ## @extra tss.route Configuration related to the routing of the TSS.
-  ## @param tss.route.schema Protocol scheme used for the service. Can be "http" or "https".
-  ## @param tss.route.port Primary port on which the TSS listens.
   ## @param tss.route.metricsPort Port dedicated to metrics collection for the TSS.
   route:
-    schema: "https"
-    port: "9000"
     metricsPort: "9002"
 
   ## @extra tss.deployment Configuration related to the deployment of the TSS.
