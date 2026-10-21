@@ -610,9 +610,10 @@ func (p *PaymentModel) UpdateStatuses(ctx context.Context, sqlExec db.SQLExecute
 		SET status = $1,
 			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, NULL))
 		WHERE id = ANY($2)
+		AND status = ANY($3)
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query, toStatus, pq.Array(paymentIDs))
+	result, err := sqlExec.ExecContext(ctx, query, toStatus, pq.Array(paymentIDs), pq.Array(toStatus.SourceStatuses()))
 	if err != nil {
 		return 0, fmt.Errorf("error updating payment statuses: %w", err)
 	}
@@ -641,9 +642,10 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 			stellar_transaction_id = COALESCE($3, stellar_transaction_id),
 			sender_address = COALESCE(NULLIF($4, ''), sender_address)
 		WHERE id = $5
+		AND status = $6
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, update.SenderAddress, payment.ID)
+	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, update.SenderAddress, payment.ID, payment.Status)
 	if err != nil {
 		return fmt.Errorf("error updating payment with id %s: %w", payment.ID, err)
 	}
