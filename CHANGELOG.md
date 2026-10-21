@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Publish TSS metrics on `TSS_METRICS_PORT` (default `9002`) in Docker Compose. [#1239](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1239)
 - Show English instead of raw translation keys in the SEP-24 webview when the device language is unsupported, and respect the saved language. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
 - Detect Ukrainian devices in the SEP-24 webview by using the `uk` language code instead of the `ua` country code, and show Ukrainian country names in the phone number picker. [#1241](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1241)
+- Make payment cancellation an atomic compare-and-set. [#1245](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1245)
 
 ### Security and Dependencies
 
