@@ -192,7 +192,7 @@ DATABASE_URL="postgres://postgres@localhost:5432/sdp_mtn?sslmode=disable" \
 
 ## Mainnet Deployment
 
-⚠️ **IMPORTANT**: Mainnet deployment is for production use with real funds. Exercise extreme caution.
+⚠️ **IMPORTANT**: Mainnet deployment uses real funds. It is not recommended for production. Exercise extreme caution: do not leave any environment variables and secrets with default values during configuration.
 
 ### Mainnet Configuration
 
@@ -205,7 +205,7 @@ The setup wizard automatically handles mainnet configuration when you select "pu
    - `DATABASE_NAME=sdp_mainnet` (separate database for isolation)
    - `DISABLE_MFA=false` (MFA enforced for mainnet)
 
-   > Note: The setup wizard does not configure the rest of the environment variables. Be sure to set these explicitly in your mainnet `.env` file. **Do not leave default values for secrets**. See the [Configuration Guide](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) for more details on environment variables.
+   > ⚠️ **Note**: The setup wizard does not configure any further environment variables. Be sure to set these explicitly in your mainnet `.env` file. **Do not leave default values for secrets**. See the [Configuration Guide](https://developers.stellar.org/docs/platforms/stellar-disbursement-platform/admin-guide/configuring-sdp) for more details on environment variables.
 
 2. **Account Requirements**:
    - **Distribution Account**: Must be funded with sufficient XLM for creating channel accounts, distribution accounts for different tenants, and transaction fees
@@ -358,7 +358,12 @@ From the repo root, run the wizard:
 make setup
 ```
 
-This will generate SEP-10 and distribution keys, fund the distribution with XLM + USDC on testnet, and write `dev/.env`.
+The wizard writes the configuration to `dev/.env`. How it handles accounts depends on the network you choose:
+
+- Testnet: choose "Generate new accounts" to create a distribution account and a SEP-10 signing key and fund both with XLM through Friendbot, or "Enter existing accounts" to use your own distribution secret key.
+- Pubnet (mainnet): enter the secret key of an existing distribution account. Nothing is generated or funded, so fund the account with XLM before launching.
+
+In both cases the SEP-10 signing key is generated for you.
 
 ### Building the SDP Docker Containers
 
