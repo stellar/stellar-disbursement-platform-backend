@@ -949,6 +949,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 				assert.Contains(t, e.Message, "starting request")
 			case 1:
 				assert.Contains(t, e.Message, "finished request")
+				assert.Contains(t, entry, "route=/")
 			default:
 				require.Fail(t, "unexpected log entry")
 			}
