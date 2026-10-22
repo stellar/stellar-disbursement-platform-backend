@@ -15,7 +15,6 @@ require (
 	github.com/dimchansky/utfbom v1.1.1
 	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/getsentry/sentry-go v0.50.0
-	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/httprate v0.16.1
 	github.com/go-webauthn/webauthn v0.18.2
@@ -67,6 +66,7 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/go-chi/chi v4.1.2+incompatible // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
