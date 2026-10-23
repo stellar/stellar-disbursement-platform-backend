@@ -194,7 +194,7 @@ func (h SEP24Handler) GetTransaction(w http.ResponseWriter, r *http.Request) {
 func (h SEP24Handler) GetInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	assets, err := h.Models.Assets.GetAll(ctx)
+	assets, err := h.Models.Assets.GetAll(ctx, false)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
 		return
