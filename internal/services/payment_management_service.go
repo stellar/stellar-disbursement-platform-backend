@@ -53,7 +53,7 @@ func (s *PaymentManagementService) CancelPayment(ctx context.Context, paymentID 
 		}
 
 		if numRowsAffected == 0 {
-			return ErrPaymentStatusCantBeChanged
+			return ErrPaymentNotReadyToCancel
 		}
 
 		return nil

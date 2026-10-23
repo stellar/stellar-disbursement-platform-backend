@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -105,5 +107,61 @@ func Test_PaymentManagementService_CancelPayment(t *testing.T) {
 		payment, err := models.Payment.Get(ctx, readyPayment.ID, models.DBConnectionPool)
 		require.NoError(t, err)
 		require.Equal(t, data.CanceledPaymentStatus, payment.Status)
+	})
+
+	t.Run("payment taken by the scheduler while the cancel waits for the row lock", func(t *testing.T) {
+		receiver5 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		rw5 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver5.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+		racedPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw5,
+			Disbursement:   startedDisbursement,
+			Asset:          *asset,
+			Amount:         "500",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		// scheduler side: lock the row the way SendBatchPayments does
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		defer func() { _ = dbTx.Rollback() }() // releases the lock if an assertion fails before Commit
+		batch, err := models.Payment.GetBatchForUpdate(ctx, dbTx, 10)
+		require.NoError(t, err)
+		var locked *data.Payment
+		for _, p := range batch {
+			if p.ID == racedPayment.ID {
+				locked = p
+			}
+		}
+		require.NotNil(t, locked, "raced payment should be in the locked batch")
+
+		// cancel side: reads READY, then its UPDATE must block on the locked row
+		cancelErr := make(chan error, 1)
+		go func() { cancelErr <- service.CancelPayment(ctx, racedPayment.ID) }()
+		require.Eventually(t, func() bool {
+			var waiting int
+			qErr := dbConnectionPool.GetContext(ctx, &waiting, `SELECT count(*) FROM pg_stat_activity
+				WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%UPDATE payments%'`)
+			return qErr == nil && waiting == 1
+		}, 5*time.Second, 50*time.Millisecond, "cancel's UPDATE should be waiting on the row lock")
+
+		// scheduler commits PENDING, releasing the lock
+		numUpdated, err := models.Payment.UpdateStatuses(ctx, dbTx, []*data.Payment{locked}, data.PendingPaymentStatus)
+		require.NoError(t, err)
+		require.Equal(t, int64(1), numUpdated)
+		require.NoError(t, dbTx.Commit())
+
+		select {
+		case err = <-cancelErr:
+			require.ErrorIs(t, err, ErrPaymentNotReadyToCancel)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "cancel did not return after the lock was released")
+		}
+
+		payment, err := models.Payment.Get(ctx, racedPayment.ID, models.DBConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, data.PendingPaymentStatus, payment.Status)
+		for _, entry := range payment.StatusHistory {
+			assert.NotEqual(t, data.CanceledPaymentStatus, entry.Status)
+		}
 	})
 }
