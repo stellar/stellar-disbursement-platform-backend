@@ -3,6 +3,6 @@ services:
   sdp-frontend:
     image: stellar/stellar-disbursement-platform-frontend:edge
     ports:
-      - "3000:80"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:3000:80"
     volumes:
       - ./env-config-${NETWORK_TYPE:-testnet}.js:/usr/share/nginx/html/settings/env-config.js
