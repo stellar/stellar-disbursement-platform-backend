@@ -1917,3 +1917,146 @@ func Test_PaymentColumnNames(t *testing.T) {
 		})
 	}
 }
+
+func Test_PaymentModel_UpdateStatuses(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{Status: StartedDisbursementStatus})
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, disbursement.Wallet.ID, RegisteredReceiversWalletStatus)
+	newReadyPayment := func(amount string) *Payment {
+		return CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         amount,
+			Disbursement:   disbursement,
+			Asset:          *disbursement.Asset,
+			ReceiverWallet: rw,
+			Status:         ReadyPaymentStatus,
+		})
+	}
+
+	t.Run("returns 0 when there are no payments", func(t *testing.T) {
+		numUpdated, err := models.Payment.UpdateStatuses(ctx, dbConnectionPool, nil, PendingPaymentStatus)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), numUpdated)
+	})
+
+	t.Run("returns an error when the in-memory transition is invalid", func(t *testing.T) {
+		payment := newReadyPayment("1")
+		payment.Status = PendingPaymentStatus
+
+		_, err := models.Payment.UpdateStatuses(ctx, dbConnectionPool, []*Payment{payment}, CanceledPaymentStatus)
+		assert.ErrorContains(t, err, "cannot transition from PENDING to CANCELED")
+	})
+
+	t.Run("🎉 updates every payment still in a source status", func(t *testing.T) {
+		payment1 := newReadyPayment("2")
+		payment2 := newReadyPayment("3")
+
+		numUpdated, err := models.Payment.UpdateStatuses(ctx, dbConnectionPool, []*Payment{payment1, payment2}, PendingPaymentStatus)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), numUpdated)
+
+		for _, id := range []string{payment1.ID, payment2.ID} {
+			paymentDB, err := models.Payment.Get(ctx, id, dbConnectionPool)
+			require.NoError(t, err)
+			assert.Equal(t, PendingPaymentStatus, paymentDB.Status)
+		}
+	})
+
+	t.Run("skips a payment whose status changed since it was loaded", func(t *testing.T) {
+		stale := newReadyPayment("4")
+		fresh := newReadyPayment("5")
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE payments SET status = 'PENDING' WHERE id = $1", stale.ID)
+		require.NoError(t, err)
+
+		// both Go objects still say READY
+		numUpdated, err := models.Payment.UpdateStatuses(ctx, dbConnectionPool, []*Payment{stale, fresh}, CanceledPaymentStatus)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), numUpdated)
+
+		staleDB, err := models.Payment.Get(ctx, stale.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, PendingPaymentStatus, staleDB.Status)
+		assert.Len(t, staleDB.StatusHistory, len(stale.StatusHistory))
+
+		freshDB, err := models.Payment.Get(ctx, fresh.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, CanceledPaymentStatus, freshDB.Status)
+	})
+}
+
+func Test_PaymentModel_Update(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{Status: StartedDisbursementStatus})
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, disbursement.Wallet.ID, RegisteredReceiversWalletStatus)
+	newPendingPayment := func(amount string) *Payment {
+		return CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         amount,
+			Disbursement:   disbursement,
+			Asset:          *disbursement.Asset,
+			ReceiverWallet: rw,
+			Status:         PendingPaymentStatus,
+		})
+	}
+
+	t.Run("returns an error when the in-memory transition is invalid", func(t *testing.T) {
+		payment := newPendingPayment("1")
+
+		err := models.Payment.Update(ctx, dbConnectionPool, payment, &PaymentUpdate{Status: CanceledPaymentStatus, StellarTransactionID: "tx-hash"})
+		assert.ErrorContains(t, err, "cannot transition from PENDING to CANCELED")
+	})
+
+	t.Run("🎉 updates the payment when the stored status matches", func(t *testing.T) {
+		payment := newPendingPayment("2")
+
+		err := models.Payment.Update(ctx, dbConnectionPool, payment, &PaymentUpdate{
+			Status:               SuccessPaymentStatus,
+			StatusMessage:        "done",
+			StellarTransactionID: "tx-hash",
+			SenderAddress:        "GCKZ3F4LHZDKX4WJ43YYZ3VXWQ3ZNT3SL5FKXOQG2YJ6WFLSNU2YMKWV",
+		})
+		require.NoError(t, err)
+
+		paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, SuccessPaymentStatus, paymentDB.Status)
+		assert.Equal(t, "tx-hash", paymentDB.StellarTransactionID)
+		assert.Equal(t, "GCKZ3F4LHZDKX4WJ43YYZ3VXWQ3ZNT3SL5FKXOQG2YJ6WFLSNU2YMKWV", paymentDB.SenderAddress)
+		assert.Len(t, paymentDB.StatusHistory, len(payment.StatusHistory)+1)
+	})
+
+	t.Run("does not update a payment whose status changed since it was loaded", func(t *testing.T) {
+		payment := newPendingPayment("3")
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE payments SET status = 'FAILED' WHERE id = $1", payment.ID)
+		require.NoError(t, err)
+
+		// the Go object still says PENDING
+		err = models.Payment.Update(ctx, dbConnectionPool, payment, &PaymentUpdate{Status: SuccessPaymentStatus, StellarTransactionID: "tx-hash"})
+		assert.ErrorContains(t, err, "status was not updated from PENDING to SUCCESS")
+
+		paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, FailedPaymentStatus, paymentDB.Status)
+		assert.Empty(t, paymentDB.StellarTransactionID)
+	})
+}
