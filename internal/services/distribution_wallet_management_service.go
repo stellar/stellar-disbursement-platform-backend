@@ -526,7 +526,9 @@ func (s *DistributionWalletManagementService) addTrustlines(ctx context.Context,
 			continue
 		}
 		if _, err := s.Models.Assets.Insert(ctx, s.Models.DBConnectionPool, asset.Code, asset.Issuer); err != nil {
-			return fmt.Errorf("restoring retired asset %s:%s: %w", asset.Code, asset.Issuer, err)
+			// The trustline is on-chain; only the catalogue flag did not flip. The next add or
+			// remove of this asset restores it.
+			log.Ctx(ctx).Warnf("trustline for %s:%s added to wallet %q but the asset stays retired: %v", asset.Code, asset.Issuer, wallet.ID, err)
 		}
 	}
 
