@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/keypair"
@@ -309,5 +310,119 @@ func Test_DistributionWalletManagementService_ArchiveAndPromote(t *testing.T) {
 		current, gErr := models.DistributionWallets.GetDefault(ctx, dbConnectionPool)
 		require.NoError(t, gErr)
 		assert.Equal(t, w.ID, current.ID, "the promoted wallet is now the sole default")
+	})
+}
+
+// addTrustlines derives the new account's trustlines from the enabled wallet providers' supported
+// assets, retired (soft-deleted) ones included: the provider link is tenant intent, and once this
+// account trusts the asset it is back in use, so it returns to the catalogue. Only after the
+// ChangeTrust succeeded — trustlines are best-effort, and an account that trusts nothing must not
+// revive anything.
+func Test_DistributionWalletManagementService_addTrustlines_restoresRetiredAssets(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	provider := data.CreateWalletFixture(t, ctx, dbConnectionPool, "provider", "https://provider.test", "provider.test", "provider://")
+	live := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDT", "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ")
+	retired := data.CreateAssetFixture(t, ctx, dbConnectionPool, "EURC", "GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO")
+	data.AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, live.ID, provider.ID)
+	data.AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, retired.ID, provider.ID)
+
+	retire := func(t *testing.T) {
+		t.Helper()
+		_, sdErr := models.Assets.SoftDelete(ctx, dbConnectionPool, retired.ID)
+		require.NoError(t, sdErr)
+	}
+	deletedAt := func(t *testing.T, id string) *time.Time {
+		t.Helper()
+		a, gErr := models.Assets.Get(ctx, id)
+		require.NoError(t, gErr)
+		return a.DeletedAt
+	}
+
+	kp := keypair.MustRandom()
+	address := kp.Address()
+	wallet := data.DistributionWallet{
+		ID:            "new-wallet",
+		Address:       &address,
+		AccountType:   schema.DistributionAccountStellarDBVault,
+		AccountStatus: schema.AccountStatusActive,
+	}
+	account := schema.TransactionAccount{Address: address, Type: wallet.AccountType, Status: wallet.AccountStatus}
+
+	newService := func(t *testing.T, mHorizonClient *horizonclient.MockClient, submitted **txnbuild.Transaction) *DistributionWalletManagementService {
+		t.Helper()
+
+		signatureService, sigRouter, _ := signing.NewMockSignatureService(t)
+		sigRouter.
+			On("SignStellarTransaction", mock.Anything, mock.AnythingOfType("*txnbuild.Transaction"), account).
+			Run(func(args mock.Arguments) { *submitted = args.Get(1).(*txnbuild.Transaction) }).
+			Return(&txnbuild.Transaction{}, nil).Once()
+
+		return &DistributionWalletManagementService{
+			Models: models,
+			SubmitterEngine: engine.SubmitterEngine{
+				SignatureService:    signatureService,
+				HorizonClient:       mHorizonClient,
+				LedgerNumberTracker: preconditionsMocks.NewMockLedgerNumberTracker(t),
+				MaxBaseFee:          100,
+			},
+		}
+	}
+
+	t.Run("trusts the retired asset too and restores it to the catalogue", func(t *testing.T) {
+		retire(t)
+		require.NotNil(t, deletedAt(t, retired.ID))
+
+		mHorizonClient := &horizonclient.MockClient{}
+		defer mHorizonClient.AssertExpectations(t)
+		mHorizonClient.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: address}).
+			Return(horizon.Account{AccountID: address, Sequence: 1}, nil).Once()
+		mHorizonClient.
+			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).Once()
+
+		var submitted *txnbuild.Transaction
+		svc := newService(t, mHorizonClient, &submitted)
+		require.NoError(t, svc.addTrustlines(ctx, wallet))
+
+		require.NotNil(t, submitted)
+		codes := make([]string, 0, 2)
+		for _, op := range submitted.Operations() {
+			changeTrust, ok := op.(*txnbuild.ChangeTrust)
+			require.True(t, ok)
+			codes = append(codes, changeTrust.Line.GetCode())
+		}
+		assert.ElementsMatch(t, []string{live.Code, retired.Code}, codes)
+
+		assert.Nil(t, deletedAt(t, retired.ID), "the retired asset is back in use")
+		assert.Nil(t, deletedAt(t, live.ID))
+	})
+
+	t.Run("a failed ChangeTrust leaves the retired asset retired", func(t *testing.T) {
+		retire(t)
+
+		mHorizonClient := &horizonclient.MockClient{}
+		defer mHorizonClient.AssertExpectations(t)
+		mHorizonClient.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: address}).
+			Return(horizon.Account{AccountID: address, Sequence: 1}, nil).Once()
+		mHorizonClient.
+			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, errors.New("horizon exploded")).Once()
+
+		var submitted *txnbuild.Transaction
+		svc := newService(t, mHorizonClient, &submitted)
+		require.Error(t, svc.addTrustlines(ctx, wallet))
+
+		assert.NotNil(t, deletedAt(t, retired.ID), "nothing trusts it, so it stays retired")
 	})
 }

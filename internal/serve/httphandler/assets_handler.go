@@ -64,14 +64,27 @@ type AssetWithEnabledInfo struct {
 func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	walletID := strings.TrimSpace(r.URL.Query().Get("wallet"))
+
 	enabledParam, errParse := utils.ParseBoolQueryParam(r, "enabled")
+	if errParse != nil {
+		httperror.BadRequest("invalid 'enabled' parameter value", errParse, nil).Render(w)
+		return
+	}
+
+	// include_deleted also lists retired (soft-deleted) assets. It has no effect when ?wallet= is set.
+	includeDeletedParam, errParse := utils.ParseBoolQueryParam(r, "include_deleted")
+	if errParse != nil {
+		httperror.BadRequest("invalid 'include_deleted' parameter value", errParse, nil).Render(w)
+		return
+	}
+	includeDeleted := includeDeletedParam != nil && *includeDeletedParam
 
 	var assets []data.Asset
 	var err error
 	if walletID != "" {
 		assets, err = c.Models.Assets.GetByWalletID(ctx, walletID)
 	} else {
-		assets, err = c.Models.Assets.GetAll(ctx)
+		assets, err = c.Models.Assets.GetAll(ctx, includeDeleted)
 	}
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
@@ -79,10 +92,6 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If enabled parameter is provided, filter assets by availability for the distribution account.
-	if errParse != nil {
-		httperror.BadRequest("invalid 'enabled' parameter value", errParse, nil).Render(w)
-		return
-	}
 	if enabledParam != nil {
 		enabled := *enabledParam
 
@@ -291,11 +300,15 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusCreated, asset, httpjson.JSON)
 }
 
-// DeleteAsset marks an asset for soft delete and drops the trustline from the target
-// distribution account — the wallet named by X-Wallet-Id, or the tenant default when the header
-// is absent. The soft delete is tenant-wide (assets are a tenant-level table) while the
-// ChangeTrust is necessarily per-account; other wallets keep their trustlines until the same
-// call is made against them, which is the only way to reach them at all.
+// DeleteAsset removes the asset's trustline from the target distribution account — the wallet
+// named by X-Wallet-Id, or the tenant default when the header is absent — and retires the asset
+// from the tenant catalogue (soft delete) once no active Stellar distribution account trusts it
+// anymore.
+//
+// The assets row is tenant-wide (payments and disbursements reference it), while a trustline is
+// per-account on-chain state. An already-retired asset still gets its trustline removed, so a
+// trustline left behind on another account can always be cleaned up without a data migration.
+// The native asset has no trustline and is never retired.
 func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -313,42 +326,76 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 
 	asset, err := c.Models.Assets.Get(ctx, assetID)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Error performing soft delete on asset id %s: %s", assetID, err.Error())
+		log.Ctx(ctx).Errorf("Error getting asset id %s for deletion: %s", assetID, err.Error())
 		httperror.NotFound("could not find asset for deletion", err, nil).Render(w)
 		return
 	}
 
-	if asset.DeletedAt != nil {
-		log.Ctx(ctx).Errorf("Error performing soft delete on asset id %s: %s", assetID, "asset already deleted")
-		httpjson.RenderStatus(w, http.StatusNoContent, "asset already deleted", httpjson.JSON)
+	if asset.IsNative() {
+		httperror.BadRequest("The native asset (XLM) cannot be removed", nil, nil).Render(w)
 		return
 	}
 
-	asset, err = db.RunInTransactionWithResult(ctx, c.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Asset, error) {
-		deletedAsset, deleteErr := c.Models.Assets.SoftDelete(ctx, dbTx, assetID)
-		if deleteErr != nil {
-			return nil, fmt.Errorf("performing soft delete on asset id %s: %w", assetID, deleteErr)
-		}
-
-		assetToRemove := &txnbuild.CreditAsset{Code: deletedAsset.Code, Issuer: deletedAsset.Issuer}
-		trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemove, distributionAccount)
-		if trustlineErr != nil {
-			return nil, fmt.Errorf("removing trustline: %w", trustlineErr)
-		}
-
-		return asset, nil
-	})
-	if err != nil {
+	assetToRemove := &txnbuild.CreditAsset{Code: asset.Code, Issuer: asset.Issuer}
+	if err = c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemove, distributionAccount); err != nil {
 		if errors.Is(err, errCouldNotRemoveTrustline) {
 			httperror.UnprocessableEntity("Could not remove trustline because distribution account still has balance", err, nil).Render(w)
 			return
 		}
 
-		httperror.InternalError(ctx, "Cannot delete asset", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot delete asset", fmt.Errorf("removing trustline: %w", err), nil).Render(w)
 		return
 	}
 
+	if asset.DeletedAt == nil {
+		stillTrusted, trustErr := c.assetTrustedByOtherAccounts(ctx, *asset, distributionAccount.Address)
+		if trustErr != nil {
+			// The trustline is already gone, so the request did not fail: the catalogue entry just
+			// stays until a later removal can complete the check.
+			log.Ctx(ctx).Warnf("not retiring asset %s:%s after removing its trustline: %v", asset.Code, asset.Issuer, trustErr)
+		} else if !stillTrusted {
+			asset, err = c.Models.Assets.SoftDelete(ctx, c.Models.DBConnectionPool, assetID)
+			if err != nil {
+				httperror.InternalError(ctx, "Cannot delete asset", fmt.Errorf("performing soft delete on asset id %s: %w", assetID, err), nil).Render(w)
+				return
+			}
+		}
+	}
+
 	httpjson.Render(w, asset, httpjson.JSON)
+}
+
+// assetTrustedByOtherAccounts reports whether an ACTIVE Stellar distribution account of the
+// tenant other than `except` still holds a trustline for the asset. Archived and not-yet-funded
+// wallets are skipped.
+func (c AssetsHandler) assetTrustedByOtherAccounts(ctx context.Context, asset data.Asset, except string) (bool, error) {
+	wallets, err := c.Models.DistributionWallets.GetAll(ctx, c.Models.DBConnectionPool, false)
+	if err != nil {
+		return false, fmt.Errorf("listing distribution wallets: %w", err)
+	}
+
+	for _, wallet := range wallets {
+		if !wallet.AccountType.IsStellar() || wallet.Address == nil || *wallet.Address == "" || *wallet.Address == except {
+			continue
+		}
+
+		acc, accErr := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *wallet.Address})
+		if accErr != nil {
+			if horizonclient.IsNotFoundError(accErr) {
+				continue
+			}
+			return false, fmt.Errorf("getting account details for distribution wallet %s: %w", wallet.ID, accErr)
+		}
+
+		for _, balance := range acc.Balances {
+			if asset.EqualsHorizonAsset(balance.Asset) {
+				log.Ctx(ctx).Infof("asset %s:%s is still trusted by distribution wallet %s", asset.Code, asset.Issuer, wallet.ID)
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(

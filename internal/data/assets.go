@@ -157,19 +157,14 @@ func (a *AssetModel) GetByWalletID(ctx context.Context, walletID string) ([]Asse
 	return assets, nil
 }
 
-// GetAll returns all assets in the database.
-func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
+// GetAll returns the tenant's assets. Soft-deleted assets are excluded unless includeDeleted is true.
+func (a *AssetModel) GetAll(ctx context.Context, includeDeleted bool) ([]Asset, error) {
 	assets := []Asset{}
-	query := `
-		SELECT
-			*
-		FROM
-			assets
-		WHERE
-		    deleted_at IS NULL
-		ORDER BY
-			code ASC
-	`
+	query := `SELECT * FROM assets`
+	if !includeDeleted {
+		query += ` WHERE deleted_at IS NULL`
+	}
+	query += ` ORDER BY code ASC`
 
 	err := a.dbConnectionPool.SelectContext(ctx, &assets, query)
 	if err != nil {

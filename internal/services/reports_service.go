@@ -207,7 +207,7 @@ func (s *ReportsService) resolveAsset(ctx context.Context, assetCode string) (*d
 		return &data.Asset{Code: assets.XLMAssetCode, Issuer: ""}, nil
 	}
 	// Non-native: look up by code; use empty issuer to match any issuer, or get first by code from GetAll
-	all, err := s.Models.Assets.GetAll(ctx)
+	all, err := s.Models.Assets.GetAll(ctx, false)
 	if err != nil {
 		return nil, fmt.Errorf("listing assets: %w", err)
 	}

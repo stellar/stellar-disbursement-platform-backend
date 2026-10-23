@@ -315,15 +315,32 @@ func Test_AssetModelGetAll(t *testing.T) {
 
 	t.Run("returns all assets successfully", func(t *testing.T) {
 		expected := ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
-		actual, err := assetModel.GetAll(ctx)
+		actual, err := assetModel.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Equal(t, expected, actual)
 	})
 
+	t.Run("includes soft-deleted assets only when asked", func(t *testing.T) {
+		expected := ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		retired, err := assetModel.SoftDelete(ctx, dbConnectionPool, expected[0].ID)
+		require.NoError(t, err)
+
+		live, err := assetModel.GetAll(ctx, false)
+		require.NoError(t, err)
+		assert.Equal(t, []Asset{expected[1]}, live)
+
+		all, err := assetModel.GetAll(ctx, true)
+		require.NoError(t, err)
+		require.Len(t, all, 2)
+		assert.Equal(t, retired.ID, all[0].ID)
+		assert.NotNil(t, all[0].DeletedAt)
+		assert.Equal(t, expected[1], all[1])
+	})
+
 	t.Run("returns empty array when no assets", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-		actual, err := assetModel.GetAll(ctx)
+		actual, err := assetModel.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Equal(t, []Asset{}, actual)
