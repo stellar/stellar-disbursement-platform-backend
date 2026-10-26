@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -55,6 +56,38 @@ func Test_DefaultJWTManager_GenerateToken(t *testing.T) {
 		tenantID, err := jwtManager.GetTenantIDFromToken(ctx, token)
 		require.NoError(t, err)
 		require.Equal(t, currentTenant.ID, tenantID)
+	})
+
+	t.Run("returns error when there is no tenant in the context", func(t *testing.T) {
+		jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
+
+		expiresAt := time.Now().Add(time.Minute * 5)
+		token, err := jwtManager.GenerateToken(context.Background(), &User{}, expiresAt)
+
+		assert.ErrorContains(t, err, "getting tenant from context to generate token")
+		assert.Empty(t, token)
+	})
+
+	t.Run("returns error (no panic) when the context holds a nil tenant", func(t *testing.T) {
+		jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
+		nilCtx := sdpcontext.SetTenantInContext(context.Background(), (*schema.Tenant)(nil))
+
+		expiresAt := time.Now().Add(time.Minute * 5)
+		token, err := jwtManager.GenerateToken(nilCtx, &User{}, expiresAt)
+
+		assert.ErrorContains(t, err, "no tenant scoped in context")
+		assert.Empty(t, token)
+	})
+
+	t.Run("returns error when the context tenant has an empty ID", func(t *testing.T) {
+		jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
+		emptyIDCtx := sdpcontext.SetTenantInContext(context.Background(), &schema.Tenant{ID: ""})
+
+		expiresAt := time.Now().Add(time.Minute * 5)
+		token, err := jwtManager.GenerateToken(emptyIDCtx, &User{}, expiresAt)
+
+		assert.ErrorContains(t, err, "no tenant scoped in context")
+		assert.Empty(t, token)
 	})
 }
 
@@ -140,6 +173,25 @@ func Test_DefaultJWTManager_RefreshToken(t *testing.T) {
 
 		assert.NotEqual(t, token, refreshedToken)
 	})
+
+	t.Run("preserves the token's tenant on refresh, ignoring the context tenant", func(t *testing.T) {
+		expiresAt := time.Now().Add(time.Minute * tokenRefreshWindow)
+		token, err := jwtManager.GenerateToken(ctx, &User{}, expiresAt)
+		require.NoError(t, err)
+
+		// Refresh under a different context tenant: the refreshed token must keep the original one.
+		otherTenant := schema.Tenant{ID: "other-tenant-id", Name: "other-tenant"}
+		otherCtx := sdpcontext.SetTenantInContext(context.Background(), &otherTenant)
+
+		newExpiresAt := time.Now().Add(time.Minute * 5)
+		refreshedToken, err := jwtManager.RefreshToken(otherCtx, token, newExpiresAt)
+		require.NoError(t, err)
+		require.NotEqual(t, token, refreshedToken)
+
+		tenantID, err := jwtManager.GetTenantIDFromToken(otherCtx, refreshedToken)
+		require.NoError(t, err)
+		assert.Equal(t, currentTenant.ID, tenantID)
+	})
 }
 
 func Test_DefaultJWTManager_parseToken(t *testing.T) {
@@ -212,4 +264,54 @@ func Test_DefaultJWTManager_GetUserFromToken(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, expectedUser, gotUser)
+}
+
+// newTokenWithoutUser returns a token signed with the test key that carries no user claim, like the tokens issued to
+// embedded wallets.
+func newTokenWithoutUser(t *testing.T, expiresAt time.Time) string {
+	t.Helper()
+
+	privateKey, err := jwtgo.ParseECPrivateKeyFromPEM([]byte(testPrivateKey))
+	require.NoError(t, err)
+
+	token, err := jwtgo.NewWithClaims(jwtgo.SigningMethodES256, jwtgo.MapClaims{
+		"sub":              "credential-id",
+		"tenant_id":        "tenant-id",
+		"contract_address": "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX",
+		"exp":              expiresAt.Unix(),
+	}).SignedString(privateKey)
+	require.NoError(t, err)
+
+	return token
+}
+
+func Test_DefaultJWTManager_tokenWithoutUser(t *testing.T) {
+	ctx := context.Background()
+	jwtManager := newDefaultJWTManager(withECKeypair(testPublicKey, testPrivateKey))
+	// Expires inside the refresh window, so RefreshToken would re-sign it.
+	token := newTokenWithoutUser(t, time.Now().Add(time.Minute))
+
+	t.Run("ValidateToken returns false", func(t *testing.T) {
+		isValid, err := jwtManager.ValidateToken(ctx, token)
+		require.NoError(t, err)
+		assert.False(t, isValid)
+	})
+
+	t.Run("GetUserFromToken returns ErrInvalidToken", func(t *testing.T) {
+		user, err := jwtManager.GetUserFromToken(ctx, token)
+		require.ErrorIs(t, err, ErrInvalidToken)
+		assert.Nil(t, user)
+	})
+
+	t.Run("GetTenantIDFromToken returns ErrInvalidToken", func(t *testing.T) {
+		tenantID, err := jwtManager.GetTenantIDFromToken(ctx, token)
+		require.ErrorIs(t, err, ErrInvalidToken)
+		assert.Empty(t, tenantID)
+	})
+
+	t.Run("RefreshToken returns ErrInvalidToken", func(t *testing.T) {
+		refreshedToken, err := jwtManager.RefreshToken(ctx, token, time.Now().Add(time.Hour))
+		require.ErrorIs(t, err, ErrInvalidToken)
+		assert.Empty(t, refreshedToken)
+	})
 }

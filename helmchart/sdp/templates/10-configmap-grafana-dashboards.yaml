@@ -1,9 +1,9 @@
 {{- if .Values.grafanaDashboards.enabled -}}
-# Provisions the committed Grafana dashboards (chart-vendored copies of
-# resources/grafana/*.json) as a ConfigMap. The `grafana_dashboard: "1"` label is the
-# convention the kube-prometheus-stack Grafana sidecar watches for auto-import. Source of
-# truth for the JSON lives at the repo root under resources/grafana/; the copies under
-# dashboards/ exist because Helm's .Files can only read files inside the chart directory.
+# Provisions the committed Grafana dashboards as a ConfigMap. The `grafana_dashboard: "1"`
+# label is the convention the kube-prometheus-stack Grafana sidecar watches for auto-import.
+# Source of truth for the JSON is resources/grafana/ in the stellar-disbursement-platform-backend
+# repository; the copies under dashboards/ exist because Helm's .Files can only read files
+# inside the chart directory.
 apiVersion: v1
 kind: ConfigMap
 metadata:

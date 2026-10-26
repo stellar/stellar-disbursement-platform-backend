@@ -63,14 +63,15 @@ func (e InsufficientBalanceError) Error() string {
 	requiredAmount := e.DisbursementAmount.Add(e.TotalPendingAmount)
 	shortfall := requiredAmount.Sub(e.AvailableBalance)
 
+	// Round against the user so the message never shows enough funds or a zero shortfall.
 	return fmt.Sprintf(
 		"the disbursement %s failed due to an account balance (%s) that was insufficient to fulfill new amount (%s) along with the pending amount (%s). To complete this action, your distribution account (%s) needs to be recharged with at least %s %s",
 		e.DisbursementID,
-		e.AvailableBalance.StringFixed(2),
-		e.DisbursementAmount.StringFixed(2),
-		e.TotalPendingAmount.StringFixed(2),
+		e.AvailableBalance.RoundFloor(6).StringFixed(6),
+		e.DisbursementAmount.RoundCeil(6).StringFixed(6),
+		e.TotalPendingAmount.RoundCeil(6).StringFixed(6),
 		e.DistributionAddress,
-		shortfall.StringFixed(2),
+		shortfall.RoundCeil(6).StringFixed(6),
 		e.DisbursementAsset.Code,
 	)
 }
@@ -206,13 +207,6 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			} else {
 				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
 			}
-		}
-
-		// 0. Wallet-scoped authorization: an Approver/FC on wallet A cannot start a
-		// disbursement sourced from wallet B. Owners are tenant-wide.
-		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
-			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
-			return err
 		}
 
 		// 1. Verify Wallet is Enabled
@@ -383,13 +377,6 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 0. Wallet-scoped authorization: pausing requires a qualifying role on the
-		// disbursement's source wallet. Owners are tenant-wide.
-		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
-			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
-			return err
-		}
-
 		// 1. Verify Transition is Possible
 		err = disbursement.Status.TransitionTo(data.PausedDisbursementStatus)
 		if err != nil {
@@ -435,13 +422,6 @@ func (s *DisbursementManagementService) CancelDisbursement(ctx context.Context, 
 			} else {
 				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
 			}
-		}
-
-		// 0. Wallet-scoped authorization: canceling requires a qualifying role on the
-		// disbursement's source wallet. Owners are tenant-wide.
-		if err = EnsureUserCanActOnWallet(ctx, dbTx, s.Models.WalletMemberships, user, disbursement.SourceWalletID,
-			data.FinancialControllerUserRole, data.ApproverUserRole); err != nil {
-			return err
 		}
 
 		// 1. Verify Transition is Possible

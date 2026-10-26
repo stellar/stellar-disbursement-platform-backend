@@ -1,0 +1,73 @@
+{
+  "selectVerification": {
+    "title": "Selecione o Método de Convite de Pagamento",
+    "message": "Como você recebeu seu convite para resgatar os fundos?",
+    "warning": "ATENÇÃO: você deve usar o contato que foi convidado a resgatar este pagamento.",
+    "phoneErrorMessage": "O número de telefone informado não é válido",
+    "emailErrorMessage": "O e-mail informado não é válido",
+    "missingAuthToken": "O token de autenticação está ausente. Verifique se a sua URL está correta."
+  },
+  "enterPasscode": {
+    "title": "Verificar Informações",
+    "message": "Se suas informações de contato corresponderem a um pagamento pendente, você receberá um código de acesso único. Digite-o abaixo para continuar.",
+    "messageNoOtp": "Se você não recebeu um código OTP, provavelmente usou um número de telefone ou e-mail não cadastrado na sua organização. Verifique suas informações de contato.",
+    "warning": "Não compartilhe seu código OTP ou seus dados de verificação com ninguém. Pessoas que pedem essas informações podem estar tentando acessar sua conta.",
+    "passcode": "Código de Acesso Único (OTP)",
+    "verDateOfBirth": "Data de Nascimento",
+    "verYearMonth": "Data de Nascimento (apenas Ano e Mês)",
+    "verNationalIdNumber": "Número do Documento de Identidade",
+    "verPin": "PIN",
+    "resendOtpSuccessTitle": "Novo OTP enviado",
+    "resendOtpSuccessMessage": "Você receberá um novo código de acesso único."
+  },
+  "success": {
+    "title": "Suas informações foram verificadas com sucesso!",
+    "message": "Sua conta foi verificada usando as seguintes informações de contato: {{contactInfo}}.",
+    "goToHomeMessage": "Clique no botão abaixo para voltar ao início e receber seu pagamento."
+  },
+  "alreadyRegistered": {
+    "title": "Você já está cadastrado!",
+    "message": "Sua conta já foi verificada usando as seguintes informações de contato: {{contactInfo}}.",
+    "goToHomeMessage": "Clique no botão abaixo para voltar ao início e receber seu pagamento."
+  },
+  "footer": {
+    "privacyMessage": "Seus dados são processados por {{orgName}} de acordo com a <Link href=''>Política de Privacidade</Link>"
+  },
+  "generic": {
+    "phoneNumber": "Número de Telefone",
+    "email": "E-mail",
+    "continue": "Continuar",
+    "error": "Erro",
+    "goBack": "Voltar",
+    "goToHome": "Voltar ao Início",
+    "resendOtp": "Reenviar OTP",
+    "errorMessage": "Algo deu errado, tente novamente mais tarde.",
+    "errorReCaptchaRequired": "O reCAPTCHA é obrigatório"
+  },
+  "errorCodes": {
+    "400_0": "Corpo da requisição inválido.",
+    "400_1": "O token do reCAPTCHA é inválido.",
+    "400_2": "As informações fornecidas não foram encontradas.",
+    "400_3": "O número de tentativas para confirmar o valor de verificação excedeu o máximo permitido.",
+    "400_4": "O número máximo de tentativas de OTP foi atingido. Solicite um novo OTP.",
+    "400_5": "O OTP expirou. Solicite um novo OTP.",
+    "400_6": "O OTP é inválido.",
+    "401_0": "Não autorizado.",
+    "500_0": "Ocorreu um erro interno ao processar esta requisição.",
+    "500_1": "Não foi possível obter a organização.",
+    "500_2": "Não foi possível obter o tenant a partir do contexto.",
+    "500_3": "Não foi possível obter a URL do logotipo.",
+    "500_4": "Não foi possível registrar a carteira do destinatário.",
+    "500_5": "Não foi possível validar o token do reCAPTCHA.",
+    "500_6": "Informação de contato inesperada.",
+    "500_7": "Não foi possível gerar o OTP para a carteira do destinatário.",
+    "500_8": "Não foi possível atualizar o OTP para a carteira do destinatário.",
+    "500_9": "Falha ao enviar a mensagem de OTP.",
+    "EXTRA_1": "OTP: Formato de OTP inválido. Deve ser um valor de 6 dígitos.",
+    "EXTRA_2": "Verificação: Formato de data de nascimento inválido. Formato correto: 1990-01-30.",
+    "EXTRA_3": "Verificação: Formato de ano/mês inválido. Formato correto: 1990-12.",
+    "EXTRA_4": "Verificação: A data não pode estar no futuro.",
+    "EXTRA_5": "Verificação: Tamanho do PIN inválido. O PIN não pode ter menos de 4 nem mais de 8 caracteres.",
+    "EXTRA_6": "Verificação: Documento de identidade inválido. O documento de identidade não pode ter mais de 50 caracteres."
+  }
+}

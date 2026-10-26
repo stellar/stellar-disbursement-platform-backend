@@ -24,6 +24,7 @@ var (
 	ErrUserNotFound              = errors.New("user not found")
 	ErrUserEmailAlreadyExists    = errors.New("a user with this email already exists")
 	ErrUserHasValidToken         = errors.New("user has a valid token")
+	ErrLastOwner                 = errors.New("a tenant must keep at least one active owner")
 )
 
 const (
@@ -222,10 +223,10 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 	return nil
 }
 
-func (a *defaultAuthenticator) updateIsActive(ctx context.Context, userID string, isActive bool) error {
+func (a *defaultAuthenticator) updateIsActive(ctx context.Context, sqlExec db.SQLExecuter, userID string, isActive bool) error {
 	const query = "UPDATE auth_users SET is_active = $1 WHERE id = $2"
 
-	result, err := a.dbConnectionPool.ExecContext(ctx, query, isActive, userID)
+	result, err := sqlExec.ExecContext(ctx, query, isActive, userID)
 	if err != nil {
 		return fmt.Errorf("error updating is_active for user ID %s: %w", userID, err)
 	}
@@ -243,7 +244,7 @@ func (a *defaultAuthenticator) updateIsActive(ctx context.Context, userID string
 }
 
 func (a *defaultAuthenticator) ActivateUser(ctx context.Context, userID string) error {
-	err := a.updateIsActive(ctx, userID, true)
+	err := a.updateIsActive(ctx, a.dbConnectionPool, userID, true)
 	if err != nil {
 		return fmt.Errorf("error activating user ID %s: %w", userID, err)
 	}
@@ -252,7 +253,16 @@ func (a *defaultAuthenticator) ActivateUser(ctx context.Context, userID string) 
 }
 
 func (a *defaultAuthenticator) DeactivateUser(ctx context.Context, userID string) error {
-	err := a.updateIsActive(ctx, userID, false)
+	err := db.RunInTransaction(ctx, a.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		ownerIDs, err := lockActiveOwnerIDs(ctx, dbTx, defaultOwnerRoleName)
+		if err != nil {
+			return err
+		}
+		if isLastOwner(ownerIDs, userID) {
+			return ErrLastOwner
+		}
+		return a.updateIsActive(ctx, dbTx, userID, false)
+	})
 	if err != nil {
 		return fmt.Errorf("error deactivating user ID %s: %w", userID, err)
 	}

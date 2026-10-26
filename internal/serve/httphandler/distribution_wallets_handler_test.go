@@ -34,7 +34,7 @@ type mockDistributionWalletService struct {
 	getFn             func(ctx context.Context, id string) (*data.DistributionWallet, error)
 	listFn            func(ctx context.Context, includeArchived bool) ([]data.DistributionWallet, error)
 	archiveFn         func(ctx context.Context, id string) (*data.DistributionWallet, error)
-	promoteFn         func(ctx context.Context, id string) (*data.DistributionWallet, error)
+	promoteFn         func(ctx context.Context, id string, scope []string) (*data.DistributionWallet, error)
 	listMembershipsFn func(ctx context.Context, walletID string) ([]data.WalletMembership, error)
 	listAuditFn       func(ctx context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error)
 	grantFn           func(ctx context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error)
@@ -61,8 +61,8 @@ func (m *mockDistributionWalletService) RevokeMembership(ctx context.Context, wa
 	return m.revokeFn(ctx, walletID, membershipID, revokedBy)
 }
 
-func (m *mockDistributionWalletService) PromoteToDefault(ctx context.Context, id string) (*data.DistributionWallet, error) {
-	return m.promoteFn(ctx, id)
+func (m *mockDistributionWalletService) PromoteToDefault(ctx context.Context, id string, scope []string) (*data.DistributionWallet, error) {
+	return m.promoteFn(ctx, id, scope)
 }
 
 func (m *mockDistributionWalletService) CreateWallet(ctx context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error) {
@@ -243,165 +243,202 @@ func Test_DistributionWalletsHandler_GetDistributionWallet(t *testing.T) {
 	})
 }
 
-// ownerOnlyReadRoutes are the three handlers serve.go groups as "Owner-only reads (admin views)".
-var ownerOnlyReadRoutes = []struct {
-	name    string
-	pattern string
-	handler func(DistributionWalletsHandler) http.HandlerFunc
-}{
-	{"wallet", "/distribution-wallets/{id}", func(h DistributionWalletsHandler) http.HandlerFunc {
-		return h.GetDistributionWallet
-	}},
-	{"memberships", "/distribution-wallets/{id}/memberships", func(h DistributionWalletsHandler) http.HandlerFunc {
-		return h.GetDistributionWalletMemberships
-	}},
-	{"audit", "/distribution-wallets/{id}/audit", func(h DistributionWalletsHandler) http.HandlerFunc {
-		return h.GetDistributionWalletAudit
-	}},
+// scopedKeyContext is what APIKeyAuthenticator.Middleware puts in the context for a key.
+func scopedKeyContext(ctx context.Context, key *data.APIKey) context.Context {
+	return sdpcontext.SetUserIDInContext(sdpcontext.SetAPIKeyInContext(ctx, key), key.CreatedBy)
 }
 
-func getOwnerOnlyRead(routed http.HandlerFunc, pattern, walletID, callerID string) *httptest.ResponseRecorder {
-	r := chi.NewRouter()
-	r.Get(pattern, routed)
-	req := httptest.NewRequest(http.MethodGet, strings.Replace(pattern, "{id}", walletID, 1), nil)
-	req = req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), callerID))
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	return rr
-}
+// Test_APIKeyWalletWriteScope pins the API-key path of the distribution-wallet writes: the key's permission and scope
+// decide (404 outside it; promote also needs the demoted default in scope), never its creator's role.
+func Test_APIKeyWalletWriteScope(t *testing.T) {
+	const inScope, outOfScope = "dw-a", "dw-b"
 
-// Test_DistributionWalletsHandler_ownerOnlyReadsRequireOwner pins the ordering half of the
-// Owner-only-read fix: the owner check runs first, before the read scope is resolved and before
-// the service is touched, so a non-owner gets the same empty-bodied 403 for every id, existing or
-// not, and denial answers no question about the wallet named in the path.
-//
-// The handler is deliberately given no Models: resolving a non-owner's read scope needs the
-// database, so reaching that check at all — which is what removing the owner gate does — is
-// itself the failure. The 403-for-a-wallet-genuinely-in-scope case, which is the substance of the
-// fix, is Test_DistributionWalletsHandler_ownerOnlyReadsRejectScopedMembers below.
-func Test_DistributionWalletsHandler_ownerOnlyReadsRequireOwner(t *testing.T) {
-	member := &auth.User{ID: "member-1", Roles: []string{string(data.FinancialControllerUserRole)}}
+	type calls struct {
+		get, create, archive, grant, revoke int
+		promoteScope                        []string
+		promoted                            bool
+		grantedBy, revokedBy                string
+	}
+	newHandler := func(t *testing.T, c *calls, promoteErr error) DistributionWalletsHandler {
+		t.Helper()
+		authManagerMock := &auth.AuthManagerMock{}
+		authManagerMock.On("GetUserByID", mock.Anything, "grantee-x").
+			Return(&auth.User{ID: "grantee-x", Roles: []string{string(data.BusinessUserRole)}}, nil).Maybe()
 
-	for _, route := range ownerOnlyReadRoutes {
-		t.Run(route.name+": a non-owner is denied before anything is looked up", func(t *testing.T) {
-			authManagerMock := &auth.AuthManagerMock{}
-			authManagerMock.On("GetUserByID", mock.Anything, member.ID).Return(member, nil).Maybe()
-
-			failIfCalled := func(operation string) {
-				t.Errorf("%s was reached by a non-owner on an Owner-only read", operation)
-			}
-			handler := DistributionWalletsHandler{
-				AuthManager: authManagerMock,
-				Service: &mockDistributionWalletService{
-					getFn: func(context.Context, string) (*data.DistributionWallet, error) {
-						failIfCalled("GetWallet")
-						return nil, nil
-					},
-					listMembershipsFn: func(context.Context, string) ([]data.WalletMembership, error) {
-						failIfCalled("ListMemberships")
-						return nil, nil
-					},
-					listAuditFn: func(context.Context, string) ([]data.WalletMembershipAuditEntry, error) {
-						failIfCalled("ListMembershipAudit")
-						return nil, nil
-					},
+		return DistributionWalletsHandler{
+			AuthManager: authManagerMock,
+			Service: &mockDistributionWalletService{
+				getFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+					c.get++
+					return &data.DistributionWallet{ID: id, Status: data.ActiveDistributionWalletStatus}, nil
 				},
-			}
+				createFn: func(_ context.Context, insert data.DistributionWalletInsert) (*data.DistributionWallet, error) {
+					c.create++
+					return &data.DistributionWallet{ID: "dw-new", Name: insert.Name}, nil
+				},
+				archiveFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+					c.archive++
+					return &data.DistributionWallet{ID: id, Status: data.ArchivedDistributionWalletStatus}, nil
+				},
+				promoteFn: func(_ context.Context, id string, scope []string) (*data.DistributionWallet, error) {
+					c.promoted, c.promoteScope = true, scope
+					if promoteErr != nil {
+						return nil, promoteErr
+					}
+					return &data.DistributionWallet{ID: id, IsDefault: true}, nil
+				},
+				grantFn: func(_ context.Context, walletID, userID string, role data.UserRole, grantedBy string) (*data.WalletMembership, error) {
+					c.grant++
+					c.grantedBy = grantedBy
+					return &data.WalletMembership{ID: "m-1", WalletID: walletID, UserID: userID, Role: role}, nil
+				},
+				revokeFn: func(_ context.Context, _, _, revokedBy string) error {
+					c.revoke++
+					c.revokedBy = revokedBy
+					return nil
+				},
+			},
+		}
+	}
+	// Wired as serve.go wires the Owner-only write group.
+	newRouter := func(handler DistributionWalletsHandler) *chi.Mux {
+		r := chi.NewRouter()
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(data.WriteDistributionWallets, middleware.AnyRoleMiddleware(handler.AuthManager, data.OwnerUserRole)))
+			r.Post("/distribution-wallets", handler.PostDistributionWallet)
+			r.Post("/distribution-wallets/{id}/archive", handler.PostArchiveDistributionWallet)
+			r.Post("/distribution-wallets/{id}/promote-to-default", handler.PostPromoteDistributionWalletToDefault)
+			r.Post("/distribution-wallets/{id}/memberships", handler.PostDistributionWalletMembership)
+			r.Delete("/distribution-wallets/{id}/memberships/{membershipID}", handler.DeleteDistributionWalletMembership)
+		})
+		return r
+	}
+	// The creator is a developer who no longer exists: neither fact matters to the key.
+	key := &data.APIKey{
+		ID:                    "ak-1",
+		Permissions:           data.APIKeyPermissions{data.ReadAll, data.WriteAll},
+		DistributionWalletIDs: []string{inScope},
+		CreatedBy:             "deleted-developer",
+	}
+	do := func(handler DistributionWalletsHandler, method, path, body string) *httptest.ResponseRecorder {
+		var reader io.Reader
+		if body != "" {
+			reader = strings.NewReader(body)
+		}
+		req := httptest.NewRequest(method, path, reader)
+		rr := httptest.NewRecorder()
+		newRouter(handler).ServeHTTP(rr, req.WithContext(scopedKeyContext(req.Context(), key)))
+		return rr
+	}
 
-			rr := getOwnerOnlyRead(route.handler(handler), route.pattern, "dw-secret", member.ID)
-			assert.Equal(t, http.StatusForbidden, rr.Code)
-			assert.NotContains(t, rr.Body.String(), "dw-secret", "denial discloses no wallet detail")
+	routes := []struct {
+		name, method, path, body string
+		okStatus                 int
+		reached                  func(c *calls) bool
+	}{
+		{"archive", http.MethodPost, "/distribution-wallets/%s/archive", "", http.StatusOK, func(c *calls) bool { return c.archive > 0 }},
+		{"grant", http.MethodPost, "/distribution-wallets/%s/memberships", `{"user_id": "grantee-x", "role": "approver"}`, http.StatusCreated, func(c *calls) bool { return c.get > 0 || c.grant > 0 }},
+		{"revoke", http.MethodDelete, "/distribution-wallets/%s/memberships/m-1", "", http.StatusNoContent, func(c *calls) bool { return c.revoke > 0 }},
+		{"promote", http.MethodPost, "/distribution-wallets/%s/promote-to-default", "", http.StatusOK, func(c *calls) bool { return c.promoted }},
+	}
+
+	for _, route := range routes {
+		t.Run(route.name+": out of scope is 404 and never reaches the service", func(t *testing.T) {
+			c := &calls{}
+			rr := do(newHandler(t, c, nil), route.method, fmt.Sprintf(route.path, outOfScope), route.body)
+			assert.Equal(t, http.StatusNotFound, rr.Code)
+			assert.False(t, route.reached(c))
 		})
 
-		t.Run(route.name+": an owner is still served", func(t *testing.T) {
-			handler := DistributionWalletsHandler{
-				AuthManager: newWalletScopeOwnerMock(),
-				Service: &mockDistributionWalletService{
-					getFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
-						return &data.DistributionWallet{ID: id, Name: "program-a"}, nil
-					},
-					listMembershipsFn: func(context.Context, string) ([]data.WalletMembership, error) {
-						return []data.WalletMembership{}, nil
-					},
-					listAuditFn: func(context.Context, string) ([]data.WalletMembershipAuditEntry, error) {
-						return []data.WalletMembershipAuditEntry{}, nil
-					},
-				},
-			}
-
-			rr := getOwnerOnlyRead(route.handler(handler), route.pattern, "dw-1", "payments-test-owner")
-			assert.Equal(t, http.StatusOK, rr.Code)
+		t.Run(route.name+": in scope is served", func(t *testing.T) {
+			c := &calls{}
+			rr := do(newHandler(t, c, nil), route.method, fmt.Sprintf(route.path, inScope), route.body)
+			assert.Equal(t, route.okStatus, rr.Code, rr.Body.String())
+			assert.True(t, route.reached(c))
 		})
 	}
+
+	t.Run("grant and revoke record the key's creator as the actor", func(t *testing.T) {
+		c := &calls{}
+		handler := newHandler(t, c, nil)
+		do(handler, http.MethodPost, "/distribution-wallets/dw-a/memberships", `{"user_id": "grantee-x", "role": "approver"}`)
+		do(handler, http.MethodDelete, "/distribution-wallets/dw-a/memberships/m-1", "")
+		assert.Equal(t, key.CreatedBy, c.grantedBy)
+		assert.Equal(t, key.CreatedBy, c.revokedBy)
+	})
+
+	t.Run("promote passes the key's scope so the demoted account is checked under the lock", func(t *testing.T) {
+		c := &calls{}
+		do(newHandler(t, c, nil), http.MethodPost, "/distribution-wallets/dw-a/promote-to-default", "")
+		assert.Equal(t, []string{inScope}, c.promoteScope)
+	})
+
+	t.Run("promote is 403 when the account being demoted is out of scope", func(t *testing.T) {
+		c := &calls{}
+		denied := fmt.Errorf("demoting: %w", services.ErrWalletActionForbidden)
+		rr := do(newHandler(t, c, denied), http.MethodPost, "/distribution-wallets/dw-a/promote-to-default", "")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.NotContains(t, rr.Body.String(), outOfScope)
+	})
+
+	t.Run("create has no wallet to scope: any key with the permission creates", func(t *testing.T) {
+		c := &calls{}
+		rr := do(newHandler(t, c, nil), http.MethodPost, "/distribution-wallets", `{"name": "program-c"}`)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Equal(t, 1, c.create)
+	})
+
+	t.Run("a key without the permission is refused by the route", func(t *testing.T) {
+		c := &calls{}
+		readOnly := *key
+		readOnly.Permissions = data.APIKeyPermissions{data.ReadDistributionWallets}
+		req := httptest.NewRequest(http.MethodPost, "/distribution-wallets/dw-a/archive", nil)
+		rr := httptest.NewRecorder()
+		newRouter(newHandler(t, c, nil)).ServeHTTP(rr, req.WithContext(scopedKeyContext(req.Context(), &readOnly)))
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Zero(t, c.archive)
+	})
 }
 
-// Test_DistributionWalletsHandler_ownerOnlyReadsRejectScopedMembers is the regression test for
-// the gap that scope-checking alone left open. The caller here holds a REAL membership row on the
-// wallet, so ensureWalletInReadScope passes: before the owner check they were served the wallet's
-// membership roster — who else has authority on this account — and its grant/revoke history.
-// Those are the operator's views, not the member's, which is what "Owner-only reads (admin
-// views)" in serve.go says.
-func Test_DistributionWalletsHandler_ownerOnlyReadsRejectScopedMembers(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	wallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
-	member := &auth.User{ID: "scoped-member", Roles: []string{string(data.FinancialControllerUserRole)}}
-	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, member.ID, wallet.ID, data.FinancialControllerUserRole, nil)
-	require.NoError(t, err)
-
-	// The membership really does put the wallet in the caller's read scope — the check the three
-	// handlers used to rely on passes here.
-	scope, err := models.WalletMemberships.GetWalletIDsForUser(ctx, dbConnectionPool, member.ID)
-	require.NoError(t, err)
-	require.Contains(t, scope, wallet.ID)
-
-	authManagerMock := &auth.AuthManagerMock{}
-	authManagerMock.On("GetUserByID", mock.Anything, member.ID).Return(member, nil).Maybe()
-
+// Test_DistributionWalletsHandler_ownersAreTenantWide pins that a JWT owner's writes are unscoped and
+// that promote hands the service a nil scope, so no demotion check applies.
+func Test_DistributionWalletsHandler_ownersAreTenantWide(t *testing.T) {
+	var promoteScope []string
+	promoteCalled := false
 	handler := DistributionWalletsHandler{
-		AuthManager: authManagerMock,
-		Models:      models,
+		AuthManager: newWalletScopeOwnerMock(),
 		Service: &mockDistributionWalletService{
-			getFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
-				return &data.DistributionWallet{ID: id, Name: "admin-only-name"}, nil
+			archiveFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+				return &data.DistributionWallet{ID: id}, nil
 			},
-			listMembershipsFn: func(_ context.Context, walletID string) ([]data.WalletMembership, error) {
-				return []data.WalletMembership{{ID: "leaked-membership", WalletID: walletID}}, nil
+			promoteFn: func(_ context.Context, id string, scope []string) (*data.DistributionWallet, error) {
+				promoteCalled, promoteScope = true, scope
+				return &data.DistributionWallet{ID: id, IsDefault: true}, nil
 			},
-			listAuditFn: func(_ context.Context, walletID string) ([]data.WalletMembershipAuditEntry, error) {
-				return []data.WalletMembershipAuditEntry{{
-					WalletMembership: data.WalletMembership{ID: "leaked-audit", WalletID: walletID},
-				}}, nil
-			},
+			revokeFn: func(context.Context, string, string, string) error { return nil },
 		},
 	}
+	r := chi.NewRouter()
+	r.Post("/distribution-wallets/{id}/archive", handler.PostArchiveDistributionWallet)
+	r.Post("/distribution-wallets/{id}/promote-to-default", handler.PostPromoteDistributionWalletToDefault)
+	r.Delete("/distribution-wallets/{id}/memberships/{membershipID}", handler.DeleteDistributionWalletMembership)
 
-	for _, route := range ownerOnlyReadRoutes {
-		t.Run(route.name+": in scope is not enough — the admin views need an Owner", func(t *testing.T) {
-			rr := getOwnerOnlyRead(route.handler(handler), route.pattern, wallet.ID, member.ID)
-			assert.Equal(t, http.StatusForbidden, rr.Code)
-			assert.NotContains(t, rr.Body.String(), "admin-only-name")
-			assert.NotContains(t, rr.Body.String(), "leaked-")
-		})
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodPost, "/distribution-wallets/dw-any/archive"},
+		{http.MethodPost, "/distribution-wallets/dw-any/promote-to-default"},
+		{http.MethodDelete, "/distribution-wallets/dw-any/memberships/m-1"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), "payments-test-owner")))
+		assert.Lessf(t, rr.Code, 300, "%s %s: %s", tc.method, tc.path, rr.Body.String())
 	}
+	require.True(t, promoteCalled)
+	assert.Nil(t, promoteScope)
 }
 
-// Test_DistributionWalletsHandler_grantIsNotInert pins the grant invariant: a grant is rejected
-// exactly when it confers nothing whatsoever, which is only true for a global owner.
-//
-// It is NOT "the grantee must already hold the requested role globally" — the two 🎉 cases are
-// the ones such a rule would wrongly forbid. Nor is it "the write-capability set is empty": a
-// membership is also the read-visibility grant (GetWalletIDsForUser ignores role), and for a
-// developer it is the ONLY way they ever see an account, so the read-only cases below are real
-// grants and must succeed. See walletGrantIsInert for the full reasoning.
+// Test_DistributionWalletsHandler_grantIsNotInert pins that a grant is rejected exactly when the grantee
+// is tenant-wide; read-only grants (the membership is the read-visibility grant) still succeed.
 func Test_DistributionWalletsHandler_grantIsNotInert(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -424,13 +461,11 @@ func Test_DistributionWalletsHandler_grantIsNotInert(t *testing.T) {
 			wantStatusCode: http.StatusCreated,
 		},
 		{
-			// Confers no WRITE capability, but it is the only way a developer sees the account
-			// at all — serve.go admits developers to the membership-scoped reads, and those
-			// filter on membership existence regardless of role.
-			name:           "global developer + approver: read visibility is a real grant",
+			name:           "global developer grantee is rejected as inert",
 			granteeRoles:   []string{string(data.DeveloperUserRole)},
 			role:           "approver",
-			wantStatusCode: http.StatusCreated,
+			wantStatusCode: http.StatusBadRequest,
+			wantContains:   "an approver membership grants nothing to a developer: developers already have tenant-wide access",
 		},
 		{
 			name:           "global approver + initiator: read visibility is a real grant",
@@ -451,13 +486,18 @@ func Test_DistributionWalletsHandler_grantIsNotInert(t *testing.T) {
 			wantStatusCode: http.StatusCreated,
 		},
 		{
-			// The one genuinely inert grant: owners short-circuit both the action gate and the
-			// read scope, so the row changes nothing and the operator cannot tell.
 			name:           "global owner grantee is rejected as inert",
 			granteeRoles:   []string{string(data.OwnerUserRole)},
 			role:           "financial_controller",
 			wantStatusCode: http.StatusBadRequest,
 			wantContains:   "grants nothing to an owner",
+		},
+		{
+			name:           "developer is not a grantable role",
+			granteeRoles:   []string{string(data.BusinessUserRole)},
+			role:           "developer",
+			wantStatusCode: http.StatusBadRequest,
+			wantContains:   "unexpected value for role",
 		},
 		{
 			name:           "unknown grantee returns 400",
@@ -613,11 +653,7 @@ func Test_DistributionWalletsHandler_GetDistributionWalletCapabilities_forSubjec
 		return none
 	}
 
-	// The reviewer's case: a global developer fails every capability's global gate, so no
-	// membership role can give them a write capability here. Every option in the picker yields
-	// the identical empty set — the role dropdown is decorative for this grantee, and only the
-	// existence of the row does anything (it confers read visibility). The endpoint has to make
-	// that visible, which is what lets the client annotate or disable those options.
+	// A developer clears no capability's global gate, so no membership role could give them a write here.
 	t.Run("a global developer: every role yields the same nothing", func(t *testing.T) {
 		developer := &auth.User{ID: "dev-1", Roles: []string{string(data.DeveloperUserRole)}}
 		handler := DistributionWalletsHandler{AuthManager: ownerCallerFor(developer), Service: servingWallet()}
@@ -636,6 +672,32 @@ func Test_DistributionWalletsHandler_GetDistributionWalletCapabilities_forSubjec
 			assert.Equalf(t, noCapabilities(), got.Capabilities,
 				"granting %s to a global developer yields nothing: the picker must be able to say so", role)
 		}
+	})
+
+	t.Run("a developer subject is tenant-wide: no membership lookup, and still nothing to write", func(t *testing.T) {
+		developer := &auth.User{ID: "dev-1", Roles: []string{string(data.DeveloperUserRole)}}
+		handler := DistributionWalletsHandler{AuthManager: ownerCallerFor(developer), Service: servingWallet()}
+
+		rr := do(handler, owner.ID, "?user_id=dev-1")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, noCapabilities(), decode(t, rr).Capabilities)
+	})
+
+	t.Run("an API key reaches the subject readings through its permission, not its creator's role", func(t *testing.T) {
+		controller := &auth.User{ID: "fc-1", Roles: []string{string(data.FinancialControllerUserRole)}}
+		handler := DistributionWalletsHandler{AuthManager: ownerCallerFor(controller), Service: servingWallet()}
+
+		r := chi.NewRouter()
+		r.Get("/distribution-wallets/{id}/capabilities", handler.GetDistributionWalletCapabilities)
+		req := httptest.NewRequest(http.MethodGet, "/distribution-wallets/dw-1/capabilities?user_id=fc-1&role=approver", nil)
+		ctx := scopedKeyContext(req.Context(), &data.APIKey{
+			ID: "ak-1", Permissions: data.APIKeyPermissions{data.ReadDistributionWallets},
+			DistributionWalletIDs: []string{"dw-1"}, CreatedBy: "developer-1",
+		})
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req.WithContext(ctx))
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		assert.True(t, decode(t, rr).Capabilities["can_start_disbursement"])
 	})
 
 	t.Run("🎉 a global financial controller granted approver here: approve, but do not create", func(t *testing.T) {
@@ -737,7 +799,7 @@ func Test_DistributionWalletsHandler_GetDistributionWalletCapabilities_forSubjec
 			},
 		}
 
-		for _, role := range []string{"nonsense", "owner"} {
+		for _, role := range []string{"nonsense", "owner", "developer"} {
 			rr := do(handler, owner.ID, "?user_id=dev-1&role="+role)
 			assert.Equalf(t, http.StatusBadRequest, rr.Code, "role=%s", role)
 			assert.Contains(t, rr.Body.String(), "unexpected value for role")
@@ -992,7 +1054,7 @@ func Test_DistributionWalletsHandler_lifecycleEndpoints(t *testing.T) {
 	for _, tc := range promoteCases {
 		t.Run("promote: "+tc.name, func(t *testing.T) {
 			handler := DistributionWalletsHandler{AuthManager: newWalletScopeOwnerMock(), Service: &mockDistributionWalletService{
-				promoteFn: func(_ context.Context, id string) (*data.DistributionWallet, error) {
+				promoteFn: func(_ context.Context, id string, _ []string) (*data.DistributionWallet, error) {
 					assert.Equal(t, "dw-2", id)
 					if tc.serviceErr != nil {
 						return nil, tc.serviceErr
@@ -1097,140 +1159,6 @@ func Test_DistributionWalletsHandler_walletBalances_resolvesCircleFromTenant(t *
 
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), `"balances": {}`)
-	})
-}
-
-// Test_DistributionWalletsHandler_writesRequireOwnerOnAPIKeyPath pins the fix for the write
-// group's authorization hole. middleware.RequirePermission short-circuits straight to the handler
-// once an API key carries the permission and never invokes the AnyRoleMiddleware(OwnerUserRole)
-// the route handed it, so an owner-only write surface was reachable by any key — including one
-// created by a non-owner, and including write:all, which HasPermission treats as a wildcard.
-// Every probe on those routes mutates, so a bypass is both an escalation and an existence oracle.
-func Test_DistributionWalletsHandler_writesRequireOwnerOnAPIKeyPath(t *testing.T) {
-	keyCreator := &auth.User{ID: "key-creator", Roles: []string{string(data.DeveloperUserRole)}}
-
-	routes := []struct {
-		name   string
-		method string
-		path   string
-		body   string
-	}{
-		{"create", http.MethodPost, "/distribution-wallets", `{"name": "escalation"}`},
-		{"archive", http.MethodPost, "/distribution-wallets/dw-1/archive", ""},
-		{"promote-to-default", http.MethodPost, "/distribution-wallets/dw-1/promote-to-default", ""},
-		{"grant membership", http.MethodPost, "/distribution-wallets/dw-1/memberships", `{"user_id": "user-x", "role": "approver"}`},
-		{"revoke membership", http.MethodDelete, "/distribution-wallets/dw-1/memberships/m-1", ""},
-	}
-
-	// write:distribution_wallets and the write:all wildcard both clear RequirePermission.
-	permissionSets := []struct {
-		name        string
-		permissions data.APIKeyPermissions
-	}{
-		{"write:distribution_wallets", data.APIKeyPermissions{data.WriteDistributionWallets}},
-		{"write:all wildcard", data.APIKeyPermissions{data.WriteAll}},
-	}
-
-	for _, permissionSet := range permissionSets {
-		for _, route := range routes {
-			t.Run(permissionSet.name+" / "+route.name, func(t *testing.T) {
-				authManagerMock := &auth.AuthManagerMock{}
-				authManagerMock.On("GetUserByID", mock.Anything, keyCreator.ID).Return(keyCreator, nil).Maybe()
-
-				failIfCalled := func(operation string) {
-					t.Errorf("%s reached the service: the write must be denied before it mutates", operation)
-				}
-				handler := DistributionWalletsHandler{
-					AuthManager: authManagerMock,
-					Service: &mockDistributionWalletService{
-						createFn: func(context.Context, data.DistributionWalletInsert) (*data.DistributionWallet, error) {
-							failIfCalled("CreateWallet")
-							return nil, nil
-						},
-						archiveFn: func(context.Context, string) (*data.DistributionWallet, error) {
-							failIfCalled("ArchiveWallet")
-							return nil, nil
-						},
-						promoteFn: func(context.Context, string) (*data.DistributionWallet, error) {
-							failIfCalled("PromoteToDefault")
-							return nil, nil
-						},
-						grantFn: func(context.Context, string, string, data.UserRole, string) (*data.WalletMembership, error) {
-							failIfCalled("GrantMembership")
-							return nil, nil
-						},
-						revokeFn: func(context.Context, string, string, string) error {
-							failIfCalled("RevokeMembership")
-							return nil
-						},
-						getFn: func(context.Context, string) (*data.DistributionWallet, error) {
-							failIfCalled("GetWallet")
-							return nil, nil
-						},
-					},
-				}
-
-				// The route gate is wired exactly as serve.go wires the write group.
-				r := chi.NewRouter()
-				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequirePermission(
-						data.WriteDistributionWallets,
-						middleware.AnyRoleMiddleware(authManagerMock, data.OwnerUserRole),
-					))
-					r.Post("/distribution-wallets", handler.PostDistributionWallet)
-					r.Post("/distribution-wallets/{id}/archive", handler.PostArchiveDistributionWallet)
-					r.Post("/distribution-wallets/{id}/promote-to-default", handler.PostPromoteDistributionWalletToDefault)
-					r.Post("/distribution-wallets/{id}/memberships", handler.PostDistributionWalletMembership)
-					r.Delete("/distribution-wallets/{id}/memberships/{membershipID}", handler.DeleteDistributionWalletMembership)
-				})
-
-				var body io.Reader
-				if route.body != "" {
-					body = strings.NewReader(route.body)
-				}
-				req := httptest.NewRequest(route.method, route.path, body)
-				// Exactly what APIKeyAuthenticator.Middleware puts in the context: the key, and
-				// its creator as the acting user.
-				ctx := sdpcontext.SetAPIKeyInContext(req.Context(), &data.APIKey{
-					ID:          "ak-1",
-					Permissions: permissionSet.permissions,
-					CreatedBy:   keyCreator.ID,
-				})
-				ctx = sdpcontext.SetUserIDInContext(ctx, keyCreator.ID)
-				rr := httptest.NewRecorder()
-				r.ServeHTTP(rr, req.WithContext(ctx))
-
-				assert.Equal(t, http.StatusForbidden, rr.Code,
-					"a key whose creator is not an Owner must not reach an owner-only write")
-				assert.NotContains(t, rr.Body.String(), "dw-1", "the response discloses no wallet detail")
-			})
-		}
-	}
-
-	t.Run("a key whose creator no longer exists is rejected, not passed through", func(t *testing.T) {
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.On("GetUserByID", mock.Anything, "deleted-user").
-			Return(nil, fmt.Errorf("getting: %w", auth.ErrUserNotFound))
-
-		handler := DistributionWalletsHandler{
-			AuthManager: authManagerMock,
-			Service: &mockDistributionWalletService{
-				createFn: func(context.Context, data.DistributionWalletInsert) (*data.DistributionWallet, error) {
-					t.Error("CreateWallet reached the service with no resolvable acting user")
-					return nil, nil
-				},
-			},
-		}
-
-		req := httptest.NewRequest(http.MethodPost, "/distribution-wallets", strings.NewReader(`{"name": "orphan"}`))
-		ctx := sdpcontext.SetAPIKeyInContext(req.Context(), &data.APIKey{
-			ID: "ak-2", Permissions: data.APIKeyPermissions{data.WriteAll}, CreatedBy: "deleted-user",
-		})
-		ctx = sdpcontext.SetUserIDInContext(ctx, "deleted-user")
-		rr := httptest.NewRecorder()
-		handler.PostDistributionWallet(rr, req.WithContext(ctx))
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
 

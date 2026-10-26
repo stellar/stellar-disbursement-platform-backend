@@ -3,19 +3,15 @@ package httphandler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
-	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -42,22 +38,6 @@ type PatchCircleConfigRequest struct {
 	APIKey   *string `json:"api_key"`
 }
 
-func (h CircleConfigHandler) ensureCallerIsOwner(ctx context.Context) *httperror.HTTPError {
-	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
-	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			return httperror.Unauthorized("", err, nil)
-		}
-		return httperror.InternalError(ctx, "Cannot get user from context", err, nil)
-	}
-
-	if !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
-		return httperror.Forbidden("", nil, nil)
-	}
-
-	return nil
-}
-
 // validate validates the request.
 func (r PatchCircleConfigRequest) validate() error {
 	if r.WalletID == nil && r.APIKey == nil {
@@ -69,11 +49,6 @@ func (r PatchCircleConfigRequest) validate() error {
 // Patch is a handler to configure the Circle API access.
 func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
-	if httpErr := h.ensureCallerIsOwner(ctx); httpErr != nil {
-		httpErr.Render(w)
-		return
-	}
 
 	tnt, err := sdpcontext.GetTenantFromContext(ctx)
 	if err != nil {

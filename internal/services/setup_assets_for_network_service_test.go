@@ -41,7 +41,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 	t.Run("[Stellar,Testnet] inserts new assets", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		allAssets, err := models.Assets.GetAll(ctx)
+		allAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 0)
 
@@ -52,7 +52,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, schema.StellarPlatform)
 		require.NoError(t, err)
 
-		allAssets, err = models.Assets.GetAll(ctx)
+		allAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, allAssets, 3)
@@ -84,7 +84,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		randomIssuer := keypair.MustRandom().Address()
 		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, randomIssuer)
 
-		allAssets, err := models.Assets.GetAll(ctx)
+		allAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 1)
 		assert.Equal(t, assets.EURCAssetCode, allAssets[0].Code)
@@ -97,7 +97,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, schema.StellarPlatform)
 		require.NoError(t, err)
 
-		allAssets, err = models.Assets.GetAll(ctx)
+		allAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, allAssets, 3)
@@ -125,7 +125,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 	t.Run("[Stellar,Futurenet] updates existing asset with wrong issuer and inserts new assets", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		allAssets, err := models.Assets.GetAll(ctx)
+		allAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 0)
 
@@ -136,7 +136,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.FuturenetNetworkType, schema.StellarPlatform)
 		require.NoError(t, err)
 
-		allAssets, err = models.Assets.GetAll(ctx)
+		allAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, allAssets, 1)
@@ -163,7 +163,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		arstAssetCode := "ARST"
 		data.CreateAssetFixture(t, ctx, dbConnectionPool, arstAssetCode, pubnetARSTIssuer)
 
-		allAssets, err := models.Assets.GetAll(ctx)
+		allAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 1)
 		assert.Equal(t, arstAssetCode, allAssets[0].Code)
@@ -176,7 +176,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, schema.StellarPlatform)
 		require.NoError(t, err)
 
-		allAssets, err = models.Assets.GetAll(ctx)
+		allAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 4)
 		assert.Equal(t, arstAssetCode, allAssets[0].Code)
@@ -206,7 +206,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 	t.Run("[Circle,Testnet] inserts new assets", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		allAssets, err := models.Assets.GetAll(ctx)
+		allAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 0)
 
@@ -217,7 +217,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.TestnetNetworkType, schema.CirclePlatform)
 		require.NoError(t, err)
 
-		allAssets, err = models.Assets.GetAll(ctx)
+		allAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, allAssets, 2)
@@ -246,7 +246,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		randomIssuer := keypair.MustRandom().Address()
 		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, randomIssuer)
 
-		allAssets, err := models.Assets.GetAll(ctx)
+		allAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 1)
 		assert.Equal(t, assets.EURCAssetCode, allAssets[0].Code)
@@ -259,7 +259,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		err = SetupAssetsForProperNetwork(ctx, dbConnectionPool, utils.PubnetNetworkType, schema.CirclePlatform)
 		require.NoError(t, err)
 
-		allAssets, err = models.Assets.GetAll(ctx)
+		allAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, allAssets, 2)

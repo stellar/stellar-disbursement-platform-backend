@@ -452,6 +452,9 @@ func Test_ValidateNoHTML_Valid(t *testing.T) {
 		"Whitespace    \n\t  ",
 		"This doesn't contain any HTML tags or scripts.",
 		"Text with word expression but not as code.",
+		"Claim your payment: {{.RegistrationLink}}",
+		"Meeting at 3 < 5 pm, see you",
+		"Price <100 dollars, save 20% & more",
 	}
 
 	for i, tc := range validTestCases {
@@ -476,6 +479,11 @@ func Test_ValidateNoHTML(t *testing.T) {
 		"JAVASCRIPT:ALERT(localStorage.getItem('sdp_session'))",
 		"javascript:alert('XSS')",
 		"JAVASCRIPT:ALERT('XSS')",
+		// Slash-separated tags: missed by a regex denylist, parsed as live elements by browsers.
+		"<svg/onload=alert(document.domain)>",
+		"<img/src=x onerror=alert(document.domain)>",
+		`<a/href="https://evil.com">legit text</a/>`,
+		"<svg/onload=alert(1)>",
 	}
 
 	for i, tc := range rawHTMLTestCases {
@@ -490,6 +498,53 @@ func Test_ValidateNoHTML(t *testing.T) {
 		t.Run(fmt.Sprintf("encodedHTML/%d(%s)", i, encodedHTMLStr), func(t *testing.T) {
 			err := ValidateNoHTML(encodedHTMLStr)
 			require.Error(t, err, "ValidateNoHTML(%q) didn't catch the error", encodedHTMLStr)
+		})
+	}
+}
+
+func Test_ValidateMessageTemplate(t *testing.T) {
+	testCases := []struct {
+		name        string
+		template    string
+		expectError bool
+	}{
+		// allowed
+		{name: "empty is allowed", template: "", expectError: false},
+		{name: "blank is allowed", template: "   ", expectError: false},
+		{name: "plain text", template: "You have a payment waiting for you.", expectError: false},
+		{name: "single field substitution", template: "Your code is {{.OTP}}", expectError: false},
+		{name: "field with surrounding spaces", template: "Your code is {{ .OTP }}", expectError: false},
+		{name: "multiple field substitutions", template: "{{.OTP}} is your {{.OrganizationName}} code", expectError: false},
+		{name: "chained field", template: "Hello {{.Receiver.Name}}", expectError: false},
+		{name: "dot", template: "{{.}}", expectError: false},
+
+		// rejected: expansion / control constructs
+		{name: "range over int (amplification)", template: "{{range 1000}}A{{end}}", expectError: true},
+		{name: "nested range", template: "{{range 1000}}{{range 1000}}A{{end}}{{end}}", expectError: true},
+		{name: "range over int (infinite loop)", template: "{{range 9223372036854775807}}{{end}}", expectError: true},
+		{name: "if block", template: "{{if .OTP}}x{{end}}", expectError: true},
+		{name: "with block", template: "{{with .OTP}}{{.}}{{end}}", expectError: true},
+		{name: "define/template", template: `{{define "T"}}x{{end}}{{template "T"}}`, expectError: true},
+
+		// rejected: function calls (printf width is its own amplification vector)
+		{name: "printf width amplification", template: `{{printf "%9999999d" 1}}`, expectError: true},
+		{name: "function pipeline", template: "{{.OTP | printf \"%s\"}}", expectError: true},
+
+		// rejected: variable declaration
+		{name: "variable declaration", template: "{{$x := .OTP}}{{$x}}", expectError: true},
+
+		// rejected: unparseable
+		{name: "unbalanced braces", template: "{{.OTP", expectError: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateMessageTemplate(tc.template)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

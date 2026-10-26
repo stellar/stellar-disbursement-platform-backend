@@ -203,6 +203,11 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //
 //	Horizon: 400 tx_too_late, unexpected errors
 //	RPC: unexpected errors
+//
+// Errors that keep the bundle locked until its ledger bound expires, because the recorded envelope may still be
+// included (any handler, whenever a hash was already recorded for the attempt):
+//
+//	Horizon: 5xx (incl. 504 Timeout), client-side timeouts, transport errors
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, txErr utils.TransactionError) error {
 	// Emit the failure with discrete, structured fields (horizon_status_code, tx_result_code,
 	// operation_result_codes, ...) so operators can filter/alert on specific result codes, instead of
@@ -241,15 +246,23 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, fmt.Sprintf("%s transaction error - cannot be retried", strings.ToLower(txErr.GetErrorType())))
 		}
 	} else {
-		if txErr.IsRetryable() && tw.txHandler.RequiresRebuildOnRetry() {
-			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
-				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
-			}
-		}
-
 		var horizonErr utils.HorizonSpecificError
 		if errors.As(txErr, &horizonErr) && horizonErr.IsBadSequence() {
 			tw.crashTrackerClient.LogAndReportErrors(ctx, txErr, "tx_bad_seq detected!")
+		}
+
+		if txJob.Transaction.StellarTransactionHash.Valid && txErr.IsOutcomeUnknown() {
+			log.Ctx(ctx).WithFields(log.F{
+				"tx_hash":                    txJob.Transaction.StellarTransactionHash.String,
+				"locked_until_ledger_number": txJob.LockedUntilLedgerNumber,
+			}).Warn("unknown Horizon outcome; holding transaction and channel account locks until the ledger bound expires")
+			return nil
+		}
+
+		if isRetryable && tw.txHandler.RequiresRebuildOnRetry() {
+			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
+			}
 		}
 	}
 
@@ -307,8 +320,8 @@ func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *
 
 // TODO: add tests
 // unlockJob will unlock the channel account and transaction instantaneously, so they can be made available ASAP. If
-// this method is not called, the algorithm will fall back to get these resources qutomatically unlocked when their
-// `locked-to-ledger` expire.
+// this method is not called, the algorithm will fall back to get these resources automatically unlocked when their
+// `locked-to-ledger` expire, which is required when the submission outcome is unknown (the envelope may still land).
 func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
 	_, err := tw.chAccModel.Unlock(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey)
 	if err != nil {
@@ -324,7 +337,7 @@ func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error 
 }
 
 // handleSuccessfulTransaction will wrap up the job when the transaction has been successfully submitted to the network.
-// This method will only return an error if something goes wromg when handling the result and marking the transaction as SUCCESS.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as SUCCESS.
 func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction) error {
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
@@ -332,6 +345,21 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	}
 	if !hTxResp.Successful {
 		return fmt.Errorf("transaction was not successful for some reason")
+	}
+
+	// Record the hash that landed, preferring the outer fee-bump hash, falling back to top-level hash
+	landedHash := hTxResp.Hash
+	if hTxResp.FeeBumpTransaction != nil && hTxResp.FeeBumpTransaction.Hash != "" {
+		landedHash = hTxResp.FeeBumpTransaction.Hash
+	}
+	if landedHash != "" {
+		storedHash := &txJob.Transaction.StellarTransactionHash
+		if storedHash.String != "" && storedHash.String != landedHash {
+			log.Ctx(ctx).WithFields(log.F{"submitted_hash": storedHash.String, "landed_hash": landedHash}).
+				Warn("on-ledger hash differs from the submitted hash; the fee-bump wrapper was replaced")
+		}
+		storedHash.String = landedHash
+		storedHash.Valid = true
 	}
 
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
@@ -373,6 +401,18 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	txDetail, err := tw.engine.HorizonClient.TransactionDetail(txHash)
 	hWrapperErr := utils.NewHorizonErrorWrapper(err)
 
+	// The inner transaction hash is stable and Horizon resolves it, so a 404 is only terminal if the inner hash is also absent.
+	if hWrapperErr != nil && hWrapperErr.IsNotFound() && txJob.Transaction.XDRSent.Valid {
+		if innerHash, ok := innerHashFromEnvelope(ctx, txJob.Transaction.XDRSent.String, tw.engine.SignatureService.NetworkPassphrase()); ok {
+			innerDetail, innerErr := tw.engine.HorizonClient.TransactionDetail(innerHash)
+			if innerWrapErr := utils.NewHorizonErrorWrapper(innerErr); innerErr == nil || !innerWrapErr.IsNotFound() {
+				log.Ctx(ctx).WithFields(log.F{"outer_hash": txHash, "inner_hash": innerHash}).
+					Info("outer hash not found on the ledger; adopting inner-transaction lookup result")
+				txDetail, err, hWrapperErr = innerDetail, innerErr, innerWrapErr
+			}
+		}
+	}
+
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
@@ -391,6 +431,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
+	// Authoritative 404: a bundle with a hash is only reselected after its lock (== MaxLedger) expires or a definitive 4xx.
 	log.Ctx(ctx).Warnf("Previous transaction didn't make through, marking %v for resubmission...", txJob)
 
 	_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID)
@@ -699,4 +740,24 @@ func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *
 
 	// For other errors, return as-is without special handling
 	return err
+}
+
+// innerHashFromEnvelope returns the inner-transaction hash of a stored fee-bump envelope.
+// Returns ok=false for a non-fee-bump envelope or a decode/hash failure
+func innerHashFromEnvelope(ctx context.Context, envelopeB64, networkPassphrase string) (string, bool) {
+	gtx, err := txnbuild.TransactionFromXDR(envelopeB64)
+	if err != nil {
+		log.Ctx(ctx).Warnf("could not decode stored xdr_sent to check the inner transaction hash: %v", err)
+		return "", false
+	}
+	feeBump, ok := gtx.FeeBump()
+	if !ok {
+		return "", false
+	}
+	hash, err := feeBump.InnerTransaction().HashHex(networkPassphrase)
+	if err != nil {
+		log.Ctx(ctx).Warnf("could not hash the inner transaction of the stored fee-bump envelope: %v", err)
+		return "", false
+	}
+	return hash, true
 }

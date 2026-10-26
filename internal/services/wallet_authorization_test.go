@@ -57,75 +57,14 @@ func Test_WalletScopedAuthorization(t *testing.T) {
 			data.InitiatorUserRole)
 		require.ErrorIs(t, gErr, ErrWalletActionForbidden)
 
-		// Owner bypasses everywhere with zero membership rows.
-		for _, w := range []string{walletA.ID, walletBID} {
-			require.NoError(t, EnsureUserCanActOnWallet(ctx, dbConnectionPool, models.WalletMemberships, owner, w,
-				data.ApproverUserRole))
+		// Owners and developers bypass everywhere with zero membership rows.
+		developer := &auth.User{ID: "user-developer", Roles: []string{string(data.DeveloperUserRole)}}
+		for _, tenantWide := range []*auth.User{owner, developer} {
+			for _, w := range []string{walletA.ID, walletBID} {
+				require.NoError(t, EnsureUserCanActOnWallet(ctx, dbConnectionPool, models.WalletMemberships, tenantWide, w,
+					data.ApproverUserRole))
+			}
 		}
-	})
-
-	t.Run("cross-wallet state transitions are rejected end-to-end", func(t *testing.T) {
-		svc := &DisbursementManagementService{Models: models}
-
-		// A STARTED disbursement sourced from wallet B.
-		disbursementFromB := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:           "authz-disbursement-from-b",
-			Status:         data.StartedDisbursementStatus,
-			SourceWalletID: walletBID,
-		})
-
-		// Approver on A cannot pause it…
-		pErr := svc.PauseDisbursement(ctx, disbursementFromB.ID, approverOnA)
-		require.ErrorIs(t, pErr, ErrWalletActionForbidden)
-
-		// …or start it (gate fires before any transition/balance logic).
-		sErr := svc.StartDisbursement(ctx, disbursementFromB.ID, approverOnA, nil)
-		require.ErrorIs(t, sErr, ErrWalletActionForbidden)
-
-		// A separate, not-yet-started disbursement sourced from wallet B, to exercise cancel.
-		cancelableFromB := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:           "authz-cancelable-disbursement-from-b",
-			Status:         data.ReadyDisbursementStatus,
-			SourceWalletID: walletBID,
-		})
-
-		// …or cancel it (gate fires before any transition logic here too).
-		cErr := svc.CancelDisbursement(ctx, cancelableFromB.ID, approverOnA)
-		require.ErrorIs(t, cErr, ErrWalletActionForbidden)
-
-		// State unchanged.
-		got, gErr := models.Disbursements.Get(ctx, dbConnectionPool, disbursementFromB.ID)
-		require.NoError(t, gErr)
-		assert.Equal(t, data.StartedDisbursementStatus, got.Status)
-		got, gErr = models.Disbursements.Get(ctx, dbConnectionPool, cancelableFromB.ID)
-		require.NoError(t, gErr)
-		assert.Equal(t, data.ReadyDisbursementStatus, got.Status)
-
-		// Explicit grant on B unlocks the action: pause and cancel now succeed fully.
-		_, mErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, approverOnA.ID, walletBID, data.ApproverUserRole, nil)
-		require.NoError(t, mErr)
-		require.NoError(t, svc.PauseDisbursement(ctx, disbursementFromB.ID, approverOnA))
-		require.NoError(t, svc.CancelDisbursement(ctx, cancelableFromB.ID, approverOnA))
-
-		got, gErr = models.Disbursements.Get(ctx, dbConnectionPool, disbursementFromB.ID)
-		require.NoError(t, gErr)
-		assert.Equal(t, data.PausedDisbursementStatus, got.Status)
-		got, gErr = models.Disbursements.Get(ctx, dbConnectionPool, cancelableFromB.ID)
-		require.NoError(t, gErr)
-		assert.Equal(t, data.CanceledDisbursementStatus, got.Status)
-	})
-
-	t.Run("owner is tenant-wide on every wallet's transitions", func(t *testing.T) {
-		svc := &DisbursementManagementService{Models: models}
-
-		disbursementFromB := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:           "authz-owner-disbursement",
-			Status:         data.StartedDisbursementStatus,
-			SourceWalletID: walletBID,
-		})
-
-		require.NoError(t, svc.PauseDisbursement(ctx, disbursementFromB.ID, owner),
-			"owner must act on any wallet without membership rows")
 	})
 }
 
@@ -162,12 +101,14 @@ func Test_ResolveWalletReadScope(t *testing.T) {
 		assert.Nil(t, scope)
 	})
 
-	t.Run("owner via role → nil scope", func(t *testing.T) {
-		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
-			&auth.User{ID: "owner-role", Roles: []string{string(data.OwnerUserRole)}})
-		require.NoError(t, sErr)
-		assert.Nil(t, scope)
-	})
+	for _, role := range []data.UserRole{data.OwnerUserRole, data.DeveloperUserRole} {
+		t.Run(role.String()+" via role → nil scope", func(t *testing.T) {
+			scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships,
+				&auth.User{ID: role.String() + "-role", Roles: []string{string(role)}})
+			require.NoError(t, sErr)
+			assert.Nil(t, scope)
+		})
+	}
 
 	t.Run("member sees exactly the wallets they hold membership on", func(t *testing.T) {
 		scope, sErr := ResolveWalletReadScope(ctx, dbConnectionPool, models.WalletMemberships, member)

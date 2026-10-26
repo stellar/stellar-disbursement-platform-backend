@@ -1,8 +1,8 @@
 version: '3.8'
 services:
   sdp-frontend:
-    image: stellar/stellar-disbursement-platform-frontend:edge
+    image: stellar/stellar-disbursement-platform-frontend:${SDP_FRONTEND_VERSION:-7.1.0}
     ports:
-      - "3000:80"
+      - "${SDP_BIND_ADDR:-127.0.0.1}:3000:80"
     volumes:
       - ./env-config-${NETWORK_TYPE:-testnet}.js:/usr/share/nginx/html/settings/env-config.js

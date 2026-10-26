@@ -37,6 +37,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -753,6 +754,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
+		// Reports
+		{http.MethodGet, "/reports/statement"},
+		{http.MethodGet, "/reports/payment/1234"},
 		// Exports
 		{http.MethodGet, "/exports/disbursements"},
 		{http.MethodGet, "/exports/payments"},
@@ -828,6 +832,35 @@ func Test_handleHTTP_rateLimit(t *testing.T) {
 	require.Equal(t, expectedResponseCodes, actualResponseCodes)
 }
 
+func Test_handleHTTP_shortURLRateLimit(t *testing.T) {
+	dbConnectionPool := getConnectionPool(t)
+
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+
+	handlerMux := handleHTTP(serveOptions)
+
+	get := func(path, ip string) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set(middleware.TenantHeaderKey, "aid-org")
+		req.RemoteAddr = ip + ":1234"
+		w := httptest.NewRecorder()
+		handlerMux.ServeHTTP(w, req)
+		return w.Result().StatusCode
+	}
+
+	// 1. The first n requests to distinct short codes from one IP reach the handler (the global limiter is keyed by
+	//    path, so it never trips; the route limiter is keyed by IP alone).
+	for i := 0; i < rateLimitPer20Seconds; i++ {
+		require.Equal(t, http.StatusNotFound, get(fmt.Sprintf("/r/code%d", i), "10.0.0.1"), "request %d", i+1)
+	}
+	// 2. The n+1 request from the same IP, to yet another code, is throttled.
+	require.Equal(t, http.StatusTooManyRequests, get("/r/another", "10.0.0.1"))
+	// 3. Another IP is unaffected.
+	require.Equal(t, http.StatusNotFound, get("/r/another", "10.0.0.2"))
+	// 4. The throttled IP can still reach other endpoints.
+	require.Equal(t, http.StatusOK, get("/health", "10.0.0.1"))
+}
+
 func Test_createAuthManager(t *testing.T) {
 	dbConnectionPool := getConnectionPool(t)
 
@@ -892,4 +925,10 @@ func getConnectionPool(t *testing.T) db.DBConnectionPool {
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Close() })
 	return pool
+}
+
+func Test_ServeOptions_stellarExpertBaseURL(t *testing.T) {
+	assert.Equal(t, "https://stellar.expert/explorer/testnet/", ServeOptions{NetworkType: utils.TestnetNetworkType}.stellarExpertBaseURL())
+	assert.Equal(t, "https://stellar.expert/explorer/public/", ServeOptions{NetworkType: utils.PubnetNetworkType}.stellarExpertBaseURL())
+	assert.Equal(t, "https://explorer.example/", ServeOptions{NetworkType: utils.PubnetNetworkType, StellarExpertURL: "https://explorer.example//"}.stellarExpertBaseURL())
 }

@@ -31,6 +31,8 @@ var readEndpointInventory = map[string]string{
 	"GET /exports/payments":                  "membership-filtered",
 	"GET /exports/receivers":                 "membership-filtered",
 	"GET /distribution-wallets/{id}/balance": "membership-filtered",
+	"GET /reports/statement":                 "membership-filtered",
+	"GET /reports/payment/{id}":              "membership-filtered",
 
 	// TENANT-SCOPED: identical cross-wallet data for every qualifying tenant role.
 	"GET /receivers/verification-types":          "tenant-scoped",
@@ -46,8 +48,8 @@ var readEndpointInventory = map[string]string{
 	"GET /api-keys/":                             "tenant-scoped",
 	"GET /api-keys/{id}":                         "tenant-scoped",
 	"GET /balances":                              "tenant-scoped",
-	"GET /distribution-wallets/":                 "membership-filtered", // members list their wallets; Owners all
-	"GET /distribution-wallets/balance":          "membership-filtered", // scope-summed aggregate (Owner = tenant-wide)
+	"GET /distribution-wallets/":                 "membership-filtered", // members list their wallets; owners and developers all
+	"GET /distribution-wallets/balance":          "membership-filtered", // scope-summed aggregate (owners and developers = tenant-wide)
 	"GET /distribution-wallets/{id}/":            "tenant-scoped",       // Owner-only admin view
 	"GET /distribution-wallets/{id}/memberships": "tenant-scoped",       // Owner-only admin/audit view
 

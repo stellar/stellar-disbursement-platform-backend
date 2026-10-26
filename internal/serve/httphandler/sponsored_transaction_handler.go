@@ -96,6 +96,11 @@ func (h SponsoredTransactionHandler) CreateSponsoredTransaction(w http.ResponseW
 		return
 	}
 
+	if err = ensureAuthorizedByWallet(reqBody.OperationXDR, account); err != nil {
+		httperror.BadRequest("operation_xdr must be authorized only by the caller's embedded wallet", err, nil).Render(w)
+		return
+	}
+
 	allowed, err := h.isContractAllowed(ctx, contractAddress)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to validate contract address", err, nil).Render(w)
@@ -160,6 +165,19 @@ func (h SponsoredTransactionHandler) GetSponsoredTransaction(w http.ResponseWrit
 	}
 
 	httpjson.Render(w, resp, httpjson.JSON)
+}
+
+// ensureAuthorizedByWallet rejects an operation unless every auth entry is from the caller's own
+// embedded wallet (account); the TSS applies the same rule before signing.
+func ensureAuthorizedByWallet(operationXDR, account string) error {
+	var operation xdr.InvokeHostFunctionOp
+	if err := xdr.SafeUnmarshalBase64(operationXDR, &operation); err != nil {
+		return fmt.Errorf("decoding operation XDR: %w", err)
+	}
+	if err := utils.ValidateAuthEntriesFromContract(operation.Auth, account); err != nil {
+		return fmt.Errorf("validating auth entries: %w", err)
+	}
+	return nil
 }
 
 // getInvokeContractAddress extracts the contract address from an InvokeHostFunctionOp XDR payload.

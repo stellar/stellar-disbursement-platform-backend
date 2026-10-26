@@ -151,6 +151,20 @@ func Test_DisbursementHandler_validateRequest(t *testing.T) {
 			},
 		},
 		{
+			name: "🔴 receiver_registration_message_template contains an unbounded range construct",
+			request: PostDisbursementRequest{
+				Name:                                "disbursement 1",
+				AssetID:                             "61dbfa89-943a-413c-b862-a2177384d321",
+				WalletID:                            wallet.ID,
+				RegistrationContactType:             data.RegistrationContactTypePhone,
+				VerificationField:                   data.VerificationTypeDateOfBirth,
+				ReceiverRegistrationMessageTemplate: "{{range 1000}}{{range 1000}}A{{end}}{{end}}",
+			},
+			expectedErrors: map[string]interface{}{
+				"receiver_registration_message_template": "message template may only contain text and field substitutions like {{.OTP}}",
+			},
+		},
+		{
 			name: "🟢 all fields are valid",
 			request: PostDisbursementRequest{
 				Name:                    "disbursement 1",
@@ -1438,6 +1452,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "number of instructions exceeds maximum of 10000",
 		},
 		{
+			name:           "🔴 max columns exceeded",
+			disbursementID: emailDraftDisbursement.ID,
+			csvRecords: [][]string{
+				append([]string{"email", "id", "amount", "verification"}, make([]string, maxCSVColumns-3)...),
+				append([]string{"foobar@test.com", "123456789", "100.5", "1990-01-01"}, make([]string, maxCSVColumns-3)...),
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "number of commas in line 1 exceeds maximum of 49 (max 50 columns)",
+		},
+		{
 			name:           "🔴 wallet address already in use by another receiver",
 			disbursementID: emailWalletDraftDisbursement.ID,
 			csvRecords: [][]string{
@@ -1468,6 +1492,50 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			assert.Contains(t, bodyStr, tc.expectedMessage)
 		})
 		authManagerMock.AssertExpectations(t)
+	}
+}
+
+func Test_parseInstructionsFromCSV_capsReportedErrors(t *testing.T) {
+	var csv bytes.Buffer
+	csv.WriteString("phone,verification\n")
+	for i := 0; i < 1000; i++ {
+		csv.WriteString(",\n")
+	}
+
+	_, v := parseInstructionsFromCSV(context.Background(), &csv, data.RegistrationContactTypePhone, data.VerificationTypeDateOfBirth)
+
+	require.True(t, v.HasErrors())
+	assert.Len(t, v.Errors, maxReportedCSVErrors+1) // the capped errors plus the "info" summary
+	assert.Positive(t, v.OmittedErrors)
+	assert.Contains(t, v.Errors["info"], fmt.Sprintf("showing first %d errors", maxReportedCSVErrors))
+}
+
+func Test_validateCSVDimensions(t *testing.T) {
+	const header = "phone,verification\n"
+	row := "+14155550000,1990-01-01\n"
+	testCases := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{name: "max rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement)},
+		{name: "blank lines are not rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement) + "\n\r\n"},
+		{name: "too many rows", content: header + strings.Repeat(row, data.MaxInstructionsPerDisbursement+1), wantErr: "number of instructions exceeds maximum of 10000"},
+		{name: "rows of delimiters only", content: header + strings.Repeat(",\n", 2_000_000), wantErr: "number of instructions exceeds maximum of 10000"},
+		{name: "max columns", content: strings.Repeat("a,", maxCSVColumns-1) + "a\n"},
+		{name: "too many columns", content: strings.Repeat("a,", maxCSVColumns) + "a\n", wantErr: "number of commas in line 1 exceeds maximum of 49 (max 50 columns)"},
+		{name: "columns spread over quoted lines", content: header + strings.Repeat(`"`+strings.Repeat(",", 1000)+"\n"+`"`, 100), wantErr: "number of commas in line 2 exceeds maximum of 49 (max 50 columns)"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCSVDimensions([]byte(tc.content))
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.wantErr)
+			}
+		})
 	}
 }
 
@@ -1927,7 +1995,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		httpRouter := chi.NewRouter()
 		httpRouter.Patch("/disbursements/{id}/status", handler.PatchDisbursementStatus)
@@ -1965,7 +2033,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
@@ -1992,7 +2060,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
@@ -2045,7 +2113,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, approverUser.ID).
 			Return(approverUser, nil).
-			Once()
+			Twice()
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
 			Return(decimal.NewFromFloat(10000.0), nil).Once()
@@ -2067,7 +2135,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Twice()
+			Times(4)
 
 		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
 			Return(decimal.NewFromFloat(10000.0), nil).Once()
@@ -2127,7 +2195,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Paused"})
 		require.NoError(t, err)
@@ -2146,7 +2214,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		cancelableDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:   "disbursement to cancel",
@@ -2188,7 +2256,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		startedForCancelAttempt := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:   "started disbursement can't be canceled",
@@ -2212,7 +2280,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUserByID", mock.Anything, userID).
 			Return(user, nil).
-			Once()
+			Twice()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Completed"})
 		require.NoError(t, err)
@@ -2225,6 +2293,54 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), services.ErrDisbursementStatusCantBeChanged.Error())
+	})
+
+	t.Run("API key within scope starts a disbursement whatever its creator's role", func(t *testing.T) {
+		// Once: the wallet gate answers from the key's scope and never loads its creator.
+		developer := &auth.User{ID: "developer-user-id", Email: "developer@email.com", Roles: []string{data.DeveloperUserRole.String()}}
+		authManagerMock.
+			On("GetUserByID", mock.Anything, developer.ID).
+			Return(developer, nil).
+			Once()
+		mockDistAccSvc.On("GetBalance", mock.Anything, &resolvedDistAcc, mock.AnythingOfType("data.Asset")).
+			Return(decimal.NewFromFloat(10000.0), nil).Once()
+
+		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
+			Name:          "ready disbursement started by key",
+			Status:        data.ReadyDisbursementStatus,
+			StatusHistory: readyStatusHistory,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   readyDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
+		})
+
+		keyCtx := sdpcontext.SetUserIDInContext(ctx, developer.ID)
+		keyCtx = sdpcontext.SetAPIKeyInContext(keyCtx, &data.APIKey{
+			ID:                    "in-scope-key",
+			CreatedBy:             developer.ID,
+			DistributionWalletIDs: []string{readyDisbursement.SourceWalletID},
+		})
+
+		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(keyCtx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		got, err := handler.Models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
+		require.NoError(t, err)
+		require.Equal(t, data.StartedDisbursementStatus, got.Status)
 	})
 
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
@@ -2619,6 +2735,23 @@ func Test_DisbursementHandler_PostDisbursement_WithInstructions(t *testing.T) {
 			expectedStatus: http.StatusCreated,
 		},
 		{
+			name: "🔴 receiver_registration_message_template contains HTML (multipart/CSV path)",
+			disbursementData: map[string]interface{}{
+				"name":                                   "disbursement with html template",
+				"asset_id":                               asset.ID,
+				"wallet_id":                              enabledWallet.ID,
+				"registration_contact_type":              data.RegistrationContactTypePhone,
+				"verification_field":                     data.VerificationTypeDateOfBirth,
+				"receiver_registration_message_template": "<b>Claim</b> your payment",
+			},
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "receiver_registration_message_template cannot contain HTML, JS or CSS",
+		},
+		{
 			name: "🔴 disabled wallet",
 			disbursementData: map[string]interface{}{
 				"name":                      "disbursement with disabled wallet",
@@ -2922,7 +3055,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus_circleTenant(t *testing.T)
 		Status:         schema.AccountStatusActive,
 	}
 
-	authManagerMock.On("GetUserByID", mock.Anything, userID).Return(user, nil).Once()
+	authManagerMock.On("GetUserByID", mock.Anything, userID).Return(user, nil).Twice()
 	mockDistAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(circleAccount, nil).Once()
 	// The account reaching the balance check must be the Circle one, carrying its wallet ID —
 	// this is the assertion that fails if the handler resolves from distribution_wallets.

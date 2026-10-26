@@ -60,7 +60,7 @@ jobs:
             echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Login to DockerHub
         uses: docker/login-action@v4.6.0
@@ -69,7 +69,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push to DockerHub (release prd)
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           push: true
           build-args: |
@@ -87,7 +87,7 @@ jobs:
       - internal_sep_validation
       - e2e_integration_test
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Login to DockerHub
         uses: docker/login-action@v4.6.0
@@ -105,7 +105,7 @@ jobs:
         run: echo "SHA=$(git rev-parse --short ${{ github.sha }} )" >> $GITHUB_OUTPUT
 
       - name: Build and push to DockerHub (develop branch)
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           push: true
           build-args: |

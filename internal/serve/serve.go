@@ -69,6 +69,7 @@ type ServeOptions struct {
 	Port                           int
 	Version                        string
 	InstanceName                   string
+	StellarExpertURL               string
 	MonitorService                 monitor.MonitorServiceInterface
 	MtnDBConnectionPool            db.DBConnectionPool
 	AdminDBConnectionPool          db.DBConnectionPool
@@ -368,6 +369,11 @@ const (
 	rateLimitWindow       = 20 * time.Second
 )
 
+// rateLimitKeyByClientIP keys a rate limiter by the canonicalized client IP.
+func rateLimitKeyByClientIP(r *http.Request) (string, error) {
+	return httprate.CanonicalizeIP(chimiddleware.GetClientIP(r.Context())), nil
+}
+
 func handleHTTP(o ServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
@@ -378,12 +384,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(httprate.LimitBy(
 		rateLimitPer20Seconds,
 		rateLimitWindow,
-		httprate.JoinKeys(
-			func(r *http.Request) (string, error) {
-				return httprate.CanonicalizeIP(chimiddleware.GetClientIP(r.Context())), nil
-			},
-			httprate.KeyByEndpoint,
-		),
+		httprate.JoinKeys(rateLimitKeyByClientIP, httprate.KeyByEndpoint),
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager, o.SingleTenantMode))
@@ -464,7 +465,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.With(middleware.RequirePermission(
 			data.ReadAll,
 			middleware.AnyRoleMiddleware(authManager),
-		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager}.PostRefreshToken)
+		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager, TenantManager: o.tenantManager}.PostRefreshToken)
 
 		// Disbursement endpoints
 		r.Route("/disbursements", func(r chi.Router) {
@@ -650,7 +651,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			)).Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
-		// Distribution wallets (the tenant's sending accounts) — Owner-only per the spec.
+		// Distribution wallets (the tenant's sending accounts): Owner-only for JWTs; API keys are
+		// authorized by permission here and bound to their wallet scope in the handlers.
 		if o.distributionWalletService != nil {
 			r.Route("/distribution-wallets", func(r chi.Router) {
 				distributionWalletsHandler := httphandler.DistributionWalletsHandler{
@@ -661,9 +663,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				}
 
-				// Owner-only reads (admin views). As with the write group below, the Owner
-				// requirement here only binds the JWT path, so each handler re-checks it via
-				// ensureCallerIsOwner and then applies its read scope.
+				// Owner-only reads (admin views); API keys get the wallet's scope check in the handler.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
@@ -675,9 +675,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 				// Membership-scoped reads (the dashboard picker + Total Balance tile): any
 				// business role at the route; the handlers filter to the caller's read scope
-				// (Owners: everything; members: their wallets; 404 outside per-wallet scope).
+				// (owners and developers: everything; members: their wallets; 404 outside per-wallet scope).
 				// /{id}/capabilities also serves the grant picker via ?user_id=/?role=, which
-				// reports a THIRD party's capabilities and is Owner-gated inside the handler.
+				// reports a THIRD party's capabilities and is Owner-gated for JWTs inside the handler.
 				r.With(middleware.RequirePermission(
 					data.ReadDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
@@ -688,10 +688,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					r.Get("/{id}/capabilities", distributionWalletsHandler.GetDistributionWalletCapabilities)
 				})
 
-				// Write operations. The Owner requirement below only binds the JWT path —
-				// RequirePermission short-circuits to the handler on the API-key path and never
-				// invokes AnyRoleMiddleware — so every handler in this group re-checks it via
-				// ensureCallerIsOwner, which is what actually holds for API keys.
+				// Write operations. Owner-only for JWTs; API keys need the wallet in scope (promote also
+				// needs the demoted default in scope). Create has no wallet to scope.
 				r.With(middleware.RequirePermission(
 					data.WriteDistributionWallets,
 					middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole),
@@ -783,12 +781,35 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.RequirePermission(
 			data.ReadAll,
-			middleware.AnyRoleMiddleware(authManager),
+			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Get("/balances", httphandler.BalancesHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			CircleService:               o.CircleService,
 			NetworkType:                 o.NetworkType,
 		}.Get)
+
+		reportsService := services.NewReportsService(
+			o.SubmitterEngine.HorizonClient,
+			o.DistributionAccountService,
+			o.Models,
+		)
+		reportsHandler := httphandler.ReportsHandler{
+			ReportsService:       reportsService,
+			Models:               o.Models,
+			DBConnectionPool:     o.MtnDBConnectionPool,
+			HorizonClient:        o.SubmitterEngine.HorizonClient,
+			AuthManager:          authManager,
+			StellarExpertBaseURL: o.stellarExpertBaseURL(),
+		}
+		// Reports follow the payment read rules: business roles at the route, membership scope in the
+		// handlers, and nothing at all while the organization has reporting switched off.
+		r.With(
+			middleware.RequirePermission(data.ReadReports, middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...)),
+			middleware.RequireReportingEnabled(o.Models),
+		).Group(func(r chi.Router) {
+			r.Get("/reports/statement", reportsHandler.GetStatementExport)
+			r.Get("/reports/payment/{id}", reportsHandler.GetPaymentExport)
+		})
 
 		exportHandler := httphandler.ExportHandler{
 			Models:      o.Models,
@@ -853,7 +874,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			PasswordValidator: o.PasswordValidator,
 		}.ServeHTTP)
 
-		r.Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
+		// Keyed by IP only: the global limiter treats every /r/{code} as a distinct endpoint and never counts enumeration.
+		r.With(httprate.LimitBy(rateLimitPer20Seconds, rateLimitWindow, rateLimitKeyByClientIP)).
+			Get("/r/{code}", httphandler.URLShortenerHandler{Models: o.Models}.HandleRedirect)
 
 		// Embedded wallet routes (only if feature is enabled)
 		if o.EnableEmbeddedWallets && o.EmbeddedWalletService != nil {
@@ -920,8 +943,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			}
 			r.With(middleware.WalletAuthMiddleware(o.walletJWTManager)).
 				Post("/rpc/wallet", rpcProxyHandler.ServeHTTP)
-			r.With(middleware.AuthenticateMiddleware(o.authManager, o.tenantManager)).
-				Post("/rpc/user", rpcProxyHandler.ServeHTTP)
+			r.With(
+				middleware.AuthenticateMiddleware(o.authManager, o.tenantManager),
+				middleware.AnyRoleMiddleware(o.authManager, data.GetAllRoles()...),
+			).Post("/rpc/user", rpcProxyHandler.ServeHTTP)
 		}
 	})
 
@@ -1068,4 +1093,16 @@ func staticFileServer(r chi.Router, fileSystem fs.FS) {
 		fs := http.StripPrefix(pathPrefix, http.FileServer(http.FS(fileSystem)))
 		fs.ServeHTTP(w, r)
 	})
+}
+
+// stellarExpertBaseURL returns the explorer base URL the report PDFs link to, with a trailing slash.
+func (opts ServeOptions) stellarExpertBaseURL() string {
+	u := strings.TrimRight(opts.StellarExpertURL, "/")
+	if u == "" {
+		u = "https://stellar.expert/explorer/testnet"
+		if opts.NetworkType == utils.PubnetNetworkType {
+			u = "https://stellar.expert/explorer/public"
+		}
+	}
+	return u + "/"
 }

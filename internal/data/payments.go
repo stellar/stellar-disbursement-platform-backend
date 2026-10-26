@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -128,6 +129,15 @@ func (psh *PaymentStatusHistory) Scan(src interface{}) error {
 }
 
 var _ sql.Scanner = (*PaymentStatusHistory)(nil)
+
+func (psh PaymentStatusHistory) GetSuccessTimestamp() (time.Time, bool) {
+	for _, e := range psh {
+		if e.Status == SuccessPaymentStatus {
+			return e.Timestamp, true
+		}
+	}
+	return time.Time{}, false
+}
 
 func (p *PaymentInsert) Validate() error {
 	if strings.TrimSpace(p.ReceiverID) == "" {
@@ -253,6 +263,47 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 	}
 
 	return &payments[0], nil
+}
+
+// GetSuccessfulByStellarTransaction returns walletID's SUCCESS payment in the transaction, preferring the one matching operationID.
+func (p *PaymentModel) GetSuccessfulByStellarTransaction(ctx context.Context, sqlExec db.SQLExecuter, walletID, txHash, operationID string) (*Payment, error) {
+	if walletID == "" || txHash == "" {
+		return nil, ErrRecordNotFound
+	}
+	query := `
+		SELECT
+			` + PaymentColumnNames("p", "") + `,
+			` + DisbursementColumnNames("d", "disbursement") + `,
+			` + AssetColumnNames("a", "asset", false) + `,
+			` + ReceiverWalletColumnNames("rw", "receiver_wallet") + `,
+			r.external_id AS "receiver_wallet.receiver.external_id",
+			` + WalletColumnNames("w", "receiver_wallet.wallet", false) + `
+		FROM
+			payments p
+			LEFT JOIN disbursements d ON p.disbursement_id = d.id
+			JOIN assets a ON p.asset_id = a.id
+			JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
+			JOIN receivers r ON rw.receiver_id = r.id
+			JOIN wallets w ON w.id = rw.wallet_id
+		WHERE
+			p.source_wallet_id = $1
+			AND p.stellar_transaction_id = $2
+			AND p.status = $3
+		ORDER BY (p.stellar_operation_id = $4) DESC NULLS LAST, p.created_at
+		LIMIT 1
+	`
+	var payment Payment
+	err := sqlExec.GetContext(ctx, &payment, query, walletID, txHash, SuccessPaymentStatus, operationID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("getting successful payment for stellar transaction %s: %w", txHash, err)
+	}
+	if payment.Type == PaymentTypeDirect {
+		payment.Disbursement = nil
+	}
+	return &payment, nil
 }
 
 func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExecuter, batchSize int) ([]*Payment, error) {
@@ -559,9 +610,10 @@ func (p *PaymentModel) UpdateStatuses(ctx context.Context, sqlExec db.SQLExecute
 		SET status = $1,
 			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, NULL))
 		WHERE id = ANY($2)
+		AND status = ANY($3)
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query, toStatus, pq.Array(paymentIDs))
+	result, err := sqlExec.ExecContext(ctx, query, toStatus, pq.Array(paymentIDs), pq.Array(toStatus.SourceStatuses()))
 	if err != nil {
 		return 0, fmt.Errorf("error updating payment statuses: %w", err)
 	}
@@ -590,9 +642,10 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 			stellar_transaction_id = COALESCE($3, stellar_transaction_id),
 			sender_address = COALESCE(NULLIF($4, ''), sender_address)
 		WHERE id = $5
+		AND status = $6
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, update.SenderAddress, payment.ID)
+	result, err := sqlExec.ExecContext(ctx, query, update.Status, update.StatusMessage, update.StellarTransactionID, update.SenderAddress, payment.ID, payment.Status)
 	if err != nil {
 		return fmt.Errorf("error updating payment with id %s: %w", payment.ID, err)
 	}

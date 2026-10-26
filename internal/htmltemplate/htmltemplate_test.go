@@ -3,7 +3,6 @@ package htmltemplate
 import (
 	"crypto/rand"
 	"fmt"
-	"html/template"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,10 +43,25 @@ func Test_ExecuteHTMLTemplateForEmailEmptyBody(t *testing.T) {
 	randomStr := fmt.Sprintf("%x", b)[:10]
 
 	// check if the random string is imprinted in the template
-	inputData := EmptyBodyEmailTemplate{Body: template.HTML(randomStr)}
+	inputData := EmptyBodyEmailTemplate{Body: randomStr}
 	templateStr, err := ExecuteHTMLTemplateForEmailEmptyBody(inputData)
 	require.NoError(t, err)
 	require.Contains(t, templateStr, randomStr)
+}
+
+// Test_ExecuteHTMLTemplateForEmailEmptyBody_EscapesBody verifies a body with HTML-like content is escaped
+// (not emitted as live markup) when wrapped into the email shell — the sink backstop for operator messages.
+func Test_ExecuteHTMLTemplateForEmailEmptyBody_EscapesBody(t *testing.T) {
+	for _, payload := range []string{
+		"<svg/onload=alert(1)>",
+		"<img/src=x onerror=alert(1)>",
+		`<a/href="https://evil">click</a/>`,
+	} {
+		out, err := ExecuteHTMLTemplateForEmailEmptyBody(EmptyBodyEmailTemplate{Body: payload})
+		require.NoError(t, err)
+		require.NotContains(t, out, payload, "payload must not appear as raw markup")
+		require.Contains(t, out, "&lt;", "payload must be HTML-escaped")
+	}
 }
 
 func Test_ExecuteHTMLTemplateForStaffInvitationEmailMessage(t *testing.T) {

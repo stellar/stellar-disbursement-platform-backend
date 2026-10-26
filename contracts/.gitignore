@@ -29,7 +29,9 @@ Session.vim
 
 ## Tool
 .valgrindrc
-.cargo
+.cargo/*
+# Shared cargo-audit config (advisory ignores used by CI).
+!.cargo/audit.toml
 # Included because it is part of the test case
 !/tests/run-make/thumb-none-qemu/example/.cargo
 

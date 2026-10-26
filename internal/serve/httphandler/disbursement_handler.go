@@ -44,7 +44,11 @@ type DisbursementHandler struct {
 	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
-const DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
+const (
+	DefaultMaxCSVUploadSizeBytes = 500 * data.MaxInstructionsPerDisbursement // 500 bytes per instruction.
+	maxCSVColumns                = 50
+	maxReportedCSVErrors         = 20
+)
 
 type PostDisbursementRequest struct {
 	Name                                string                       `json:"name"`
@@ -66,6 +70,10 @@ func (d DisbursementHandler) validateRequest(ctx context.Context, req PostDisbur
 		fmt.Sprintf("registration_contact_type must be one of %v", data.AllRegistrationContactTypes()),
 	)
 	v.CheckError(utils.ValidateNoHTML(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "receiver_registration_message_template cannot contain HTML, JS or CSS")
+	if req.ReceiverRegistrationMessageTemplate != "" {
+		v.CheckError(utils.ValidateStringLength(req.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
+	}
+	v.CheckError(utils.ValidateMessageTemplate(req.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "")
 	if !req.RegistrationContactType.IncludesWalletAddress {
 		trimmedWalletID := strings.TrimSpace(req.WalletID)
 		v.Check(trimmedWalletID != "", "wallet_id", "wallet_id is required")
@@ -138,6 +146,11 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 }
 
 func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq *http.Request, sqlExec db.SQLExecuter, userID string, req PostDisbursementRequest) (*data.Disbursement, *httperror.HTTPError) {
+	// Validate here so every ingress path (JSON and multipart/CSV) is covered — both funnel through this function.
+	if v := d.validateRequest(ctx, req); v.HasErrors() {
+		return nil, httperror.BadRequest("", nil, v.Errors)
+	}
+
 	var wallet *data.Wallet
 	var err error
 
@@ -440,6 +453,10 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 		return fmt.Errorf("could not parse csv file: %w", parseHTTPErr)
 	}
 
+	if err := validateCSVDimensions(buf.Bytes()); err != nil {
+		return httperror.BadRequest(err.Error(), err, nil)
+	}
+
 	skipVerification := disbursement.Wallet != nil && disbursement.Wallet.Embedded && disbursement.VerificationField == ""
 	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, skipVerification); err != nil {
 		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
@@ -460,15 +477,12 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 	}
 
 	if err := d.Models.DisbursementInstructions.ProcessAll(ctx, dbTx, data.DisbursementInstructionsOpts{
-		UserID:                  authUser.ID,
-		Instructions:            instructions,
-		Disbursement:            disbursement,
-		DisbursementUpdate:      disbursementUpdate,
-		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+		UserID:             authUser.ID,
+		Instructions:       instructions,
+		Disbursement:       disbursement,
+		DisbursementUpdate: disbursementUpdate,
 	}); err != nil {
 		switch {
-		case errors.Is(err, data.ErrMaxInstructionsExceeded):
-			return httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement), err, nil)
 		case errors.Is(err, data.ErrReceiverVerificationMismatch):
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
@@ -650,20 +664,26 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	switch toStatus {
-	case data.StartedDisbursementStatus:
-		// The balance check must run against THIS disbursement's own source wallet, so the
-		// disbursement is loaded here purely to reach it (see resolveSourceDistributionAccount).
-		disbursement, getErr := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
-		if getErr != nil {
-			if errors.Is(getErr, data.ErrRecordNotFound) {
-				httperror.NotFound("disbursement not found", getErr, nil).Render(w)
-				return
-			}
-			httperror.InternalError(ctx, "Cannot get disbursement", getErr, nil).Render(w)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("disbursement not found", err, nil).Render(w)
 			return
 		}
+		httperror.InternalError(ctx, "Cannot get disbursement", err, nil).Render(w)
+		return
+	}
 
+	// a status change is a state transition — gate on the disbursement's source wallet.
+	if httpErr := ensureWalletActionAllowed(ctx, d.AuthManager, d.Models, disbursement.SourceWalletID,
+		data.FinancialControllerUserRole, data.ApproverUserRole); httpErr != nil {
+		httpErr.Render(w)
+		return
+	}
+
+	switch toStatus {
+	case data.StartedDisbursementStatus:
+		// The balance check must run against THIS disbursement's own source wallet.
 		sourceWallet, walletErr := d.Models.DistributionWallets.Get(ctx, d.Models.DBConnectionPool, disbursement.SourceWalletID)
 		if walletErr != nil {
 			httperror.InternalError(ctx, "Cannot get distribution account", walletErr, nil).Render(w)
@@ -704,8 +724,6 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
-		case errors.Is(err, services.ErrWalletActionForbidden):
-			httperror.Forbidden(services.ErrWalletActionForbidden.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		case errors.As(err, &insufficientBalanceErr):
@@ -796,17 +814,14 @@ func (d DisbursementHandler) postDisbursementWithInstructions(ctx context.Contex
 }
 
 func (d DisbursementHandler) postDisbursementOnly(ctx context.Context, r *http.Request, req PostDisbursementRequest, user *auth.User) (*data.Disbursement, *httperror.HTTPError) {
-	v := d.validateRequest(ctx, req)
-	if v.HasErrors() {
-		return nil, httperror.BadRequest("", nil, v.Errors)
-	}
-
+	// Validation runs inside createNewDisbursement so it also covers the multipart/CSV path.
 	return d.createNewDisbursement(ctx, r, d.Models.DBConnectionPool, user.ID, req)
 }
 
 // parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
 func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType data.RegistrationContactType, verificationField data.VerificationType) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(contactType, verificationField)
+	validator.MaxErrors = maxReportedCSVErrors
 
 	instructions := []*data.DisbursementInstruction{}
 	if err := gocsv.Unmarshal(reader, &instructions); err != nil {
@@ -827,11 +842,34 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 
 	validator.CheckForDuplicateContacts(instructions)
 
+	if validator.OmittedErrors > 0 {
+		validator.Errors["info"] = fmt.Sprintf("showing first %d errors; %d more were not included", maxReportedCSVErrors, validator.OmittedErrors)
+	}
+
 	if validator.HasErrors() {
 		return nil, validator
 	}
 
 	return sanitizedInstructions, nil
+}
+
+// validateCSVDimensions rejects CSVs with too many rows or columns before parsing, since parsing and validating
+// each field costs far more memory than its bytes in the file.
+func validateCSVDimensions(content []byte) error {
+	rows, lineNo := 0, 0
+	for line := range bytes.Lines(content) {
+		lineNo++
+		if len(bytes.TrimRight(line, "\r\n")) == 0 {
+			continue
+		}
+		if rows++; rows > data.MaxInstructionsPerDisbursement+1 { // +1 for the header
+			return fmt.Errorf("number of instructions exceeds maximum of %d", data.MaxInstructionsPerDisbursement)
+		}
+		if bytes.Count(line, []byte(",")) >= maxCSVColumns {
+			return fmt.Errorf("number of commas in line %d exceeds maximum of %d (max %d columns)", lineNo, maxCSVColumns-1, maxCSVColumns)
+		}
+	}
+	return nil
 }
 
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.

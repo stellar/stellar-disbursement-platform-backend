@@ -57,7 +57,7 @@ Contributions that appear to be made solely for gaining credits or building fake
 
 ## Development Environment
 
-All SDP services can be started using the `docker-compose.yml` file in the `dev` directory. Please refer to the [README](dev/README.md) for more information.
+All SDP services can be started using the `docker-compose-dev.yml` file in the `dev` directory. Please refer to the [README](dev/README.md) for more information.
 
 ## Code of Conduct
 

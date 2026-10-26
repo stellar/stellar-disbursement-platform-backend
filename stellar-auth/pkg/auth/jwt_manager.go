@@ -7,7 +7,6 @@ import (
 	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
-	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 )
@@ -61,28 +60,40 @@ func (m *defaultJWTManager) parseToken(tokenString string) (*jwtgo.Token, *claim
 		return nil, nil, ErrInvalidToken
 	}
 
+	if c.User == nil {
+		return nil, nil, ErrInvalidToken
+	}
+
 	return token, c, nil
 }
 
 func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expiresAt time.Time) (string, error) {
+	// A token must always be scoped to a tenant.
+	// Fail closed rather than issuing a tenantless token.
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting tenant from context to generate token: %w", err)
+	}
+	if currentTenant == nil || currentTenant.ID == "" {
+		return "", fmt.Errorf("generating token: no tenant scoped in context")
+	}
+
+	return m.signToken(user, currentTenant.ID, expiresAt)
+}
+
+// signToken builds and signs a token for the given user and tenant.
+func (m *defaultJWTManager) signToken(user *User, tenantID string, expiresAt time.Time) (string, error) {
 	esPrivateKey, err := jwtgo.ParseECPrivateKeyFromPEM([]byte(m.privateKey))
 	if err != nil {
 		return "", fmt.Errorf("parsing EC Private Key: %w", err)
 	}
 
 	c := &claims{
-		User: user,
+		User:     user,
+		TenantID: tenantID,
 		RegisteredClaims: jwtgo.RegisteredClaims{
 			ExpiresAt: jwtgo.NewNumericDate(expiresAt),
 		},
-	}
-
-	// TODO: Always throw this error after migrations are merged [SDP-953]
-	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
-	if err != nil {
-		log.Ctx(ctx).Error(err)
-	} else {
-		c.TenantID = currentTenant.ID
 	}
 
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodES256, c)
@@ -109,7 +120,7 @@ func (m *defaultJWTManager) RefreshToken(ctx context.Context, tokenString string
 		return tokenString, nil
 	}
 
-	tokenString, err = m.GenerateToken(ctx, c.User, expiresAt)
+	tokenString, err = m.signToken(c.User, c.TenantID, expiresAt)
 	if err != nil {
 		return "", fmt.Errorf("generating new refreshed token: %w", err)
 	}

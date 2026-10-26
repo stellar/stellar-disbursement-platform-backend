@@ -176,3 +176,14 @@ func TestMessage_String(t *testing.T) {
 		})
 	}
 }
+
+func Test_MessageType_IsTrustedHTMLBody(t *testing.T) {
+	trusted := []MessageType{MessageTypeUserForgotPassword, MessageTypeUserMFA, MessageTypeUserInvitation}
+	untrusted := []MessageType{MessageTypeReceiverInvitation, MessageTypeReceiverOTP, MessageType(""), MessageType("something_new")}
+	for _, mt := range trusted {
+		require.True(t, mt.IsTrustedHTMLBody(), "%s should be trusted HTML", mt)
+	}
+	for _, mt := range untrusted {
+		require.False(t, mt.IsTrustedHTMLBody(), "%s must not be trusted (escaped by default)", mt)
+	}
+}

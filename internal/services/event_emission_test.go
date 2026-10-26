@@ -69,13 +69,31 @@ func Test_OutboxEmission_RealFlows(t *testing.T) {
 		assert.Equal(t, "emit-owner", actor, "revoker attribution now lives in the event stream")
 	})
 
+	t.Run("revoking all of a user's memberships emits one revoke each", func(t *testing.T) {
+		for _, role := range []data.UserRole{data.ApproverUserRole, data.BusinessUserRole} {
+			_, gErr := models.WalletMemberships.Insert(ctx, dbConnectionPool, "emit-purged", defaultWallet.ID, role, nil)
+			require.NoError(t, gErr)
+		}
+
+		require.NoError(t, RevokeAllWalletMemberships(ctx, models, "emit-purged", "emit-owner"))
+
+		remaining, lErr := models.WalletMemberships.ListByUser(ctx, dbConnectionPool, "emit-purged")
+		require.NoError(t, lErr)
+		assert.Empty(t, remaining)
+		var n int
+		require.NoError(t, dbConnectionPool.GetContext(ctx, &n, `
+			SELECT COUNT(*) FROM events WHERE event_type = $1 AND payload->'data'->>'user_id' = 'emit-purged'`,
+			events.WalletMembershipRevoked))
+		assert.Equal(t, 2, n)
+	})
+
 	t.Run("promote + archive emit in their transactions", func(t *testing.T) {
 		var walletBID string
 		require.NoError(t, dbConnectionPool.GetContext(ctx, &walletBID, `
 			INSERT INTO distribution_wallets (name, distribution_account_type)
 			VALUES ('emit-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
-		_, pErr := walletSvc.PromoteToDefault(ctx, walletBID)
+		_, pErr := walletSvc.PromoteToDefault(ctx, walletBID, nil)
 		require.NoError(t, pErr)
 		assert.Equal(t, 1, countEvents(events.WalletPromotedToDefault, walletBID))
 
@@ -86,7 +104,7 @@ func Test_OutboxEmission_RealFlows(t *testing.T) {
 
 	t.Run("failed promotion writes no event (outbox rolls back with the transaction)", func(t *testing.T) {
 		preCount := countEvents(events.WalletPromotedToDefault, defaultWallet.ID)
-		_, pErr := walletSvc.PromoteToDefault(ctx, defaultWallet.ID) // archived → fails mid-tx
+		_, pErr := walletSvc.PromoteToDefault(ctx, defaultWallet.ID, nil) // archived → fails mid-tx
 		require.Error(t, pErr)
 		assert.Equal(t, preCount, countEvents(events.WalletPromotedToDefault, defaultWallet.ID),
 			"the outbox guarantee: no event without a committed change")

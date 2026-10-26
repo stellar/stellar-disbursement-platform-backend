@@ -1,24 +1,14 @@
 package httphandler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
-
-	// Don't remove the `image/jpeg` and `image/png` packages import unless
-	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
-	// See https://pkg.go.dev/image#pkg-overview
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
-	"slices"
 	"sort"
 	"strings"
 
@@ -28,7 +18,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
-	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -64,6 +53,7 @@ type PatchOrganizationProfileRequest struct {
 	WebhookURL                          *string `json:"webhook_url"`
 	MFADisabled                         *bool   `json:"mfa_disabled"`
 	CAPTCHADisabled                     *bool   `json:"captcha_disabled"`
+	ReportingEnabled                    *bool   `json:"reporting_enabled"`
 	ReceiverInvitationsDisabled         *bool   `json:"receiver_invitations_disabled"`
 }
 
@@ -91,28 +81,12 @@ type PatchUserPasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-func (h ProfileHandler) ensureCallerIsOwner(ctx context.Context) (*auth.User, *httperror.HTTPError) {
-	user, err := ctxHelper.GetUserFromContext(ctx, h.AuthManager)
-	if err != nil {
-		if errors.Is(err, auth.ErrUserNotFound) {
-			return nil, httperror.Unauthorized("", err, nil)
-		}
-		return nil, httperror.InternalError(ctx, "Cannot get user from context", err, nil)
-	}
-
-	if !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
-		return nil, httperror.Forbidden("", nil, nil)
-	}
-
-	return user, nil
-}
-
 func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	user, httpErr := h.ensureCallerIsOwner(ctx)
-	if httpErr != nil {
-		httpErr.Render(rw)
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "User identification error", err, nil).Render(rw)
 		return
 	}
 
@@ -120,7 +94,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	req.Body = http.MaxBytesReader(rw, req.Body, h.MaxMemoryAllocation)
 
 	// limiting the amount of memory allocated in the server to handle the request
-	if err := req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
+	if err = req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
 		err = fmt.Errorf("parsing multipart form: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
@@ -146,12 +120,8 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 			return
 		}
 
-		// We need to ensure the the type of file is one of the accepted - image/png and image/jpeg
-		fileContentType := http.DetectContentType(fileContentBytes)
-
 		validator := validators.NewValidator()
-		expectedContentTypes := fmt.Sprintf("%s %s", data.PNGLogoType.ToHTTPContentType(), data.JPEGLogoType.ToHTTPContentType())
-		validator.Check(strings.Contains(expectedContentTypes, fileContentType), "logo", "invalid file type provided. Expected png or jpeg.")
+		validator.CheckError(utils.ValidateLogo(fileContentBytes), "logo", "")
 		if validator.HasErrors() {
 			httperror.BadRequest("", nil, validator.Errors).Render(rw)
 			return
@@ -175,16 +145,6 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		return
 	}
 
-	// This route admits Financial Controllers as well as Owners (serve.go), but the webhook URL is
-	// where every payment and disbursement event in the tenant gets delivered. Left ungated, a
-	// non-owner could point the whole event stream at an endpoint they control. Circle config is
-	// already owner-only for the same reason; this field is at least as sensitive, so gate it
-	// rather than widening who may call the route.
-	if reqBody.WebhookURL != nil && !user.IsOwner && !slices.Contains(user.Roles, string(data.OwnerUserRole)) {
-		httperror.Forbidden("only owners can change the webhook URL", nil, nil).Render(rw)
-		return
-	}
-
 	validator := validators.NewValidator()
 	if reqBody.PrivacyPolicyLink != nil && *reqBody.PrivacyPolicyLink != "" {
 		schemes := []string{"https"}
@@ -203,9 +163,19 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		if *reqBody.ReceiverRegistrationMessageTemplate != "" {
 			validator.CheckError(utils.ValidateStringLength(*reqBody.ReceiverRegistrationMessageTemplate, "receiver_registration_message_template", 255), "receiver_registration_message_template", "")
 		}
+		validator.CheckError(utils.ValidateMessageTemplate(*reqBody.ReceiverRegistrationMessageTemplate), "receiver_registration_message_template", "")
+	}
+
+	if reqBody.OTPMessageTemplate != nil {
+		validator.CheckError(utils.ValidateNoHTML(*reqBody.OTPMessageTemplate), "otp_message_template", "otp_message_template cannot contain HTML, JS or CSS")
+		if *reqBody.OTPMessageTemplate != "" {
+			validator.CheckError(utils.ValidateStringLength(*reqBody.OTPMessageTemplate, "otp_message_template", 255), "otp_message_template", "")
+		}
+		validator.CheckError(utils.ValidateMessageTemplate(*reqBody.OTPMessageTemplate), "otp_message_template", "")
 	}
 
 	if reqBody.OrganizationName != "" {
+		validator.CheckError(utils.ValidateNoHTML(reqBody.OrganizationName), "organization_name", "organization_name cannot contain HTML, JS or CSS")
 		validator.CheckError(utils.ValidateStringLength(reqBody.OrganizationName, "organization_name", 64), "organization_name", "")
 	}
 
@@ -229,6 +199,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		WebhookURL:                           reqBody.WebhookURL,
 		MFADisabled:                          reqBody.MFADisabled,
 		CAPTCHADisabled:                      reqBody.CAPTCHADisabled,
+		ReportingEnabled:                     reqBody.ReportingEnabled,
 		ReceiverInvitationsDisabled:          reqBody.ReceiverInvitationsDisabled,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
@@ -245,7 +216,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 	sort.Strings(nonEmptyChanges)
 
-	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", user.ID, strings.Join(nonEmptyChanges, ", "))
+	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", userID, strings.Join(nonEmptyChanges, ", "))
 	err = h.Models.Organizations.Update(ctx, &organizationUpdate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
@@ -416,6 +387,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"message_channel_priority":                 org.MessageChannelPriority,
 		"mfa_disabled":                             org.MFADisabled,
 		"captcha_disabled":                         org.CAPTCHADisabled,
+		"reporting_enabled":                        org.ReportingEnabled,
 		"receiver_invitations_disabled":            org.ReceiverInvitationsDisabled,
 	}
 
@@ -480,25 +452,23 @@ func (h OrganizationLogoHandler) GetOrganizationLogo(rw http.ResponseWriter, req
 		return
 	}
 
-	if len(org.Logo) == 0 {
-		var logoBytes []byte
-		logoBytes, err = fs.ReadFile(h.PublicFilesFS, "img/logo.png")
-		if err != nil {
+	// ValidateLogoHeader reads only the header, never a pixel buffer, so serving a stored logo cannot
+	// exhaust memory. A logo that is missing, unreadable, or over the dimension cap falls back
+	// to the bundled default.
+	if err = utils.ValidateLogoHeader(org.Logo); err != nil {
+		if len(org.Logo) > 0 {
+			log.Ctx(ctx).Warnf("stored organization logo is unusable (%v); serving the default logo", err)
+		}
+
+		if org.Logo, err = fs.ReadFile(h.PublicFilesFS, "img/logo.png"); err != nil {
 			httperror.InternalError(ctx, "Cannot open default logo", err, nil).Render(rw)
 			return
 		}
-
-		org.Logo = logoBytes
 	}
 
-	_, ext, err := image.Decode(bytes.NewReader(org.Logo))
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot decode organization logo", err, nil).Render(rw)
-		return
-	}
-
-	rw.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, fmt.Sprintf("logo.%s", ext)))
-	rw.Header().Set("Content-Type", http.DetectContentType(org.Logo))
+	contentType := http.DetectContentType(org.Logo)
+	rw.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="logo.%s"`, strings.TrimPrefix(contentType, "image/")))
+	rw.Header().Set("Content-Type", contentType)
 	_, err = rw.Write(org.Logo)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot write organization logo to response", err, nil).Render(rw)

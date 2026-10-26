@@ -7,8 +7,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "sdp.labelsWithSuffix" (list . "-tss") | nindent 4 }}
+    app.kubernetes.io/component: metrics
 spec:
-  type: {{ .Values.global.service.type }}
+  type: ClusterIP
   ports:
     - port: {{ include "tss.metricsPort" . }}
       targetPort: metrics

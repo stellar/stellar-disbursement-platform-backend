@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,17 +72,19 @@ func Test_WalletMembershipModel(t *testing.T) {
 		require.ErrorIs(t, gErr, ErrRecordAlreadyExists)
 	})
 
-	t.Run("owner role can never be wallet-scoped", func(t *testing.T) {
-		_, gErr := m.Insert(ctx, dbConnectionPool, userAlice, defaultWallet.ID, OwnerUserRole, nil)
-		require.Error(t, gErr)
-		assert.ErrorContains(t, gErr, "tenant-wide")
+	for _, role := range []UserRole{OwnerUserRole, DeveloperUserRole} {
+		t.Run(fmt.Sprintf("%s role can never be wallet-scoped", role), func(t *testing.T) {
+			_, gErr := m.Insert(ctx, dbConnectionPool, userAlice, defaultWallet.ID, role, nil)
+			require.ErrorIs(t, gErr, ErrMissingInput)
+			assert.ErrorContains(t, gErr, "tenant-wide")
 
-		// And the DB CHECK independently rejects it.
-		_, dbErr := dbConnectionPool.ExecContext(ctx, `
-			INSERT INTO wallet_memberships (user_id, wallet_id, role) VALUES ($1, $2, 'owner')`,
-			userAlice, defaultWallet.ID)
-		require.Error(t, dbErr)
-	})
+			// And the DB CHECK independently rejects it.
+			_, dbErr := dbConnectionPool.ExecContext(ctx, `
+				INSERT INTO wallet_memberships (user_id, wallet_id, role) VALUES ($1, $2, $3)`,
+				userAlice, defaultWallet.ID, role)
+			require.Error(t, dbErr)
+		})
+	}
 
 	t.Run("grants on archived wallets are rejected (API maps to 409)", func(t *testing.T) {
 		_, gErr := m.Insert(ctx, dbConnectionPool, userAlice, archivedWallet, ApproverUserRole, nil)

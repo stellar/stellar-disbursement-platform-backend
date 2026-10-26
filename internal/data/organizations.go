@@ -1,24 +1,15 @@
 package data
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"image"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
-
-	// Don't remove the `image/jpeg` and `image/png` packages import unless
-	// the `image` package is no longer necessary.
-	// It registers the `Decoders` to handle the image decoding - `image.Decode`.
-	// See https://pkg.go.dev/image#pkg-overview
-	_ "image/jpeg"
-	_ "image/png"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -55,6 +46,7 @@ type Organization struct {
 	MFADisabled                 *bool                  `json:"mfa_disabled" db:"mfa_disabled"`
 	CAPTCHADisabled             *bool                  `json:"captcha_disabled" db:"captcha_disabled"`
 	ReceiverInvitationsDisabled *bool                  `json:"receiver_invitations_disabled" db:"receiver_invitations_disabled"`
+	ReportingEnabled            *bool                  `json:"reporting_enabled" db:"reporting_enabled"`
 	// WebhookURL is the tenant-configured destination for outbox event delivery;
 	// delivery is skipped when unset.
 	WebhookURL *string `json:"webhook_url,omitempty" db:"webhook_url"`
@@ -85,15 +77,12 @@ type OrganizationUpdate struct {
 	MFADisabled     *bool `json:",omitempty"`
 	CAPTCHADisabled *bool `json:",omitempty"`
 
+	// Reporting
+	ReportingEnabled            *bool `json:",omitempty"`
 	ReceiverInvitationsDisabled *bool `json:",omitempty"`
 }
 
-type LogoType string
-
 const (
-	PNGLogoType  LogoType = "png"
-	JPEGLogoType LogoType = "jpeg"
-
 	// tzRegexExpression validates the TimezoneUTCOffset value. It expects the following format:
 	// 	plus or minus symbol + two numbers + colon symbol + two numbers
 	// Example:
@@ -108,23 +97,16 @@ func init() {
 	tzRegex = regexp.MustCompile(tzRegexExpression)
 }
 
-func (lt LogoType) ToHTTPContentType() string {
-	return fmt.Sprintf("image/%s", lt)
-}
-
 func (ou *OrganizationUpdate) validate() error {
 	if ou.areAllFieldsEmpty() {
 		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, Receiver invitation resend interval, Receiver registration invite template, OTP message template, privacy policy link or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
-		_, format, err := image.Decode(bytes.NewBuffer(ou.Logo))
-		if err != nil {
-			return fmt.Errorf("error decoding image bytes: %w", err)
-		}
-
-		if !strings.Contains(fmt.Sprintf("%s %s", PNGLogoType, JPEGLogoType), format) {
-			return fmt.Errorf("invalid image type provided. Expect %s or %s", PNGLogoType, JPEGLogoType)
+		// The data layer guards safety (format and dimensions) for every writer; payload
+		// integrity needs a full decode and is enforced once, in the upload handler.
+		if err := utils.ValidateLogoHeader(ou.Logo); err != nil {
+			return fmt.Errorf("invalid logo: %w", err)
 		}
 	}
 
@@ -301,6 +283,11 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.CAPTCHADisabled != nil {
 		fields = append(fields, "captcha_disabled = ?")
 		args = append(args, *ou.CAPTCHADisabled)
+	}
+
+	if ou.ReportingEnabled != nil {
+		fields = append(fields, "reporting_enabled = ?")
+		args = append(args, *ou.ReportingEnabled)
 	}
 
 	if ou.ReceiverInvitationsDisabled != nil {

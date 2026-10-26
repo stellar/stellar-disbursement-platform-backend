@@ -22,6 +22,7 @@ type TransactionError interface {
 	IsRetryable() bool
 	ShouldMarkAsError() bool
 	ShouldReportToCrashTracker() bool
+	IsOutcomeUnknown() bool
 	GetErrorType() string
 }
 
@@ -154,6 +155,12 @@ func (e *HorizonErrorWrapper) IsRateLimit() bool {
 
 func (e *HorizonErrorWrapper) IsGatewayTimeout() bool {
 	return e.IsHorizonError() && e.StatusCode == http.StatusGatewayTimeout
+}
+
+// IsOutcomeUnknown is true when Horizon returned no verdict on the envelope (non-Horizon error, or any 5xx incl. 504),
+// so it may still be included until its ledger bound.
+func (e *HorizonErrorWrapper) IsOutcomeUnknown() bool {
+	return !e.IsHorizonError() || e.StatusCode == 0 || e.StatusCode >= http.StatusInternalServerError
 }
 
 func (e *HorizonErrorWrapper) HasResultCodes() bool {
@@ -508,6 +515,11 @@ func (e *RPCErrorWrapper) IsRateLimit() bool {
 // IsGatewayTimeout returns true if this is a gateway timeout error (similar to Horizon)
 func (e *RPCErrorWrapper) IsGatewayTimeout() bool {
 	return e.SimulationError != nil && e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
+}
+
+// IsOutcomeUnknown is true when the RPC gave no verdict: a network failure or a non-simulation error.
+func (e *RPCErrorWrapper) IsOutcomeUnknown() bool {
+	return e.SimulationError == nil || e.SimulationError.Type == stellar.SimulationErrorTypeNetwork
 }
 
 // ShouldMarkAsError determines whether a transaction needs to be marked as an error based on the

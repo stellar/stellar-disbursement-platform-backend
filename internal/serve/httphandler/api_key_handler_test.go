@@ -20,6 +20,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -59,6 +61,7 @@ func setupHandler(t *testing.T) (APIKeyHandler, context.Context) {
 // is their own access, and nothing about the key changes afterwards when that access does.
 func Test_CreateAPIKey_WalletScope(t *testing.T) {
 	const developerUserID = "d24d2a52-9a4d-4b2f-b1b1-4d9f2a7f0c31"
+	const memberUserID = "6a1f0c2e-3b4d-4e5f-8a9b-0c1d2e3f4a5b"
 
 	setup := func(t *testing.T, user *auth.User) (APIKeyHandler, context.Context, *data.DistributionWallet, string) {
 		t.Helper()
@@ -73,8 +76,8 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 			INSERT INTO distribution_wallets (name, distribution_account_type)
 			VALUES ('scope-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
-		if !user.IsOwner {
-			_, err = models.WalletMemberships.Insert(ctx, pool, user.ID, walletA.ID, data.DeveloperUserRole, nil)
+		if !services.IsTenantWideUser(user) {
+			_, err = models.WalletMemberships.Insert(ctx, pool, user.ID, walletA.ID, data.UserRole(user.Roles[0]), nil)
 			require.NoError(t, err)
 		}
 
@@ -95,12 +98,13 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 	}
 
 	developer := &auth.User{ID: developerUserID, Roles: []string{string(data.DeveloperUserRole)}}
+	member := &auth.User{ID: memberUserID, Roles: []string{string(data.FinancialControllerUserRole)}}
 	owner := &auth.User{ID: adminUserID, IsOwner: true}
 
-	t.Run("a non-owner may scope a key to a wallet they hold", func(t *testing.T) {
-		handler, ctx, walletA, _ := setup(t, developer)
+	t.Run("a scoped member may scope a key to a wallet they hold", func(t *testing.T) {
+		handler, ctx, walletA, _ := setup(t, member)
 		rr := create(t, handler, ctx, map[string]any{
-			"name":                    "developer key",
+			"name":                    "member key",
 			"permissions":             []string{"read:payments"},
 			"distribution_wallet_ids": []string{walletA.ID},
 		})
@@ -111,8 +115,8 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 		assert.Equal(t, []string{walletA.ID}, []string(got.DistributionWalletIDs))
 	})
 
-	t.Run("a non-owner may not scope a key beyond their own memberships", func(t *testing.T) {
-		handler, ctx, _, walletBID := setup(t, developer)
+	t.Run("a scoped member may not scope a key beyond their own memberships", func(t *testing.T) {
+		handler, ctx, _, walletBID := setup(t, member)
 		rr := create(t, handler, ctx, map[string]any{
 			"name":                    "overreaching key",
 			"permissions":             []string{"read:payments"},
@@ -122,8 +126,8 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 		assert.NotContains(t, rr.Body.String(), "scope-wallet-b", "the refusal discloses no wallet detail")
 	})
 
-	t.Run("omitting the field inherits a non-owner's memberships, not the tenant", func(t *testing.T) {
-		handler, ctx, walletA, walletBID := setup(t, developer)
+	t.Run("omitting the field inherits a scoped member's memberships, not the tenant", func(t *testing.T) {
+		handler, ctx, walletA, walletBID := setup(t, member)
 		rr := create(t, handler, ctx, map[string]any{
 			"name": "inheriting key", "permissions": []string{"read:payments"},
 		})
@@ -135,17 +139,19 @@ func Test_CreateAPIKey_WalletScope(t *testing.T) {
 		assert.NotContains(t, got.DistributionWalletIDs, walletBID)
 	})
 
-	t.Run("omitting the field inherits every active wallet for an owner", func(t *testing.T) {
-		handler, ctx, walletA, walletBID := setup(t, owner)
-		rr := create(t, handler, ctx, map[string]any{
-			"name": "owner key", "permissions": []string{"read:payments"},
-		})
-		require.Equal(t, http.StatusCreated, rr.Code)
+	for name, creator := range map[string]*auth.User{"owner": owner, "developer": developer} {
+		t.Run("omitting the field inherits every active wallet for a tenant-wide "+name, func(t *testing.T) {
+			handler, ctx, walletA, walletBID := setup(t, creator)
+			rr := create(t, handler, ctx, map[string]any{
+				"name": "tenant-wide key", "permissions": []string{"read:payments"},
+			})
+			require.Equal(t, http.StatusCreated, rr.Code)
 
-		var got data.APIKey
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
-		assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(got.DistributionWalletIDs))
-	})
+			var got data.APIKey
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+			assert.ElementsMatch(t, []string{walletA.ID, walletBID}, []string(got.DistributionWalletIDs))
+		})
+	}
 
 	t.Run("an explicit empty list is honored as no wallet access", func(t *testing.T) {
 		handler, ctx, _, _ := setup(t, owner)
@@ -926,5 +932,174 @@ func Test_UpdateKeyEndpoints(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
+}
+
+// Test_APIKeyManagement_ActingKeyScope is the management-time counterpart of Test_CreateAPIKey_WalletScope: a key
+// reaches only siblings whose scope it covers; others are unlisted and not found. A signed-in user manages all theirs.
+func Test_APIKeyManagement_ActingKeyScope(t *testing.T) {
+	const developerUserID = "d24d2a52-9a4d-4b2f-b1b1-4d9f2a7f0c31"
+
+	pool := getDBConnectionPool(t)
+	models, err := data.NewModels(pool)
+	require.NoError(t, err)
+
+	userCtx := sdpcontext.SetUserIDInContext(context.Background(), developerUserID)
+	walletA := data.EnsureDefaultDistributionWalletFixture(t, userCtx, pool)
+	var walletBID string
+	require.NoError(t, pool.GetContext(userCtx, &walletBID, `
+		INSERT INTO distribution_wallets (name, distribution_account_type)
+		VALUES ('scope-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
+
+	// Developers are tenant-wide, so the signed-in path below needs no memberships.
+	developer := &auth.User{ID: developerUserID, Roles: []string{string(data.DeveloperUserRole)}}
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.On("GetUserByID", mock.Anything, developerUserID).Return(developer, nil).Maybe()
+	handler := APIKeyHandler{Models: models, AuthManager: authManagerMock}
+
+	r := chi.NewRouter()
+	r.Get("/api-keys", handler.GetAllAPIKeys)
+	r.Get("/api-keys/{id}", handler.GetAPIKeyByID)
+	r.Patch("/api-keys/{id}", handler.UpdateKey)
+	r.Delete("/api-keys/{id}", handler.DeleteAPIKey)
+
+	insert := func(t *testing.T, name string, perms []data.APIKeyPermission, scope []string) *data.APIKey {
+		t.Helper()
+		key, insertErr := models.APIKeys.Insert(userCtx, name, perms, nil, scope, nil, developerUserID)
+		require.NoError(t, insertErr)
+		return key
+	}
+	reload := func(t *testing.T, id string) *data.APIKey {
+		t.Helper()
+		key, getErr := models.APIKeys.GetByID(userCtx, id, developerUserID, nil)
+		require.NoError(t, getErr)
+		return key
+	}
+	do := func(t *testing.T, ctx context.Context, method, path string, body map[string]any) *httptest.ResponseRecorder {
+		t.Helper()
+		var reader io.Reader
+		if body != nil {
+			b, marshalErr := json.Marshal(body)
+			require.NoError(t, marshalErr)
+			reader = bytes.NewReader(b)
+		}
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, httptest.NewRequestWithContext(ctx, method, path, reader))
+		return rr
+	}
+	listedIDs := func(t *testing.T, ctx context.Context) []string {
+		t.Helper()
+		rr := do(t, ctx, http.MethodGet, "/api-keys", nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+		var list []data.APIKey
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &list))
+		ids := make([]string, 0, len(list))
+		for _, k := range list {
+			ids = append(ids, k.ID)
+		}
+		return ids
+	}
+	// writeToWalletBDenied drives the key through the two gates a payment from wallet B has to pass, the
+	// permission check and the account check, and asserts at least one of them refuses.
+	writeToWalletBDenied := func(t *testing.T, key *data.APIKey) {
+		t.Helper()
+		gate := middleware.RequirePermission(data.WritePayments, nil)(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if httpErr := ensureWalletActionAllowed(req.Context(), handler.AuthManager, handler.Models, walletBID); httpErr != nil {
+				httpErr.Render(w)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		rr := httptest.NewRecorder()
+		gate.ServeHTTP(rr, httptest.NewRequestWithContext(sdpcontext.SetAPIKeyInContext(userCtx, key), http.MethodPost, "/payments", nil))
+		assert.Equal(t, http.StatusForbidden, rr.Code, "%s must not be able to write from wallet B", key.Name)
+	}
+
+	// The report's setup: A writes on wallet A only, B reads on wallet B only. Neither can pay from B.
+	keyA := insert(t, "key A: write:all on A", []data.APIKeyPermission{data.WriteAll}, []string{walletA.ID})
+	keyB := insert(t, "key B: read:payments on B", []data.APIKeyPermission{data.ReadPayments}, []string{walletBID})
+	keyC := insert(t, "key C: sibling on A", []data.APIKeyPermission{data.ReadPayments}, []string{walletA.ID})
+	keyD := insert(t, "key D: sibling with no scope", []data.APIKeyPermission{data.ReadPayments}, []string{})
+	actingA := sdpcontext.SetAPIKeyInContext(userCtx, keyA)
+
+	writeToWalletBDenied(t, keyA)
+	writeToWalletBDenied(t, keyB)
+
+	t.Run("a key cannot raise a sibling it cannot act for, even without touching its scope", func(t *testing.T) {
+		rr := do(t, actingA, http.MethodPatch, "/api-keys/"+keyB.ID, map[string]any{"permissions": []string{"write:all"}})
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.NotContains(t, rr.Body.String(), walletBID, "the refusal discloses nothing about the sibling")
+
+		after := reload(t, keyB.ID)
+		assert.Equal(t, data.APIKeyPermissions{data.ReadPayments}, after.Permissions)
+		assert.Equal(t, pq.StringArray{walletBID}, after.DistributionWalletIDs)
+
+		// The differential from the report: the pair still cannot produce a wallet-B write.
+		writeToWalletBDenied(t, keyA)
+		writeToWalletBDenied(t, after)
+	})
+
+	t.Run("a key lists only the siblings it covers", func(t *testing.T) {
+		ids := listedIDs(t, actingA)
+		assert.ElementsMatch(t, []string{keyA.ID, keyC.ID, keyD.ID}, ids)
+		assert.NotContains(t, ids, keyB.ID)
+	})
+
+	t.Run("a sibling outside the key's scope reads as not found", func(t *testing.T) {
+		assert.Equal(t, http.StatusNotFound, do(t, actingA, http.MethodGet, "/api-keys/"+keyB.ID, nil).Code)
+		assert.Equal(t, http.StatusOK, do(t, actingA, http.MethodGet, "/api-keys/"+keyC.ID, nil).Code)
+		assert.Equal(t, http.StatusOK, do(t, actingA, http.MethodGet, "/api-keys/"+keyD.ID, nil).Code)
+	})
+
+	t.Run("a key cannot delete a sibling it cannot act for", func(t *testing.T) {
+		assert.Equal(t, http.StatusNotFound, do(t, actingA, http.MethodDelete, "/api-keys/"+keyB.ID, nil).Code)
+		reload(t, keyB.ID)
+	})
+
+	t.Run("a key manages the siblings it covers, within the creation cap", func(t *testing.T) {
+		rr := do(t, actingA, http.MethodPatch, "/api-keys/"+keyC.ID, map[string]any{"permissions": []string{"read:statistics"}})
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, data.APIKeyPermissions{data.ReadStatistics}, reload(t, keyC.ID).Permissions)
+
+		// Covering a sibling does not let the key hand it an account the key itself cannot reach.
+		rr = do(t, actingA, http.MethodPatch, "/api-keys/"+keyC.ID, map[string]any{
+			"permissions": []string{"read:statistics"}, "distribution_wallet_ids": []string{walletBID},
+		})
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Equal(t, pq.StringArray{walletA.ID}, reload(t, keyC.ID).DistributionWalletIDs)
+
+		assert.Equal(t, http.StatusNoContent, do(t, actingA, http.MethodDelete, "/api-keys/"+keyD.ID, nil).Code)
+		_, getErr := models.APIKeys.GetByID(userCtx, keyD.ID, developerUserID, nil)
+		assert.ErrorIs(t, getErr, data.ErrRecordNotFound)
+	})
+
+	t.Run("a key covering the sibling's accounts manages it", func(t *testing.T) {
+		keyAB := insert(t, "key AB: write:all on A and B", []data.APIKeyPermission{data.WriteAll}, []string{walletA.ID, walletBID})
+		keyOnB := insert(t, "key on B: read:payments", []data.APIKeyPermission{data.ReadPayments}, []string{walletBID})
+		actingAB := sdpcontext.SetAPIKeyInContext(userCtx, keyAB)
+
+		assert.Contains(t, listedIDs(t, actingAB), keyOnB.ID)
+		rr := do(t, actingAB, http.MethodPatch, "/api-keys/"+keyOnB.ID, map[string]any{"permissions": []string{"read:statistics"}})
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, data.APIKeyPermissions{data.ReadStatistics}, reload(t, keyOnB.ID).Permissions)
+	})
+
+	t.Run("an unscoped key reaches only unscoped keys", func(t *testing.T) {
+		keyNone := insert(t, "key with no scope", []data.APIKeyPermission{data.WriteAll}, []string{})
+		actingNone := sdpcontext.SetAPIKeyInContext(userCtx, keyNone)
+
+		assert.ElementsMatch(t, []string{keyNone.ID}, listedIDs(t, actingNone))
+		assert.Equal(t, http.StatusNotFound, do(t, actingNone, http.MethodPatch, "/api-keys/"+keyC.ID, map[string]any{"permissions": []string{"write:all"}}).Code)
+	})
+
+	t.Run("a signed-in user still manages every key they created", func(t *testing.T) {
+		assert.Contains(t, listedIDs(t, userCtx), keyB.ID)
+		assert.Equal(t, http.StatusOK, do(t, userCtx, http.MethodGet, "/api-keys/"+keyB.ID, nil).Code)
+
+		rr := do(t, userCtx, http.MethodPatch, "/api-keys/"+keyB.ID, map[string]any{"permissions": []string{"read:statistics"}})
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, data.APIKeyPermissions{data.ReadStatistics}, reload(t, keyB.ID).Permissions)
+
+		assert.Equal(t, http.StatusNoContent, do(t, userCtx, http.MethodDelete, "/api-keys/"+keyB.ID, nil).Code)
 	})
 }

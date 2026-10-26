@@ -17,6 +17,17 @@ const (
 	MessageTypeReceiverOTP        MessageType = "receiver_otp"
 )
 
+// IsTrustedHTMLBody reports whether this type's body is trusted, fully-formed HTML (staff emails).
+// Everything else — receiver messages and unknown types — is escaped before embedding in an email.
+func (t MessageType) IsTrustedHTMLBody() bool {
+	switch t {
+	case MessageTypeUserForgotPassword, MessageTypeUserMFA, MessageTypeUserInvitation:
+		return true
+	default:
+		return false
+	}
+}
+
 type TemplateVariable string
 
 const (

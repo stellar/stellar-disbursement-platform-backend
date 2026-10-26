@@ -92,6 +92,46 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 		assert.JSONEq(t, string(expectedJSON), string(respBody))
 	})
 
+	t.Run("include_deleted=true lists retired assets too, absent or false excludes them", func(t *testing.T) {
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Len(t, assets, 2)
+		retired, sdErr := models.Assets.SoftDelete(ctx, dbConnectionPool, assets[0].ID)
+		require.NoError(t, sdErr)
+
+		list := func(query string) []data.Asset {
+			rr := httptest.NewRecorder()
+			req, reqErr := http.NewRequest("GET", "/assets"+query, nil)
+			require.NoError(t, reqErr)
+			http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+			var got []data.Asset
+			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &got))
+			return got
+		}
+
+		all := list("?include_deleted=true")
+		require.Len(t, all, 2)
+		assert.Equal(t, retired.ID, all[0].ID)
+		assert.NotNil(t, all[0].DeletedAt)
+
+		for _, query := range []string{"", "?include_deleted=false"} {
+			live := list(query)
+			require.Len(t, live, 1, query)
+			assert.Equal(t, assets[1].ID, live[0].ID, query)
+		}
+	})
+
+	t.Run("returns error for invalid include_deleted parameter", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, reqErr := http.NewRequest("GET", "/assets?include_deleted=maybe", nil)
+		require.NoError(t, reqErr)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid 'include_deleted' parameter value")
+	})
+
 	t.Run("successfully returns a list of assets by wallet ID", func(t *testing.T) {
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		require.Equal(t, 2, len(assets))
@@ -1257,6 +1297,274 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	horizonClientMock.AssertExpectations(t)
 }
 
+// Multi-account tenant: the trustline step is per account, the soft delete is tenant-wide and
+// must wait for the last trustline. Everything goes through the header-less path (tenant default
+// as the target) to keep request plumbing out of the way; X-Wallet-Id routing is covered in
+// Test_AssetsHandler_XWalletIDRouting. Unexpected Horizon calls fail the subtest, which is how
+// "the archived wallet was consulted" or "the check ran on a retired asset" are detected.
+func Test_AssetHandler_DeleteAsset_PerAccount(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	defaultKP := keypair.MustRandom()
+	defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
+	_, err = models.DistributionWallets.UpdateAddress(ctx, dbConnectionPool, defaultWallet.ID, defaultKP.Address())
+	require.NoError(t, err)
+	defaultAccount := schema.NewDefaultStellarTransactionAccount(defaultKP.Address())
+
+	// Wallet B is the other active account; the archived and the pending wallets must never be
+	// consulted (no mock expectation is ever registered for them).
+	walletBKP := keypair.MustRandom()
+	archivedKP := keypair.MustRandom()
+	_, err = dbConnectionPool.ExecContext(ctx, `
+		INSERT INTO distribution_wallets (name, distribution_account_type, distribution_account_address, status, archived_at)
+		VALUES ('wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', $1, 'ACTIVE', NULL),
+		       ('wallet-archived', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', $2, 'ARCHIVED', NOW()),
+		       ('wallet-pending', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT', NULL, 'PENDING', NULL)`,
+		walletBKP.Address(), archivedKP.Address())
+	require.NoError(t, err)
+
+	const (
+		assetCode   = "USDT"
+		assetIssuer = "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
+	)
+	creditAsset := txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}
+	trusting := []horizon.Balance{{Asset: base.Asset{Type: "credit_alphanum4", Code: assetCode, Issuer: assetIssuer}, Balance: "0.0000000"}}
+	notTrusting := []horizon.Balance{{Asset: base.Asset{Type: "native"}, Balance: "100.0000000"}}
+
+	newHandler := func(t *testing.T) (*AssetsHandler, *horizonclient.MockClient, *sigMocks.MockSignerRouter) {
+		t.Helper()
+
+		horizonClientMock := &horizonclient.MockClient{}
+		signatureService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
+		distAccResolver.On("DistributionAccountFromContext", mock.Anything).Return(defaultAccount, nil).Maybe()
+
+		return &AssetsHandler{
+			Models: models,
+			SubmitterEngine: engine.SubmitterEngine{
+				SignatureService:    signatureService,
+				HorizonClient:       horizonClientMock,
+				LedgerNumberTracker: preconditionsMocks.NewMockLedgerNumberTracker(t),
+				MaxBaseFee:          200,
+			},
+			GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
+		}, horizonClientMock, sigRouter
+	}
+
+	// expectDefaultAccount registers the Horizon read of the selected (default) account.
+	expectDefaultAccount := func(horizonClientMock *horizonclient.MockClient, balances []horizon.Balance) {
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: defaultKP.Address()}).
+			Return(horizon.Account{AccountID: defaultKP.Address(), Sequence: 123, Balances: balances}, nil).
+			Once()
+	}
+
+	// expectRemoveTrustline registers the signed ChangeTrust(limit 0) submission from the default account.
+	expectRemoveTrustline := func(t *testing.T, horizonClientMock *horizonclient.MockClient, sigRouter *sigMocks.MockSignerRouter) {
+		t.Helper()
+
+		expectedTx, txErr := txnbuild.NewTransaction(txnbuild.TransactionParams{
+			SourceAccount:        &txnbuild.SimpleAccount{AccountID: defaultKP.Address(), Sequence: 124},
+			IncrementSequenceNum: false,
+			Operations: []txnbuild.Operation{&txnbuild.ChangeTrust{
+				Line:          txnbuild.ChangeTrustAssetWrapper{Asset: creditAsset},
+				Limit:         "0",
+				SourceAccount: defaultKP.Address(),
+			}},
+			BaseFee:       200,
+			Preconditions: defaultPreconditions,
+		})
+		require.NoError(t, txErr)
+		signedTx, signErr := expectedTx.Sign(network.TestNetworkPassphrase, defaultKP)
+		require.NoError(t, signErr)
+
+		sigRouter.On("SignStellarTransaction", mock.Anything, expectedTx, defaultAccount).Return(signedTx, nil).Once()
+		horizonClientMock.
+			On("SubmitTransactionWithOptions", signedTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).
+			Once()
+	}
+
+	expectWalletB := func(horizonClientMock *horizonclient.MockClient, balances []horizon.Balance, hErr error) {
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: walletBKP.Address()}).
+			Return(horizon.Account{AccountID: walletBKP.Address(), Sequence: 1, Balances: balances}, hErr).
+			Once()
+	}
+
+	deleteAsset := func(t *testing.T, handler *AssetsHandler, assetID string) *httptest.ResponseRecorder {
+		t.Helper()
+
+		req := httptest.NewRequest(http.MethodDelete, "/assets/"+assetID, nil)
+		routeCtx := chi.NewRouteContext()
+		routeCtx.URLParams.Add("id", assetID)
+		req = req.WithContext(context.WithValue(ctx, chi.RouteCtxKey, routeCtx))
+
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handler.DeleteAsset).ServeHTTP(rr, req)
+		return rr
+	}
+
+	getAsset := func(t *testing.T, id string) *data.Asset {
+		t.Helper()
+		a, gErr := models.Assets.Get(ctx, id)
+		require.NoError(t, gErr)
+		return a
+	}
+
+	t.Run("keeps the asset in the catalogue while another active account still trusts it", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, sigRouter := newHandler(t)
+		expectDefaultAccount(horizonClientMock, trusting)
+		expectRemoveTrustline(t, horizonClientMock, sigRouter)
+		expectWalletB(horizonClientMock, trusting, nil)
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+
+		assert.Nil(t, getAsset(t, asset.ID).DeletedAt)
+		live, lErr := models.Assets.GetAll(ctx, false)
+		require.NoError(t, lErr)
+		assert.Len(t, live, 1, "the asset must still be listed")
+	})
+
+	t.Run("retires the asset once the last active account dropped it", func(t *testing.T) {
+		// The archived wallet is never consulted (no mock for its address), so it cannot keep
+		// the asset alive.
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, sigRouter := newHandler(t)
+		expectDefaultAccount(horizonClientMock, trusting)
+		expectRemoveTrustline(t, horizonClientMock, sigRouter)
+		expectWalletB(horizonClientMock, notTrusting, nil)
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+
+		var body data.Asset
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
+		assert.NotNil(t, body.DeletedAt, "the response carries the retired row")
+		assert.NotNil(t, getAsset(t, asset.ID).DeletedAt)
+	})
+
+	t.Run("still removes the trustline of an already-retired asset", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		_, sdErr := models.Assets.SoftDelete(ctx, dbConnectionPool, asset.ID)
+		require.NoError(t, sdErr)
+		handler, horizonClientMock, sigRouter := newHandler(t)
+		expectDefaultAccount(horizonClientMock, trusting)
+		expectRemoveTrustline(t, horizonClientMock, sigRouter)
+		// No other-account check: the asset is retired already.
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+		assert.NotNil(t, getAsset(t, asset.ID).DeletedAt)
+	})
+
+	t.Run("is idempotent: nothing on-chain for a retired asset submits nothing", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		_, sdErr := models.Assets.SoftDelete(ctx, dbConnectionPool, asset.ID)
+		require.NoError(t, sdErr)
+		handler, horizonClientMock, _ := newHandler(t)
+		expectDefaultAccount(horizonClientMock, notTrusting)
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+	})
+
+	t.Run("retires a live asset no account trusts anymore without submitting anything", func(t *testing.T) {
+		// Covers the trustline having been removed outside the SDP, and the second half of a
+		// removal whose other-account check could not complete the first time.
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, _ := newHandler(t)
+		expectDefaultAccount(horizonClientMock, notTrusting)
+		expectWalletB(horizonClientMock, notTrusting, nil)
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+		assert.NotNil(t, getAsset(t, asset.ID).DeletedAt)
+	})
+
+	t.Run("a Horizon failure on another account leaves the asset in the catalogue", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, sigRouter := newHandler(t)
+		expectDefaultAccount(horizonClientMock, trusting)
+		expectRemoveTrustline(t, horizonClientMock, sigRouter)
+		expectWalletB(horizonClientMock, nil, horizonclient.Error{
+			Response: &http.Response{StatusCode: http.StatusInternalServerError},
+			Problem:  problem.P{Type: "https://stellar.org/horizon-errors/server_error", Status: http.StatusInternalServerError},
+		})
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+
+		assert.Nil(t, getAsset(t, asset.ID).DeletedAt, "unknown must count as still trusting")
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Contains(t, entries[0].Message, "not retiring asset USDT:"+assetIssuer)
+	})
+
+	t.Run("an account Horizon does not know counts as not trusting", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, sigRouter := newHandler(t)
+		expectDefaultAccount(horizonClientMock, trusting)
+		expectRemoveTrustline(t, horizonClientMock, sigRouter)
+		expectWalletB(horizonClientMock, nil, horizonclient.Error{
+			Response: &http.Response{StatusCode: http.StatusNotFound},
+			Problem:  problem.P{Type: "https://stellar.org/horizon-errors/not_found", Status: http.StatusNotFound},
+		})
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+		assert.NotNil(t, getAsset(t, asset.ID).DeletedAt)
+	})
+
+	t.Run("422 while the selected account holds a balance, nothing else is consulted", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assetCode, assetIssuer)
+		handler, horizonClientMock, _ := newHandler(t)
+		expectDefaultAccount(horizonClientMock, []horizon.Balance{{Asset: base.Asset{Type: "credit_alphanum4", Code: assetCode, Issuer: assetIssuer}, Balance: "12.5000000"}})
+
+		rr := deleteAsset(t, handler, asset.ID)
+		require.Equal(t, http.StatusUnprocessableEntity, rr.Code, rr.Body.String())
+		horizonClientMock.AssertExpectations(t)
+		assert.Nil(t, getAsset(t, asset.ID).DeletedAt)
+	})
+
+	t.Run("refuses the native asset", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+		handler, horizonClientMock, _ := newHandler(t)
+
+		rr := deleteAsset(t, handler, xlm.ID)
+		require.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+		assert.Contains(t, rr.Body.String(), "The native asset (XLM) cannot be removed")
+		horizonClientMock.AssertExpectations(t)
+		assert.Nil(t, getAsset(t, xlm.ID).DeletedAt)
+	})
+}
+
 func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
@@ -2213,7 +2521,7 @@ func Test_AssetsHandler_XWalletIDRouting(t *testing.T) {
 
 		horizonClientMock.AssertExpectations(t)
 
-		createdAssets, aErr := models.Assets.GetAll(ctx)
+		createdAssets, aErr := models.Assets.GetAll(ctx, false)
 		require.NoError(t, aErr)
 		require.Len(t, createdAssets, 1)
 		assert.Equal(t, assetCode, createdAssets[0].Code)
@@ -2256,7 +2564,7 @@ func Test_AssetsHandler_XWalletIDRouting(t *testing.T) {
 		require.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
 		assert.NotContains(t, rr.Body.String(), "assets-wallet-b", "403 must not disclose wallet details")
 
-		remaining, aErr := models.Assets.GetAll(ctx)
+		remaining, aErr := models.Assets.GetAll(ctx, false)
 		require.NoError(t, aErr)
 		assert.Empty(t, remaining, "a rejected request must not insert the asset")
 	})
@@ -2286,11 +2594,22 @@ func Test_AssetsHandler_XWalletIDRouting(t *testing.T) {
 		routeCtx.URLParams.Add("id", asset.ID)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeCtx))
 
+		// The other active wallet (the default) no longer trusts the asset, so the catalogue
+		// entry is retired too. The pending wallet has no account and is never consulted.
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: defaultKP.Address()}).
+			Return(horizon.Account{AccountID: defaultKP.Address(), Sequence: 1}, nil).
+			Once()
+
 		rr := httptest.NewRecorder()
 		http.HandlerFunc(handler.DeleteAsset).ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 
 		horizonClientMock.AssertExpectations(t)
+
+		assetDB, gErr := models.Assets.Get(ctx, asset.ID)
+		require.NoError(t, gErr)
+		assert.NotNil(t, assetDB.DeletedAt)
 	})
 
 	getAssets := func(t *testing.T, handler *AssetsHandler, userID, headerWalletID, query string) *httptest.ResponseRecorder {

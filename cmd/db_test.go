@@ -496,7 +496,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 		data.CreateAssetFixture(t, ctx, tenantSchemaConnectionPool, "USDC", randomUSDCIssuer)
 
-		assets, aErr := models.Assets.GetAll(ctx)
+		assets, aErr := models.Assets.GetAll(ctx, false)
 		require.NoError(t, aErr)
 
 		assert.Len(t, assets, 1)
@@ -544,7 +544,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		require.NoError(t, mErr)
 
 		// Validating assets
-		actualAssets, aErr := models.Assets.GetAll(ctx)
+		actualAssets, aErr := models.Assets.GetAll(ctx, false)
 		require.NoError(t, aErr)
 
 		assert.Len(t, actualAssets, 3)
@@ -602,7 +602,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validating assets
-		actualAssets, err = models.Assets.GetAll(ctx)
+		actualAssets, err = models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		require.Len(t, actualAssets, 3)
@@ -684,7 +684,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validating assets
-		currentAssets, err := models.Assets.GetAll(ctx)
+		currentAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, currentAssets, 1)
@@ -709,7 +709,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validating assets
-		actualAssets, err := models.Assets.GetAll(ctx)
+		actualAssets, err := models.Assets.GetAll(ctx, false)
 		require.NoError(t, err)
 
 		assert.Len(t, actualAssets, 3)

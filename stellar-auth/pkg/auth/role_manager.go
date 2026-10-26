@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/lib/pq"
 
@@ -34,7 +35,7 @@ type defaultRoleManager struct {
 }
 
 func (rm *defaultRoleManager) getUserRolesInfo(ctx context.Context, user *User) (*userRolesInfo, error) {
-	const query = "SELECT roles, is_owner FROM auth_users WHERE id = $1"
+	const query = "SELECT roles, is_owner FROM auth_users WHERE id = $1 AND is_active = true"
 
 	var ur userRolesInfo
 	err := rm.dbConnectionPool.GetContext(ctx, &ur, query, user.ID)
@@ -111,22 +112,52 @@ func (rm *defaultRoleManager) IsSuperUser(ctx context.Context, user *User) (bool
 }
 
 func (rm *defaultRoleManager) UpdateRoles(ctx context.Context, user *User, roleNames []string) error {
-	const query = "UPDATE auth_users SET roles = $1 WHERE id = $2"
-	result, err := rm.dbConnectionPool.ExecContext(ctx, query, pq.Array(roleNames), user.ID)
-	if err != nil {
-		return fmt.Errorf("error updating user roles ID %s roles: %w", user.ID, err)
+	return db.RunInTransaction(ctx, rm.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		if !slices.Contains(roleNames, rm.ownerRoleName) {
+			ownerIDs, err := lockActiveOwnerIDs(ctx, dbTx, rm.ownerRoleName)
+			if err != nil {
+				return err
+			}
+			if isLastOwner(ownerIDs, user.ID) {
+				return ErrLastOwner
+			}
+		}
+
+		// The owner flag mirrors the owner role.
+		const query = "UPDATE auth_users SET roles = $1, is_owner = COALESCE($3 = ANY($1::text[]), false) WHERE id = $2"
+		result, err := dbTx.ExecContext(ctx, query, pq.Array(roleNames), user.ID, rm.ownerRoleName)
+		if err != nil {
+			return fmt.Errorf("error updating user roles ID %s roles: %w", user.ID, err)
+		}
+
+		numRowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("error getting number of rows affected: %w", err)
+		}
+
+		if numRowsAffected == 0 {
+			return ErrNoRowsAffected
+		}
+
+		return nil
+	})
+}
+
+// lockActiveOwnerIDs locks the active owners' rows so concurrent demotions and deactivations
+// run one at a time and can't remove the last owner together.
+func lockActiveOwnerIDs(ctx context.Context, sqlExec db.SQLExecuter, ownerRoleName string) ([]string, error) {
+	const query = "SELECT id FROM auth_users WHERE is_active AND (is_owner OR $1 = ANY(roles)) ORDER BY id FOR UPDATE"
+
+	var ownerIDs []string
+	if err := sqlExec.SelectContext(ctx, &ownerIDs, query, ownerRoleName); err != nil {
+		return nil, fmt.Errorf("locking active owners: %w", err)
 	}
 
-	numRowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("error getting number of rows affected: %w", err)
-	}
+	return ownerIDs, nil
+}
 
-	if numRowsAffected == 0 {
-		return ErrNoRowsAffected
-	}
-
-	return nil
+func isLastOwner(ownerIDs []string, userID string) bool {
+	return len(ownerIDs) == 1 && ownerIDs[0] == userID
 }
 
 var _ RoleManager = (*defaultRoleManager)(nil)

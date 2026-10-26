@@ -61,6 +61,7 @@ BEGIN
             SELECT count(*) FROM %I.auth_users u
             WHERE NOT u.is_owner
               AND NOT ('owner' = ANY(COALESCE(u.roles, '{}')))
+              AND NOT ('developer' = ANY(COALESCE(u.roles, '{}')))
               AND NOT EXISTS (SELECT 1 FROM %I.wallet_memberships m WHERE m.user_id = u.id)
         $q$, s, s) INTO n_users;
         IF n_users > 0 THEN
@@ -105,12 +106,13 @@ Then smoke test that an existing tenant still lists and starts disbursements as 
 
 For API integrators:
 - Once a tenant has more than one active distribution account, reads are scoped to the accounts the caller / API key can reach: lists (`GET /disbursements`, `/payments`, `/receivers`, `/exports/*`) return fewer rows, and single-resource reads (`GET /disbursements/{id}`, `/payments/{id}`, `/receivers/{id}`, `/statistics/{id}`) return `404` outside that scope. Single-account tenants are unaffected.
-- When authenticating **with an API key**, tenant-wide endpoints (`/organization`, `/organization/circle-config`, `/distribution-wallets`) require the key to be **minted by an Owner**.
+- Endpoints that act on one distribution account (read, archive, promote to default, memberships, audit) also require that account to be in the API key's scope, or return `404`.
+    - Promoting to default also requires the current default account in scope, or returns `403`.
+- `/api-keys` reaches only keys whose scope is within the acting API key's own; others are not listed and return `404`.
 - The `X-Wallet-Id` **request header** becomes required when creating disbursements, payments and receivers via direct API call, once a tenant has more than one active distribution account. Existing integrations keep working until a second account is added.
 - The payment response field `circle_transfer_request_id` is **renamed to `circle_transaction_id`**, and a new `circle_transaction_type` field (`PAYOUT` or `TRANSFER`) says which Circle API produced it. The old field only ever held Transfers API IDs and was always absent for tenants on the Payouts API; the new one carries whichever ID applies. Affects `GET /payments` and `GET /payments/{id}`.
     - `GET /exports/payments` is also affected: the column `CircleTransferRequestID` is renamed to `CircleTransactionID`, and a `CircleTransactionType` column is added.
 - `PATCH /receivers/{receiver_id}/wallets/{receiver_wallet_id}` returns `404` instead of `400` when the receiver wallet belongs to a different receiver. Clients matching on the old error message will break.
-- `PATCH /receivers/{id}` returns `409` when contact details are changed while the receiver has payments in flight.
 - `GET /statistics` groups payment amounts by asset issuer as well as code, and each entry gains `asset_issuer`. A tenant holding two issuers of the same asset code now sees two entries with the same `asset_code` where it previously saw one merged entry.
 - `disbursement_status` gains a `CANCELED` value. Clients that switch exhaustively on status need to handle it.
 

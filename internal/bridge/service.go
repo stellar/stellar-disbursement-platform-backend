@@ -9,7 +9,9 @@ import (
 
 	"github.com/stellar/go-stellar-sdk/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -120,6 +122,7 @@ var (
 	ErrBridgeUSDCTrustlineRequired       = errors.New("distribution account must have a USDC trustline to opt into Bridge integration")
 	ErrBridgeInvalidCustomerID           = errors.New("provided Bridge customer ID is not valid")
 	ErrBridgeCustomerNotActive           = errors.New("provided Bridge customer is not active")
+	ErrBridgeCustomerAlreadyBound        = errors.New("provided Bridge customer is already linked to another organization")
 )
 
 type OptInOptions struct {
@@ -183,7 +186,7 @@ func (s *Service) OptInToBridge(ctx context.Context, opts OptInOptions) (*Bridge
 	}
 
 	// 4. Persist the Bridge integration IDs in the database
-	integration, err := s.models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
+	integration, err := s.models.BridgeIntegration.Insert(ctx, s.models.DBConnectionPool, data.BridgeIntegrationInsert{
 		KYCLinkID:  utils.StringPtr(kycLinkInfo.ID),
 		CustomerID: kycLinkInfo.CustomerID,
 		OptedInBy:  opts.UserID,
@@ -431,11 +434,13 @@ func (s *Service) OptInForExistingCustomer(ctx context.Context, customerID, user
 		return nil, ErrBridgeCustomerNotActive
 	}
 
-	// 3. Store Bridge integration with provided customer ID
-	integration, err := s.models.BridgeIntegration.Insert(ctx, data.BridgeIntegrationInsert{
-		CustomerID: customerID,
-		OptedInBy:  userID,
-	})
+	if !strings.EqualFold(customerInfo.ID, customerID) {
+		log.Ctx(ctx).Errorf("Bridge returned customer ID %q when validating customer ID %s", customerInfo.ID, customerID)
+		return nil, fmt.Errorf("%w: Bridge returned a different customer ID", ErrBridgeInvalidCustomerID)
+	}
+
+	// 3. Store Bridge integration with the canonical customer ID, unless another tenant already holds it
+	integration, err := s.claimCustomer(ctx, customerInfo.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("storing manual Bridge integration in database: %w", err)
 	}
@@ -446,4 +451,43 @@ func (s *Service) OptInForExistingCustomer(ctx context.Context, customerID, user
 		OptedInBy:  integration.OptedInBy,
 		OptedInAt:  integration.OptedInAt,
 	}, nil
+}
+
+// acquireBridgeCustomerLock serializes opt-ins for one Bridge customer ID via a transaction-scoped advisory lock.
+func acquireBridgeCustomerLock(ctx context.Context, dbTx db.DBTransaction, customerID string) error {
+	if _, err := dbTx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext('bridge_customer_id'), hashtext($1))", customerID); err != nil {
+		return fmt.Errorf("acquiring lock for Bridge customer ID %s: %w", customerID, err)
+	}
+	return nil
+}
+
+// claimCustomer stores integration for customerID, or returns error if another tenant already holds it.
+func (s *Service) claimCustomer(ctx context.Context, customerID, userID string) (*data.BridgeIntegration, error) {
+	currentTenant, err := sdpcontext.GetTenantFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting tenant from context: %w", err)
+	}
+	ownSchema := fmt.Sprintf("sdp_%s", currentTenant.Name)
+
+	return db.RunInTransactionWithResult(ctx, s.models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.BridgeIntegration, error) {
+		// Serialize the check and the insert so two tenants cannot both pass the check.
+		if lockErr := acquireBridgeCustomerLock(ctx, dbTx, customerID); lockErr != nil {
+			return nil, lockErr
+		}
+
+		holder, lookupErr := s.models.BridgeIntegration.OtherTenantSchemaFor(ctx, dbTx, customerID, ownSchema)
+		if lookupErr == nil {
+			log.Ctx(ctx).Warnf("Tenant %s tried to opt in with Bridge customer ID %s, already held by schema %s", currentTenant.ID, customerID, holder)
+			return nil, ErrBridgeCustomerAlreadyBound
+		}
+		if !errors.Is(lookupErr, data.ErrRecordNotFound) {
+			return nil, fmt.Errorf("checking Bridge customer ID %s across tenants: %w", customerID, lookupErr)
+		}
+
+		// Same transaction as the lock, so a waiting opt-in sees this row once the lock is released.
+		return s.models.BridgeIntegration.Insert(ctx, dbTx, data.BridgeIntegrationInsert{
+			CustomerID: customerID,
+			OptedInBy:  userID,
+		})
+	})
 }
