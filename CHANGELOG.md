@@ -6,10 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [7.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/7.0.0...7.1.0))
+
 ### Added
 
 - Add Reports generation: a per-distribution account statement PDF (`GET /reports/statement`) and a per-payment transaction notice PDF (`GET /reports/payment/{id}`). [#1228](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1228)
-- Portuguese translations for the SEP-24 webview. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
+- Add Socket Tier 1 reachability analysis. [#1159](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1159)
+- Add Portuguese translations for the SEP-24 webview. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
 
 ### Changed
 
@@ -32,7 +35,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Stop insufficient-balance errors from reporting a 0.00 shortfall. [#1219](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1219)
 - Bound Prometheus `method` metric label to an allowlist to prevent memory-exhaustion from unbounded label cardinality. [#1221](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1221)
 - Keep Owner flag in sync with Owner role. [#1222](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1222)
-- Strip caller headers and query string from RPC proxy requests. [#1224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1224)
 - Reject tokens without a user claim on staff endpoints. [#1225](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1225)
 - Limit CSV dimensions before parsing. [#1229](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1229)
 - Bound password validation errors on over-length input. [#1230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1230)
@@ -54,8 +56,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Verify the SEP-10 `client_domain` signature against the operation source account. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
 - Return `400 Bad Request` instead of `500` when a `client_domain` signing key cannot be resolved. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
 - Harden URL shortener against enumeration: increase shortcode entropy and rate-limit GET /r/{code} per client IP. [#1204](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1204)
+- Strip caller headers and query string from RPC proxy requests. [#1224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1224)
 - Publish Docker Compose ports on `127.0.0.1` by default. [#1238](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1238)
 - Ignore RUSTSEC-2026-0387 in contracts cargo audit. [#1249](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1249)
+- Bump the minor-and-patch group across 1 directory with 9 updates. [#1210](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1210)
+- Bump js-yaml from 4.3.1 to 4.3.2 in the npm_and_yarn group. [#1211](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1211)
+- Bump the all-actions group across 1 directory with 3 updates. [#1231](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1231)
+- Bump the minor-and-patch group across 1 directory with 15 updates. [#1242](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1242)
+- Bump source-map-js from 1.2.1 to 1.2.2 in the npm_and_yarn group. [#1244](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1244)
 
 ## [7.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.1...7.0.0))
 
