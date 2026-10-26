@@ -1,0 +1,8 @@
+# Read by `cargo audit` when run from contracts/ (Contract Build workflow).
+[advisories]
+ignore = [
+    # crypto-bigint 0.5.5 (no fixed 0.5.x). Test build only, via soroban-sdk testutils and the p256 dev-dependency;
+    # not compiled into the contract WASM, and the network host verifies signatures. Remove once soroban-sdk uses
+    # elliptic-curve 0.14; re-check if p256 or soroban-env-host becomes a normal contract dependency.
+    "RUSTSEC-2026-0387",
+]
