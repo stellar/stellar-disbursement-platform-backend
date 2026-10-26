@@ -53,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Return `400 Bad Request` instead of `500` when a `client_domain` signing key cannot be resolved. [#1199](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1199)
 - Harden URL shortener against enumeration: increase shortcode entropy and rate-limit GET /r/{code} per client IP. [#1204](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1204)
 - Publish Docker Compose ports on `127.0.0.1` by default. [#1238](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1238)
+- Ignore RUSTSEC-2026-0387 in contracts cargo audit. [#1249](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1249)
 
 ## [7.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/6.6.1...7.0.0))
 
