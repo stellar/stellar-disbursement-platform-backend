@@ -1,8 +1,4 @@
 services:
-  sdp-frontend:
-    extends:
-      file: docker-compose-frontend.yml
-      service: sdp-frontend
   sdp-frontend-proxy:
     image: nginx:1.25-alpine
     depends_on:

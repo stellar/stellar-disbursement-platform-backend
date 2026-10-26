@@ -11,15 +11,11 @@ services:
     volumes:
       - postgres-db:/data/postgres
   sdp-api:
-    image: stellar/sdp-v2:development
-    build:
-      context: ../
-      dockerfile: Dockerfile.development
+    image: stellar/stellar-disbursement-platform-backend:${SDP_VERSION:-7.0.0}
     ports:
       - "${SDP_BIND_ADDR:-127.0.0.1}:${PORT:-8000}:${PORT:-8000}"
       - "127.0.0.1:${METRICS_PORT:-8002}:${METRICS_PORT:-8002}"
       - "127.0.0.1:${ADMIN_PORT:-8003}:${ADMIN_PORT:-8003}"
-      - "127.0.0.1:2345:2345"
     environment:
       BASE_URL: ${BASE_URL:-http://localhost:8000}
       SDP_UI_BASE_URL: ${SDP_UI_BASE_URL:-http://localhost:3000}
@@ -99,6 +95,7 @@ services:
       SEP24_JWT_SECRET: ${SEP24_JWT_SECRET:-jwt_secret_1234567890}
       RECAPTCHA_SITE_SECRET_KEY: ${RECAPTCHA_SITE_SECRET_KEY}
     entrypoint: ""
+    # docker-compose-dev.yml repeats these steps for its debug command; keep them in sync.
     command:
       - sh
       - -c
@@ -109,17 +106,8 @@ services:
         ./stellar-disbursement-platform db auth migrate up --all
         ./stellar-disbursement-platform db sdp migrate up --all
         ./stellar-disbursement-platform db setup-for-network --all
-        echo "starting dlv stellar-disbursement-platform"
-        /go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
-
-  demo-wallet:
-    build:
-      context: .
-      dockerfile: Dockerfile-demo-wallet
-    ports:
-      - "${SDP_BIND_ADDR:-127.0.0.1}:4000:80"
-    volumes:
-      - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
+        echo "starting stellar-disbursement-platform"
+        exec ./stellar-disbursement-platform serve
 
 volumes:
   postgres-db:

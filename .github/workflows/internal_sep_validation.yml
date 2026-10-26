@@ -31,7 +31,8 @@ jobs:
         run: |
           export SEP10_CLIENT_ATTRIBUTION_REQUIRED=false
           export SINGLE_TENANT_MODE=true
-          docker compose -f docker-compose-sdp.yml down && docker compose -f docker-compose-sdp.yml up --build -d
+          # The development stack builds the API from this checkout, so the tests run against this change.
+          docker compose -f docker-compose-dev.yml down && docker compose -f docker-compose-dev.yml up --build -d db sdp-api
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
@@ -48,7 +49,7 @@ jobs:
       - name: Ensure default tenant
         working-directory: dev
         run: |
-          docker compose -f docker-compose-sdp.yml exec -T sdp-api ./stellar-disbursement-platform tenants ensure-default \
+          docker compose -f docker-compose-dev.yml exec -T sdp-api ./stellar-disbursement-platform tenants ensure-default \
             --default-tenant-owner-email default@default.local \
             --default-tenant-owner-first-name Default \
             --default-tenant-owner-last-name Owner \
@@ -69,4 +70,4 @@ jobs:
       - name: Docker logs
         if: always()
         working-directory: dev
-        run: docker compose -f docker-compose-sdp.yml logs && docker compose -f docker-compose-sdp.yml down
+        run: docker compose -f docker-compose-dev.yml logs && docker compose -f docker-compose-dev.yml down

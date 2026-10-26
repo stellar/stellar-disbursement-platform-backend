@@ -25,10 +25,6 @@ services:
     depends_on:
       - db
       - sdp-api
-  demo-wallet:
-    extends:
-      file: docker-compose-sdp.yml
-      service: demo-wallet
 volumes:
   postgres-db:
     name: ${COMPOSE_PROJECT_NAME}_postgres-db
