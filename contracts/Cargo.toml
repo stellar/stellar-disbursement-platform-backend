@@ -5,6 +5,7 @@ members = [
 ]
 exclude = [
   "target",
+  ".cargo",
 ]
 
 [workspace.dependencies]
