@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres-db:/data/postgres
   sdp-api:
-    image: stellar/stellar-disbursement-platform-backend:${SDP_VERSION:-7.0.0}
+    image: stellar/stellar-disbursement-platform-backend:${SDP_VERSION:-7.1.0}
     ports:
       - "${SDP_BIND_ADDR:-127.0.0.1}:${PORT:-8000}:${PORT:-8000}"
       - "127.0.0.1:${METRICS_PORT:-8002}:${METRICS_PORT:-8002}"

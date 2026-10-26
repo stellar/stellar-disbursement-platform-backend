@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   sdp-tss:
-    image: stellar/stellar-disbursement-platform-backend:${SDP_VERSION:-7.0.0}
+    image: stellar/stellar-disbursement-platform-backend:${SDP_VERSION:-7.1.0}
     ports:
       - "127.0.0.1:${TSS_METRICS_PORT:-9002}:${TSS_METRICS_PORT:-9002}"
     environment:
