@@ -377,6 +377,8 @@ The setup wizard launches the local environment (Docker Compose), initializes te
 
 All ports are published on `127.0.0.1`, so they are reachable from this machine only. To reach the API, dashboard and demo wallet from another machine, set `SDP_BIND_ADDR=0.0.0.0` in your `.env`, and change `API_URL` in `env-config-<network>.js`, `BASE_URL` and `SDP_UI_BASE_URL` to the host's address; otherwise the dashboard and the links the SDP sends still point at `localhost`. For anything beyond testing, keep `SDP_BIND_ADDR=127.0.0.1` and put a TLS reverse proxy in front of the API and dashboard instead.
 
+All ports are published on `127.0.0.1`, so they are reachable from this machine only. To reach the API, dashboard and demo wallet from another machine, set `SDP_BIND_ADDR=0.0.0.0` in your `.env`, and change `API_URL` in `env-config-<network>.js`, `BASE_URL` and `SDP_UI_BASE_URL` to the host's address; otherwise the dashboard and the links the SDP sends still point at `localhost`. For anything beyond testing, keep `SDP_BIND_ADDR=127.0.0.1` and put a TLS reverse proxy in front of the API and dashboard instead.
+
 ### Remote Debugging
 
 To help collaborators debug remotely against the Docker containers, the development stack (`docker-compose-dev.yml`) started by the setup wizard (when testnet is selected) builds a debug image from `Dockerfile.development`. This runs the API under the Delve debugger, listening on `127.0.0.1:2345`. A sample [launch.json](./sample/launch.json) is provided.

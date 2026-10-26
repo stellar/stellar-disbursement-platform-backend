@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Add Reports generation: a per-distribution account statement PDF (`GET /reports/statement`) and a per-payment transaction notice PDF (`GET /reports/payment/{id}`). [#1228](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1228)
 - Portuguese translations for the SEP-24 webview. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
 
 ### Changed
@@ -36,10 +37,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Limit CSV dimensions before parsing. [#1229](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1229)
 - Bound password validation errors on over-length input. [#1230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1230)
 - Reconcile submitted transactions by inner tx hash. [#1234](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1234)
+- Scope API-key management to the acting key's distribution accounts. [#1235](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1235)
 - Bind sponsored transaction authorization to the caller's embedded wallet. [#1236](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1236)
 - Publish TSS metrics on `TSS_METRICS_PORT` (default `9002`) in Docker Compose. [#1239](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1239)
 - Show English instead of raw translation keys in the SEP-24 webview when the device language is unsupported, and respect the saved language. [#1240](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1240)
+- Detect Ukrainian devices in the SEP-24 webview by using the `uk` language code instead of the `ua` country code, and show Ukrainian country names in the phone number picker. [#1241](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1241)
 - Split Docker Compose into release and development stacks. [#1243](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1243)
+- Make payment cancellation an atomic compare-and-set. [#1245](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1245)
 
 ### Security and Dependencies
 
