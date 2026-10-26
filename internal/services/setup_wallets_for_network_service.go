@@ -108,7 +108,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 		}
 
 		// 2.1. Fetch all assets and populate a map for quick lookup
-		assets, err := models.Assets.GetAll(ctx)
+		assets, err := models.Assets.GetAll(ctx, false)
 		if err != nil {
 			return fmt.Errorf("getting all available assets on database: %w", err)
 		}

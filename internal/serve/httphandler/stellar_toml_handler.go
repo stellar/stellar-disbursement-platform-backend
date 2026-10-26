@@ -150,7 +150,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		assets, innerErr := s.Models.Assets.GetAll(ctx)
+		assets, innerErr := s.Models.Assets.GetAll(ctx, false)
 		if innerErr != nil {
 			httperror.InternalError(ctx, "Cannot retrieve assets", innerErr, nil).Render(w)
 			return

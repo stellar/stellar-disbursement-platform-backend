@@ -519,6 +519,19 @@ func (s *DistributionWalletManagementService) addTrustlines(ctx context.Context,
 		return fmt.Errorf("submitting change trust transaction: %w", err)
 	}
 
+	// A retired (soft-deleted) asset that a provider still supports is back in use now that this
+	// account trusts it, so it returns to the catalogue (Insert is the upsert that clears deleted_at).
+	for _, asset := range assetsToTrust {
+		if asset.DeletedAt == nil {
+			continue
+		}
+		if _, err := s.Models.Assets.Insert(ctx, s.Models.DBConnectionPool, asset.Code, asset.Issuer); err != nil {
+			// The trustline is on-chain; only the catalogue flag did not flip. The next add or
+			// remove of this asset restores it.
+			log.Ctx(ctx).Warnf("trustline for %s:%s added to wallet %q but the asset stays retired: %v", asset.Code, asset.Issuer, wallet.ID, err)
+		}
+	}
+
 	return nil
 }
 

@@ -44,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Detect Ukrainian devices in the SEP-24 webview by using the `uk` language code instead of the `ua` country code, and show Ukrainian country names in the phone number picker. [#1241](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1241)
 - Split Docker Compose into release and development stacks. [#1243](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1243)
 - Make payment cancellation an atomic compare-and-set. [#1245](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1245)
+- Make trustline removal per distribution account. [#1247](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1247)
 
 ### Security and Dependencies
 

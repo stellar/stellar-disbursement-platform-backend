@@ -109,7 +109,7 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 		return fmt.Errorf("error getting models: %w", err)
 	}
 
-	allAssets, err := models.Assets.GetAll(ctx)
+	allAssets, err := models.Assets.GetAll(ctx, false)
 	if err != nil {
 		return fmt.Errorf("error getting all available assets on database: %w", err)
 	}
