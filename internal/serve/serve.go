@@ -539,7 +539,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			// Write operations with different role permissions
 			r.With(middleware.RequirePermission(
 				data.WritePayments,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", paymentsHandler.PostDirectPayment)
 				r.Patch("/retry", paymentsHandler.RetryPayments)

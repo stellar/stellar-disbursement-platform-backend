@@ -175,7 +175,7 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 			return
 		}
 		if httpErr := ensureWalletActionAllowed(ctx, p.AuthManager, p.Models, retryPayment.SourceWalletID,
-			data.FinancialControllerUserRole, data.BusinessUserRole); httpErr != nil {
+			data.FinancialControllerUserRole); httpErr != nil {
 			httpErr.Render(rw)
 			return
 		}
@@ -347,7 +347,7 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 
 	// Routing: explicit source wallet via X-Wallet-Id (single-wallet tenants may omit).
 	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, p.AuthManager, p.Models,
-		data.FinancialControllerUserRole, data.BusinessUserRole)
+		data.FinancialControllerUserRole)
 	if walletErr != nil {
 		walletErr.Render(w)
 		return

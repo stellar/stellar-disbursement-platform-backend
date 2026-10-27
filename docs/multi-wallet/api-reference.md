@@ -117,8 +117,8 @@ apply, which is why this is a capability set rather than a single effective role
     "can_start_disbursement": false,
     "can_pause_disbursement": false,
     "can_cancel_disbursement": false,
-    "can_create_payment": true,
-    "can_retry_payment": true,
+    "can_create_payment": false,
+    "can_retry_payment": false,
     "can_cancel_payment": false
   }
 }

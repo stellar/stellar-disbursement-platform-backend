@@ -194,14 +194,14 @@ var walletCapabilityMatrix = []walletCapability{
 	{
 		// POST /payments (direct payment) → PostDirectPayment.
 		name:        "can_create_payment",
-		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
-		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole},
 	},
 	{
 		// PATCH /payments/retry → RetryPayments.
 		name:        "can_retry_payment",
-		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
-		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole},
 	},
 	{
 		// PATCH /payments/{id}/status (cancel) → PatchPaymentStatus.

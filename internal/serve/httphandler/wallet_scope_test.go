@@ -79,6 +79,16 @@ func Test_walletCapabilitiesFor(t *testing.T) {
 			},
 		},
 		{
+			name:            "business is read-only: nothing, even with a business membership",
+			user:            &auth.User{ID: "u", Roles: []string{string(data.BusinessUserRole)}},
+			membershipRoles: []data.UserRole{data.BusinessUserRole},
+			want: map[string]bool{
+				"can_create_disbursement": false, "can_start_disbursement": false,
+				"can_pause_disbursement": false, "can_cancel_disbursement": false,
+				"can_create_payment": false, "can_retry_payment": false, "can_cancel_payment": false,
+			},
+		},
+		{
 			name:            "approver granted initiator: the narrowing leaves nothing",
 			user:            &auth.User{ID: "u", Roles: []string{string(data.ApproverUserRole)}},
 			membershipRoles: []data.UserRole{data.InitiatorUserRole},
@@ -116,8 +126,8 @@ func Test_APIKeyWalletReadScope(t *testing.T) {
 		INSERT INTO distribution_wallets (name, distribution_account_type)
 		VALUES ('api-key-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
-	creator := &auth.User{ID: "api-key-creator", Email: "k@example.com", Roles: []string{string(data.BusinessUserRole)}}
-	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, creator.ID, walletA.ID, data.BusinessUserRole, nil)
+	creator := &auth.User{ID: "api-key-creator", Email: "k@example.com", Roles: []string{string(data.InitiatorUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, creator.ID, walletA.ID, data.InitiatorUserRole, nil)
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
@@ -198,10 +208,10 @@ func Test_APIKeyWalletReadScope(t *testing.T) {
 		rr := withAPIKey(fmt.Sprintf("/distribution-wallets/%s/capabilities", walletA.ID))
 		require.Equal(t, http.StatusOK, rr.Code)
 		body := rr.Body.String()
-		// Global business + business membership: direct payments, nothing on disbursements.
-		assert.Contains(t, body, `"can_create_payment": true`)
-		assert.Contains(t, body, `"can_create_disbursement": false`)
+		// Global initiator + initiator membership: create disbursements, nothing else.
+		assert.Contains(t, body, `"can_create_disbursement": true`)
 		assert.Contains(t, body, `"can_start_disbursement": false`)
+		assert.Contains(t, body, `"can_create_payment": false`)
 	})
 
 	// The wallet the key may reach is now the key's own column, not a live read of the creator's
