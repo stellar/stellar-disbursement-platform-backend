@@ -162,10 +162,8 @@ type walletCapability struct {
 	walletRoles []data.UserRole
 }
 
-// walletCapabilityMatrix is the single place that pairing is written down: the capabilities
-// endpoint and the inert-grant check both read it instead of restating the rules, and
-// Test_WalletCapabilityMatrix_Conformance pins each entry to the enforcement site named in its
-// comment, so this table cannot drift from the code that actually enforces it.
+// walletCapabilityMatrix is the single place that pairing is written down; the capabilities endpoint
+// reads it, and Test_WalletCapabilityMatrix_Conformance pins each entry to the code that enforces it.
 var walletCapabilityMatrix = []walletCapability{
 	{
 		// POST /disbursements, POST /disbursements/{id}/instructions, DELETE /disbursements/{id}.
@@ -194,14 +192,14 @@ var walletCapabilityMatrix = []walletCapability{
 	{
 		// POST /payments (direct payment) → PostDirectPayment.
 		name:        "can_create_payment",
-		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
-		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole},
 	},
 	{
 		// PATCH /payments/retry → RetryPayments.
 		name:        "can_retry_payment",
-		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole},
-		walletRoles: []data.UserRole{data.FinancialControllerUserRole, data.BusinessUserRole},
+		globalRoles: []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole},
+		walletRoles: []data.UserRole{data.FinancialControllerUserRole},
 	},
 	{
 		// PATCH /payments/{id}/status (cancel) → PatchPaymentStatus.
