@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- Remove Business role from direct payment writes. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)
+- Remove Business role from payment writes. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)
 
 ## [7.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/7.0.0...7.1.0))
 
