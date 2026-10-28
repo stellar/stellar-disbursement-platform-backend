@@ -79,8 +79,18 @@ func Test_walletCapabilitiesFor(t *testing.T) {
 			},
 		},
 		{
-			name:            "business is read-only: nothing, even with a business membership",
+			name:            "business granted financial controller: the global role keeps them read-only",
 			user:            &auth.User{ID: "u", Roles: []string{string(data.BusinessUserRole)}},
+			membershipRoles: []data.UserRole{data.FinancialControllerUserRole},
+			want: map[string]bool{
+				"can_create_disbursement": false, "can_start_disbursement": false,
+				"can_pause_disbursement": false, "can_cancel_disbursement": false,
+				"can_create_payment": false, "can_retry_payment": false, "can_cancel_payment": false,
+			},
+		},
+		{
+			name:            "financial controller narrowed to business: view only on this account",
+			user:            &auth.User{ID: "u", Roles: []string{string(data.FinancialControllerUserRole)}},
 			membershipRoles: []data.UserRole{data.BusinessUserRole},
 			want: map[string]bool{
 				"can_create_disbursement": false, "can_start_disbursement": false,

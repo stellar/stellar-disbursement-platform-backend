@@ -320,10 +320,8 @@ func parseWalletScopableRole(raw string) (data.UserRole, *httperror.HTTPError) {
 	)
 }
 
-// ensureGrantIsNotInert rejects a grant that would yield the grantee no capability at all on
-// the wallet. Deliberately not "the grantee must already hold the role globally": a global
-// financial controller granted approver here (approve, but do not create) is the feature's
-// principal use, and that pair does yield capabilities.
+// ensureGrantIsNotInert rejects grants to owners and developers, who are tenant-wide. Any other grant
+// is accepted, whatever it can write and whatever the grantee's global role: it also grants visibility.
 func (h DistributionWalletsHandler) ensureGrantIsNotInert(ctx context.Context, granteeID string, role data.UserRole) *httperror.HTTPError {
 	grantee, err := h.AuthManager.GetUserByID(ctx, granteeID)
 	if err != nil {
