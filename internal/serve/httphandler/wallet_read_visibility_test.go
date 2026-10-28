@@ -91,6 +91,7 @@ func Test_WalletReadVisibility(t *testing.T) {
 		Return(schema.NewDefaultStellarTransactionAccount("GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"), nil).
 		Maybe()
 	paymentsHandler := PaymentsHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock, DistributionAccountResolver: mDistAccResolver}
+	exportHandler := ExportHandler{Models: models, AuthManager: authManagerMock}
 
 	r := chi.NewRouter()
 	r.Get("/disbursements", disbursementHandler.GetDisbursements)
@@ -98,6 +99,8 @@ func Test_WalletReadVisibility(t *testing.T) {
 	r.Get("/disbursements/{id}/instructions", disbursementHandler.GetDisbursementInstructions)
 	r.Get("/payments", paymentsHandler.GetPayments)
 	r.Get("/payments/{id}", paymentsHandler.GetPayment)
+	r.Get("/exports/disbursements", exportHandler.ExportDisbursements)
+	r.Get("/exports/payments", exportHandler.ExportPayments)
 
 	doAs := func(userID, path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -165,6 +168,29 @@ func Test_WalletReadVisibility(t *testing.T) {
 
 		rr = doAs(owner.ID, fmt.Sprintf("/payments/%s", paymentC.ID))
 		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("exports filter to the caller's wallets like the listings", func(t *testing.T) {
+		rr := doAs(memberA.ID, "/exports/disbursements")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), disbursementA.ID)
+		assert.NotContains(t, rr.Body.String(), disbursementB.ID)
+
+		rr = doAs(memberA.ID, "/exports/payments")
+		require.Equal(t, http.StatusOK, rr.Code)
+		body := rr.Body.String()
+		assert.Contains(t, body, paymentA.ID)
+		assert.NotContains(t, body, paymentB.ID)
+		assert.NotContains(t, body, paymentC.ID)
+
+		rr = doAs(owner.ID, "/exports/disbursements")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), disbursementB.ID)
+
+		rr = doAs(owner.ID, "/exports/payments")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), paymentB.ID)
+		assert.Contains(t, rr.Body.String(), paymentC.ID)
 	})
 
 	t.Run("member with zero memberships sees nothing", func(t *testing.T) {

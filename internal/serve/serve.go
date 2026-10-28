@@ -817,7 +817,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 		r.With(middleware.RequirePermission(
 			data.ReadExports,
-			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole, data.InitiatorUserRole),
+			middleware.AnyRoleMiddleware(authManager, data.GetBusinessOperationRoles()...),
 		)).Route("/exports", func(r chi.Router) {
 			r.Get("/disbursements", exportHandler.ExportDisbursements)
 			r.Get("/payments", exportHandler.ExportPayments)

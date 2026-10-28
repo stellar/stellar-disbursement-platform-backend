@@ -66,9 +66,11 @@ func Test_ReceiverScoping_Reads(t *testing.T) {
 	receiverFromB := mkReceiverPaidFrom("recv-disb-b", walletBID)
 
 	handler := ReceiverHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
+	exportHandler := ExportHandler{Models: models, AuthManager: authManagerMock}
 	r := chi.NewRouter()
 	r.Get("/receivers", handler.GetReceivers)
 	r.Get("/receivers/{id}", handler.GetReceiver)
+	r.Get("/exports/receivers", exportHandler.ExportReceivers)
 
 	doAs := func(userID, path string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -85,6 +87,18 @@ func Test_ReceiverScoping_Reads(t *testing.T) {
 		assert.NotContains(t, rr.Body.String(), receiverFromB.ID)
 
 		rr = doAs(owner.ID, "/receivers")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), receiverFromA.ID)
+		assert.Contains(t, rr.Body.String(), receiverFromB.ID)
+	})
+
+	t.Run("export filters to receivers paid from the caller's wallets", func(t *testing.T) {
+		rr := doAs(memberA.ID, "/exports/receivers")
+		require.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), receiverFromA.ID)
+		assert.NotContains(t, rr.Body.String(), receiverFromB.ID)
+
+		rr = doAs(owner.ID, "/exports/receivers")
 		require.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), receiverFromA.ID)
 		assert.Contains(t, rr.Body.String(), receiverFromB.ID)
