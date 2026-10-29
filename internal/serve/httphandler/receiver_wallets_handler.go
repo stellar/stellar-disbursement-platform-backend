@@ -38,11 +38,11 @@ type ReceiverWalletsHandler struct {
 	AuthManager        auth.AuthManager
 }
 
-// ensureReceiverWalletInScope gates the endpoints that address a receiver through one of their
+// ensureReceiverWalletActionAllowed gates the endpoints that address a receiver through one of their
 // wallets, looking the receiver up so the check runs through the same gate as every other receiver
 // write. notFoundMsg is the endpoint's own 404 message: absent and out-of-scope must render
 // identically, or the difference between them is an existence oracle.
-func (h ReceiverWalletsHandler) ensureReceiverWalletInScope(ctx context.Context, receiverWalletID, notFoundMsg string) *httperror.HTTPError {
+func (h ReceiverWalletsHandler) ensureReceiverWalletActionAllowed(ctx context.Context, receiverWalletID, notFoundMsg string) *httperror.HTTPError {
 	receiverWallet, err := h.Models.ReceiverWallet.GetByID(ctx, h.Models.DBConnectionPool, receiverWalletID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
@@ -51,7 +51,8 @@ func (h ReceiverWalletsHandler) ensureReceiverWalletInScope(ctx context.Context,
 		return httperror.InternalError(ctx, "Cannot get receiver wallet", fmt.Errorf("getting receiver wallet %s: %w", receiverWalletID, err), nil)
 	}
 
-	scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverWallet.Receiver.ID)
+	scopeErr := ensureReceiverActionAllowed(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverWallet.Receiver.ID,
+		data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole)
 	if scopeErr != nil && scopeErr.StatusCode == http.StatusNotFound {
 		return httperror.NotFound(notFoundMsg, nil, nil)
 	}
@@ -66,7 +67,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 
 	// Resolve the receiver before retrying: RetryInvitationMessage mutates and returns in one
 	// statement, so the scope check has to happen first.
-	if scopeErr := h.ensureReceiverWalletInScope(ctx, receiverWalletID, ""); scopeErr != nil {
+	if scopeErr := h.ensureReceiverWalletActionAllowed(ctx, receiverWalletID, ""); scopeErr != nil {
 		scopeErr.Render(rw)
 		return
 	}
@@ -129,7 +130,7 @@ func (h ReceiverWalletsHandler) PatchReceiverWalletStatus(rw http.ResponseWriter
 		return
 	}
 
-	if scopeErr := h.ensureReceiverWalletInScope(ctx, receiverWalletID, "receiver wallet not found"); scopeErr != nil {
+	if scopeErr := h.ensureReceiverWalletActionAllowed(ctx, receiverWalletID, "receiver wallet not found"); scopeErr != nil {
 		scopeErr.Render(rw)
 		return
 	}
@@ -216,7 +217,8 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 		return
 	}
 
-	if scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverID); scopeErr != nil {
+	if scopeErr := ensureReceiverActionAllowed(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverID,
+		data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole); scopeErr != nil {
 		scopeErr.Render(rw)
 		return
 	}

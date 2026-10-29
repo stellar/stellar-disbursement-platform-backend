@@ -47,24 +47,68 @@ func resolveWalletReadScope(ctx context.Context, authManager auth.AuthManager, m
 	return scope, nil
 }
 
-// ensureReceiverInScope gates a receiver-scoped action on the caller's wallet scope, using the same
-// derivation the receiver reads filter with (data.ReceiverInScopeCondition). Outside the scope it
-// answers 404, never 403 — existence is not disclosed, matching GetReceiver.
-func ensureReceiverInScope(ctx context.Context, authManager auth.AuthManager, models *data.Models, sqlExec db.SQLExecuter, receiverID string) *httperror.HTTPError {
-	scope, scopeErr := resolveWalletReadScope(ctx, authManager, models)
-	if scopeErr != nil {
-		return scopeErr
+// ensureReceiverActionAllowed allows a receiver write only on a wallet where the caller holds one of requiredRoles (a key:
+// within its scope). Otherwise a receiver the caller can see answers 403, and one they can't see 404, so it isn't disclosed.
+func ensureReceiverActionAllowed(ctx context.Context, authManager auth.AuthManager, models *data.Models, sqlExec db.SQLExecuter, receiverID string, requiredRoles ...data.UserRole) *httperror.HTTPError {
+	inScope := func(scope []string) (bool, *httperror.HTTPError) {
+		ok, err := models.Receiver.IsInScope(ctx, sqlExec, receiverID, scope)
+		if err != nil {
+			return false, httperror.InternalError(ctx, "Cannot resolve receiver scope", err, nil)
+		}
+		return ok, nil
 	}
 
-	inScope, err := models.Receiver.IsInScope(ctx, sqlExec, receiverID, scope)
+	if apiKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
+		visible, httpErr := inScope(apiKey.WalletScope())
+		if httpErr != nil {
+			return httpErr
+		}
+		if !visible {
+			return httperror.NotFound("Receiver not found", nil, nil)
+		}
+		return nil
+	}
+
+	user, err := ctxHelper.GetUserFromContext(ctx, authManager)
 	if err != nil {
-		return httperror.InternalError(ctx, "Cannot resolve receiver scope", err, nil)
+		if errors.Is(err, auth.ErrUserNotFound) {
+			return httperror.Unauthorized("", err, nil)
+		}
+		return httperror.InternalError(ctx, "Cannot get user from context", err, nil)
 	}
-	if !inScope {
-		return httperror.NotFound("Receiver not found", nil, nil)
+	if services.IsTenantWideUser(user) {
+		return nil
 	}
 
-	return nil
+	memberships, err := models.WalletMemberships.ListByUser(ctx, models.DBConnectionPool, user.ID)
+	if err != nil {
+		return httperror.InternalError(ctx, "Cannot resolve wallet memberships", err, nil)
+	}
+	// Never nil: a nil scope reads as tenant-wide.
+	canSee, canAct := []string{}, []string{}
+	for _, membership := range memberships {
+		canSee = append(canSee, membership.WalletID)
+		if slices.Contains(requiredRoles, membership.Role) {
+			canAct = append(canAct, membership.WalletID)
+		}
+	}
+
+	writable, httpErr := inScope(canAct)
+	if httpErr != nil {
+		return httpErr
+	}
+	if writable {
+		return nil
+	}
+
+	visible, httpErr := inScope(canSee)
+	if httpErr != nil {
+		return httpErr
+	}
+	if visible {
+		return httperror.Forbidden(services.ErrWalletActionForbidden.Error(), nil, nil)
+	}
+	return httperror.NotFound("Receiver not found", nil, nil)
 }
 
 // ensurePaymentInReadScope gates a single-payment read on the caller's wallet scope. Outside it the
