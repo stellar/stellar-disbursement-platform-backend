@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ses v1.42.4
 	github.com/aws/aws-sdk-go-v2/service/sns v1.47.5
 	github.com/dgraph-io/ristretto v0.2.0
-	github.com/dimchansky/utfbom v1.1.1
+	github.com/dimchansky/utfbom v1.2.0
 	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/getsentry/sentry-go v0.50.0
 	github.com/go-chi/chi/v5 v5.5.0
@@ -31,17 +31,17 @@ require (
 	github.com/rubenv/sql-migrate v1.8.1
 	github.com/sendgrid/rest v2.6.9+incompatible
 	github.com/sendgrid/sendgrid-go v3.16.1+incompatible
-	github.com/shopspring/decimal v1.5.0
+	github.com/shopspring/decimal v1.6.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/stellar/go-stellar-sdk v0.7.3
+	github.com/stellar/go-stellar-sdk v0.8.0
 	github.com/stretchr/testify v1.12.1
 	github.com/twilio/twilio-go v1.32.0
 	github.com/veraison/go-cose v1.3.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
-	golang.org/x/net v0.60.0
+	golang.org/x/net v0.61.0
 )
 
 require (
