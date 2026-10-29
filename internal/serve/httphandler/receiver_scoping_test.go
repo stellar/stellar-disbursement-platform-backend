@@ -299,6 +299,22 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
 	})
 
+	t.Run("a write role can change a receiver's wallets", func(t *testing.T) {
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "member-wallet", "https://m.com", "m.com", "m://")
+		registered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverA.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		rr := patchAs(memberA.ID, fmt.Sprintf("/receivers/wallets/%s/status", registered.ID), `{"status":"READY"}`)
+		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		rr = patchAs(memberA.ID, fmt.Sprintf("/receivers/wallets/%s", registered.ID), "") // now READY, so retry applies
+		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		// Not user-managed, so the handler itself refuses the address: the account check let it through.
+		rr = patchAs(memberA.ID, fmt.Sprintf("/receivers/%s/wallets/%s", receiverA.ID, registered.ID),
+			`{"stellar_address":"GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"}`)
+		assert.Equal(t, http.StatusBadRequest, rr.Code, rr.Body.String())
+	})
+
 	t.Run("a business membership shows a receiver but cannot change it", func(t *testing.T) {
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "view-wallet", "https://v.com", "v.com", "v://")
 		rwA := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverA.ID, wallet.ID, data.ReadyReceiversWalletStatus)
