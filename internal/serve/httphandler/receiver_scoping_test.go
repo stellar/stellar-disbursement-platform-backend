@@ -183,19 +183,27 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 		INSERT INTO distribution_wallets (name, distribution_account_type)
 		VALUES ('write-wallet-b', 'DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT') RETURNING id`))
 
-	memberA := &auth.User{ID: "write-member-a", Email: "a@write.test", Roles: []string{string(data.BusinessUserRole)}}
-	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, memberA.ID, walletA.ID, data.BusinessUserRole, nil)
+	// memberA can write on A; viewerA holds only a business membership there, which shows A's receivers
+	// but cannot change them.
+	memberA := &auth.User{ID: "write-member-a", Email: "a@write.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, memberA.ID, walletA.ID, data.FinancialControllerUserRole, nil)
+	require.NoError(t, err)
+	viewerA := &auth.User{ID: "write-viewer-a", Email: "v@write.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+	_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, viewerA.ID, walletA.ID, data.BusinessUserRole, nil)
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.On("GetUserByID", mock.Anything, memberA.ID).Return(memberA, nil).Maybe()
+	authManagerMock.On("GetUserByID", mock.Anything, viewerA.ID).Return(viewerA, nil).Maybe()
 
 	receiverA := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{SourceWalletID: walletA.ID})
 	receiverB := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{SourceWalletID: walletBID})
 
+	receiverHandler := ReceiverHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
 	updateHandler := UpdateReceiverHandler{Models: models, DBConnectionPool: dbConnectionPool, AuthManager: authManagerMock}
 	rwHandler := ReceiverWalletsHandler{Models: models, AuthManager: authManagerMock}
 	r := chi.NewRouter()
+	r.Post("/receivers", receiverHandler.CreateReceiver)
 	r.Patch("/receivers/{id}", updateHandler.UpdateReceiver)
 	r.Patch("/receivers/wallets/{receiver_wallet_id}/status", rwHandler.PatchReceiverWalletStatus)
 	r.Patch("/receivers/wallets/{receiver_wallet_id}", rwHandler.RetryInvitation)
@@ -204,6 +212,18 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 	patchAs := func(userID, path, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+		return rr
+	}
+	created := 0
+	createAs := func(userID, walletID string) *httptest.ResponseRecorder {
+		created++
+		body := fmt.Sprintf(`{"email":"new-%d@write.test","external_id":"new-%d","verifications":[{"type":"DATE_OF_BIRTH","value":"1990-01-01"}]}`, created, created)
+		req := httptest.NewRequest(http.MethodPost, "/receivers", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(XWalletIDHeader, walletID)
 		req = req.WithContext(sdpcontext.SetUserIDInContext(ctx, userID))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -269,6 +289,69 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 			fmt.Sprintf("/receivers/%s/wallets/%s", receiverB.ID, rwB.ID),
 			`{"stellar_address":"GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"}`)
 		assert.Equal(t, http.StatusNotFound, rr.Code, rr.Body.String())
+	})
+
+	t.Run("creating a receiver needs a write role on the account", func(t *testing.T) {
+		rr := createAs(memberA.ID, walletA.ID)
+		assert.Equal(t, http.StatusCreated, rr.Code, rr.Body.String())
+
+		rr = createAs(viewerA.ID, walletA.ID)
+		assert.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+	})
+
+	t.Run("a business membership shows a receiver but cannot change it", func(t *testing.T) {
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "view-wallet", "https://v.com", "v.com", "v://")
+		rwA := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverA.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, execErr := dbConnectionPool.ExecContext(ctx,
+			`UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1`, rwA.ID)
+		require.NoError(t, execErr)
+		before, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverA.ID)
+		require.NoError(t, getErr)
+
+		writes := map[string]struct{ path, body string }{
+			"contact":          {fmt.Sprintf("/receivers/%s", receiverA.ID), `{"email":"viewer@write.test"}`},
+			"stellar address":  {fmt.Sprintf("/receivers/%s/wallets/%s", receiverA.ID, rwA.ID), `{"stellar_address":"GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"}`},
+			"retry invitation": {fmt.Sprintf("/receivers/wallets/%s", rwA.ID), ""},
+			"wallet status":    {fmt.Sprintf("/receivers/wallets/%s/status", rwA.ID), `{"status":"READY"}`},
+		}
+		for name, write := range writes {
+			rr := patchAs(viewerA.ID, write.path, write.body)
+			assert.Equalf(t, http.StatusForbidden, rr.Code, "%s: %s", name, rr.Body.String())
+		}
+
+		after, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverA.ID)
+		require.NoError(t, getErr)
+		assert.Equal(t, before.Email, after.Email)
+		var invitationSentAt *time.Time
+		require.NoError(t, dbConnectionPool.GetContext(ctx, &invitationSentAt,
+			`SELECT invitation_sent_at FROM receiver_wallets WHERE id = $1`, rwA.ID))
+		assert.NotNil(t, invitationSentAt, "the invitation must not have been reset")
+	})
+
+	// A receiver can belong to several accounts; any one where the caller holds a write role is enough,
+	// and one they can only see through a business membership answers 403, not 404.
+	t.Run("a shared receiver is editable through the account the caller can write on", func(t *testing.T) {
+		shared := &auth.User{ID: "write-shared", Email: "s@write.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+		_, err := models.WalletMemberships.Insert(ctx, dbConnectionPool, shared.ID, walletA.ID, data.FinancialControllerUserRole, nil)
+		require.NoError(t, err)
+		_, err = models.WalletMemberships.Insert(ctx, dbConnectionPool, shared.ID, walletBID, data.BusinessUserRole, nil)
+		require.NoError(t, err)
+		authManagerMock.On("GetUserByID", mock.Anything, shared.ID).Return(shared, nil).Maybe()
+
+		receiverAB := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{SourceWalletID: walletBID})
+		d := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name: "write-shared-from-a", SourceWalletID: walletA.ID, Status: data.StartedDisbursementStatus,
+		})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverAB.ID, d.Wallet.ID, data.ReadyReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw, Disbursement: d, Asset: *d.Asset, Amount: "3", Status: data.DraftPaymentStatus,
+		})
+
+		rr := patchAs(shared.ID, fmt.Sprintf("/receivers/%s", receiverAB.ID), `{"email":"shared@write.test"}`)
+		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+
+		rr = patchAs(shared.ID, fmt.Sprintf("/receivers/%s", receiverB.ID), `{"email":"shared@write.test"}`)
+		assert.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
 	})
 }
 

@@ -8,8 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- Remove Business role from payment writes. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)
-- Grant Business role access to exports. [#1254](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1254)
+- Remove payment write access from Business role. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)
+- Grant export access to Business role. [#1254](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1254)
+- Remove receiver write access from Business memberships. [#TBD](https://github.com/stellar/stellar-disbursement-platform-backend/pull/TBD)
 
 ## [7.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/7.0.0...7.1.0))
 

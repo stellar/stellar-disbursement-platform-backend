@@ -89,7 +89,8 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 		return
 	}
 
-	if scopeErr := ensureReceiverInScope(ctx, h.AuthManager, h.Models, h.DBConnectionPool, receiverID); scopeErr != nil {
+	if scopeErr := ensureReceiverActionAllowed(ctx, h.AuthManager, h.Models, h.DBConnectionPool, receiverID,
+		data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole); scopeErr != nil {
 		scopeErr.Render(rw)
 		return
 	}
