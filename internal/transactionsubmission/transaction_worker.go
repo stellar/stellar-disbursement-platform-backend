@@ -159,6 +159,13 @@ func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
 	ctx = tw.updateContextLogger(ctx, txJob)
 	err := tw.runJob(ctx, txJob)
 	if err != nil {
+		if errors.Is(err, store.ErrLockLost) {
+			log.Ctx(ctx).WithFields(log.F{
+				"error":                      err.Error(),
+				"locked_until_ledger_number": txJob.LockedUntilLedgerNumber,
+			}).Warn("lock lost to a newer job; skipping remaining writes")
+			return
+		}
 		tw.crashTrackerClient.LogAndReportErrors(ctx, err, "unexpected TSS error")
 	}
 }
@@ -260,7 +267,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 		}
 
 		if isRetryable && tw.txHandler.RequiresRebuildOnRetry() {
-			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+			if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber); prepareErr != nil {
 				return fmt.Errorf("preparing transaction for reprocessing: %w", prepareErr)
 			}
 		}
@@ -301,7 +308,7 @@ func (tw *TransactionWorker) handleEntryArchived(ctx context.Context, txJob *TxJ
 		log.Ctx(ctx).Infof("Successfully restored archived entries for %s", txJob.Transaction.Destination)
 	}
 
-	if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID); prepareErr != nil {
+	if _, prepareErr := tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber); prepareErr != nil {
 		return true, fmt.Errorf("preparing transaction for reprocessing after restore: %w", prepareErr)
 	}
 	return true, tw.unlockJob(ctx, txJob)
@@ -323,12 +330,13 @@ func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *
 // this method is not called, the algorithm will fall back to get these resources automatically unlocked when their
 // `locked-to-ledger` expire, which is required when the submission outcome is unknown (the envelope may still land).
 func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
-	_, err := tw.chAccModel.Unlock(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey)
-	if err != nil {
+	// ErrLockLost here means another job already holds the channel account: nothing of ours to release.
+	_, err := tw.chAccModel.UnlockIfLockedUntil(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey, txJob.LockedUntilLedgerNumber)
+	if err != nil && !errors.Is(err, store.ErrLockLost) {
 		return fmt.Errorf("unlocking channel account: %w", err)
 	}
 
-	_, err = tw.txModel.Unlock(ctx, tw.dbConnectionPool, txJob.Transaction.ID)
+	_, err = tw.txModel.Unlock(ctx, tw.dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber)
 	if err != nil {
 		return fmt.Errorf("unlocking transaction: %w", err)
 	}
@@ -434,7 +442,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	// Authoritative 404: a bundle with a hash is only reselected after its lock (== MaxLedger) expires or a definitive 4xx.
 	log.Ctx(ctx).Warnf("Previous transaction didn't make through, marking %v for resubmission...", txJob)
 
-	_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID)
+	_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber)
 	if err != nil {
 		return fmt.Errorf("pushing back transaction to queue: %w", err)
 	}
@@ -527,7 +535,7 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 	// The distribution account is the fee account in the fee bump transaction
 	distributionAccountAddr := feeBumpTx.FeeAccount()
 
-	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, feeBumpTxHash, sentXDR, distributionAccountAddr)
+	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, feeBumpTxHash, sentXDR, distributionAccountAddr)
 	if err != nil {
 		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}
@@ -625,7 +633,7 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 	}
 
 	resultXDR := resp.ResultXdr
-	updatedTx, err := tw.txModel.UpdateStellarTransactionXDRReceived(ctx, txJob.Transaction.ID, resultXDR)
+	updatedTx, err := tw.txModel.UpdateStellarTransactionXDRReceived(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, resultXDR)
 	if err != nil {
 		return fmt.Errorf("updating XDRReceived(%s) for job %v: %w", resultXDR, txJob, err)
 	}
@@ -707,9 +715,15 @@ func (tw *TransactionWorker) restoreArchivedEntries(ctx context.Context, txJob *
 		return fmt.Errorf("signing restore fee bump transaction: %w", err)
 	}
 
+	restoreHash, hashErr := feeBumpTx.HashHex(tw.engine.SignatureService.NetworkPassphrase())
+	if hashErr != nil {
+		log.Ctx(ctx).WithField("error", hashErr.Error()).Warn("hashing restore transaction for logging")
+	}
+	log.Ctx(ctx).WithField("restore_tx_hash", restoreHash).Info("submitting restore transaction")
+
 	_, err = tw.engine.HorizonClient.SubmitFeeBumpTransactionWithOptions(feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
-		return fmt.Errorf("submitting restore transaction: %w", err)
+		return fmt.Errorf("submitting restore transaction %s: %w", restoreHash, err)
 	}
 
 	return nil

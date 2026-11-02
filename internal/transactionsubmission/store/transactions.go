@@ -24,6 +24,7 @@ import (
 )
 
 var ErrRecordNotFound = errors.New("record not found")
+var ErrLockLost = errors.New("lock lost")
 
 type TransactionType string
 
@@ -370,10 +371,14 @@ func (t *TransactionModel) UpdateStatusToSuccess(ctx context.Context, tx Transac
 				status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), $1::transaction_status, NULL, COALESCE(NULLIF($2, ''), stellar_transaction_hash), xdr_sent, xdr_received))
 			WHERE
 				id = $3
+				AND locked_until_ledger_number = $4
 			RETURNING
 				` + TransactionColumnNames("", "")
-	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.StellarTransactionHash, tx.ID)
+	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusSuccess, tx.StellarTransactionHash, tx.ID, tx.LockedUntilLedgerNumber)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrLockLost
+		}
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusSuccess: %w", err)
 	}
 
@@ -399,17 +404,22 @@ func (t *TransactionModel) UpdateStatusToError(ctx context.Context, tx Transacti
 				status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), $1::transaction_status, $2::text, stellar_transaction_hash, xdr_sent, xdr_received))
 			WHERE
 				id = $3
+				AND locked_until_ledger_number = $4
 			RETURNING
 				` + TransactionColumnNames("", "")
-	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusError, message, tx.ID)
+	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, TransactionStatusError, message, tx.ID, tx.LockedUntilLedgerNumber)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrLockLost
+		}
 		return nil, fmt.Errorf("updating transaction status to TransactionStatusError: %w", err)
 	}
 
 	return &updatedTx, nil
 }
 
-func (t *TransactionModel) UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error) {
+// UpdateStellarTransactionHashXDRSentAndDistributionAccount records the attempt about to be submitted.
+func (t *TransactionModel) UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, lockedUntil int, txHash, txXDRSent, distributionAccount string) (*Transaction, error) {
 	if len(txHash) != 64 {
 		return nil, fmt.Errorf("invalid transaction hash %q", txHash)
 	}
@@ -436,13 +446,14 @@ func (t *TransactionModel) UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			attempts_count = attempts_count + 1
 		WHERE 
 			id = $4
+			AND locked_until_ledger_number = $5
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var tx Transaction
-	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, distributionAccount, txID)
+	err = t.DBConnectionPool.GetContext(ctx, &tx, query, txHash, txXDRSent, distributionAccount, txID, lockedUntil)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
+			return nil, ErrLockLost
 		}
 		return nil, fmt.Errorf("error updating transaction hash: %w", err)
 	}
@@ -451,7 +462,7 @@ func (t *TransactionModel) UpdateStellarTransactionHashXDRSentAndDistributionAcc
 }
 
 // UpdateStellarTransactionXDRReceived updates a Transaction's XDR received.
-func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Context, txID string, xdrReceived string) (*Transaction, error) {
+func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Context, txID string, lockedUntil int, xdrReceived string) (*Transaction, error) {
 	var txResult xdr.TransactionResult
 	err := xdr.SafeUnmarshalBase64(xdrReceived, &txResult)
 	if err != nil {
@@ -466,13 +477,14 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 			status_history = array_append(status_history, create_submitter_transactions_status_history(NOW(), status, 'Updating XDR Received', stellar_transaction_hash, xdr_sent, $1::text))
 		WHERE 
 			id = $2
+			AND locked_until_ledger_number = $3
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var updatedTx Transaction
-	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, xdrReceived, txID)
+	err = t.DBConnectionPool.GetContext(ctx, &updatedTx, query, xdrReceived, txID, lockedUntil)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
+			return nil, ErrLockLost
 		}
 		return nil, fmt.Errorf("error updating transaction hash: %w", err)
 	}
@@ -619,8 +631,8 @@ func (t *TransactionModel) Lock(ctx context.Context, sqlExec db.SQLExecuter, tra
 	return &transaction, nil
 }
 
-// Unlock lifts the lock from the transactionID with the provided publicKey.
-func (t *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error) {
+// Unlock lifts the lock from the transaction with the provided transactionID.
+func (t *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, lockedUntil int) (*Transaction, error) {
 	q := `
 		UPDATE
 			submitter_transactions
@@ -629,22 +641,23 @@ func (t *TransactionModel) Unlock(ctx context.Context, sqlExec db.SQLExecuter, p
 			locked_until_ledger_number = NULL
 		WHERE
 			id = $1
+			AND (locked_until_ledger_number = $2 OR locked_until_ledger_number IS NULL)
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var transaction Transaction
-	err := sqlExec.GetContext(ctx, &transaction, q, publicKey)
+	err := sqlExec.GetContext(ctx, &transaction, q, transactionID, lockedUntil)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
+			return nil, ErrLockLost
 		}
-		return nil, fmt.Errorf("unlocking transaction %q: %w", publicKey, err)
+		return nil, fmt.Errorf("unlocking transaction %q: %w", transactionID, err)
 	}
 
 	return &transaction, nil
 }
 
 // PrepareTransactionForReprocessing pushes the transaction with the provided transactionID back to the queue.
-func (t *TransactionModel) PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error) {
+func (t *TransactionModel) PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, lockedUntil int) (*Transaction, error) {
 	q := `
 		UPDATE
 			submitter_transactions
@@ -658,14 +671,15 @@ func (t *TransactionModel) PrepareTransactionForReprocessing(ctx context.Context
 			id = $1
 			AND synced_at IS NULL
 			AND status = ANY($2)
+			AND locked_until_ledger_number = $3
 		RETURNING
 			` + TransactionColumnNames("", "")
 	var transaction Transaction
 	allowedTxStatuses := []TransactionStatus{TransactionStatusPending, TransactionStatusProcessing}
-	err := sqlExec.GetContext(ctx, &transaction, q, transactionID, pq.Array(allowedTxStatuses))
+	err := sqlExec.GetContext(ctx, &transaction, q, transactionID, pq.Array(allowedTxStatuses), lockedUntil)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
+			return nil, ErrLockLost
 		}
 		return nil, fmt.Errorf("pushing transaction back to queue %q: %w", transactionID, err)
 	}

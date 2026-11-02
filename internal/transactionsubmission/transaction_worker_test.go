@@ -497,7 +497,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				mockTxStore.
-					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber, mock.AnythingOfType("string")).
 					Return(nil, errors.New("txModel error in UpdateStellarTransactionXDRReceived")).
 					Once()
 				tw.txModel = mockTxStore
@@ -544,7 +544,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
 				mockTxStore.
-					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber, mock.AnythingOfType("string")).
 					Return(&txJob.Transaction, nil).
 					Once()
 				tw.txModel = mockTxStore
@@ -557,7 +557,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 				// PART 3: mock Unlock that'll be called in unlockJob
 				mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
 				mockChAccStore.
-					On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
+					On("UnlockIfLockedUntil", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey, txJob.LockedUntilLedgerNumber).
 					Return(nil, errors.New("chAccModel error in Unlock")).
 					Once()
 				tw.chAccModel = mockChAccStore
@@ -679,19 +679,19 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			mockTxStore := storeMocks.NewMockTransactionStore(t)
 			txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
 			mockTxStore.
-				On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+				On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber, mock.AnythingOfType("string")).
 				Return(&txJob.Transaction, nil).
 				Once()
 			tw.txModel = mockTxStore
 			// PART 2: mock Unlock(s), that will be called from unlockJob
 			mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
 			mockChAccStore.
-				On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
+				On("UnlockIfLockedUntil", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey, txJob.LockedUntilLedgerNumber).
 				Return(nil, nil).
 				Once()
 			tw.chAccModel = mockChAccStore
 			mockTxStore.
-				On("Unlock", mock.Anything, mock.Anything, txJob.Transaction.ID).
+				On("Unlock", mock.Anything, mock.Anything, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber).
 				Return(nil, nil).
 				Once()
 			// PART 3: setup the jitter to be one error away from taking action
@@ -830,7 +830,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			)
-			tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+			tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -947,9 +947,14 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 			TenantID:           uuid.NewString(),
 		})
 		chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 1)[0]
-		tx, txErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, txHash, envelopeXDR, distAccountAddr)
+		const lockedUntil = 2
+		tx, txErr := txModel.Lock(ctx, dbConnectionPool, tx.ID, 1, lockedUntil)
 		require.NoError(t, txErr)
-		txJob := TxJob{ChannelAccount: *chAcc, Transaction: *tx, LockedUntilLedgerNumber: 2}
+		chAcc, chAccErr := chAccModel.Lock(ctx, dbConnectionPool, chAcc.PublicKey, 1, lockedUntil)
+		require.NoError(t, chAccErr)
+		tx, txErr = txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, lockedUntil, txHash, envelopeXDR, distAccountAddr)
+		require.NoError(t, txErr)
+		txJob := TxJob{ChannelAccount: *chAcc, Transaction: *tx, LockedUntilLedgerNumber: lockedUntil}
 		return txJob, txModel, chAccModel
 	}
 
@@ -978,7 +983,7 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 
 		// createTxJobFixture creates a tx with G-address destination (not a contract)
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
-		tx, txErr := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+		tx, txErr := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 		require.NoError(t, txErr)
 		txJob.Transaction = *tx
 
@@ -1018,9 +1023,11 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		// Simulate prior attempts to exceed maxRestoreAttempts.
 		// createContractTxJob already calls Update once (attempts_count=1), so we need maxRestoreAttempts more.
 		for i := 0; i < maxRestoreAttempts; i++ {
-			_, prepErr := txModel.PrepareTransactionForReprocessing(ctx, dbConnectionPool, txJob.Transaction.ID)
+			_, prepErr := txModel.PrepareTransactionForReprocessing(ctx, dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber)
 			require.NoError(t, prepErr)
-			tx, updErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, distributionKP.Address())
+			_, lockErr := txModel.Lock(ctx, dbConnectionPool, txJob.Transaction.ID, 1, int32(txJob.LockedUntilLedgerNumber))
+			require.NoError(t, lockErr)
+			tx, updErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, distributionKP.Address())
 			require.NoError(t, updErr)
 			txJob.Transaction = *tx
 		}
@@ -1088,8 +1095,10 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		mockHorizon.
 			On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).
 			Return(horizon.Account{Sequence: 123}, nil).Once()
+		var restoreTx *txnbuild.FeeBumpTransaction
 		mockHorizon.
 			On("SubmitFeeBumpTransactionWithOptions", mock.AnythingOfType("*txnbuild.FeeBumpTransaction"), mock.Anything).
+			Run(func(args mock.Arguments) { restoreTx = args.Get(0).(*txnbuild.FeeBumpTransaction) }).
 			Return(horizon.Transaction{Successful: true}, nil).Once()
 
 		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
@@ -1114,7 +1123,9 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 			jobUUID:             uuid.NewString(),
 		}
 
+		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 		handleErr := tw.handleFailedTransaction(ctx, &txJob, makeHorizonTransaction(txJob.ChannelAccount.PublicKey), hErr)
+		entries := getEntries()
 		require.NoError(t, handleErr)
 
 		// Assert transaction is prepared for reprocessing, not marked as error
@@ -1123,6 +1134,17 @@ func Test_TransactionWorker_handleFailedTransaction_entryArchived(t *testing.T) 
 		assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
 		assert.False(t, updatedTx.StellarTransactionHash.Valid)
 		assert.False(t, updatedTx.XDRSent.Valid)
+
+		// Assert the restore transaction's hash is logged
+		wantHash, hashErr := restoreTx.HashHex(sigService.NetworkPassphrase())
+		require.NoError(t, hashErr)
+		var loggedHash any
+		for _, e := range entries {
+			if e.Message == "submitting restore transaction" {
+				loggedHash = e.Data["restore_tx_hash"]
+			}
+		}
+		assert.Equal(t, wantHash, loggedHash)
 	})
 
 	t.Run("restore tx submission fails still reprocesses", func(t *testing.T) {
@@ -1213,7 +1235,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 		envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 	)
-	tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+	tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 	require.NoError(t, err)
 	txJob.Transaction = *tx
 	// declare horizon error
@@ -1350,7 +1372,7 @@ func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTrig
 				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			)
-			tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+			tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -1498,7 +1520,7 @@ func Test_TransactionWorker_handleFailedTransaction_unknownOutcomeHoldsLock(t *t
 			tw.jobUUID = uuid.NewString()
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 			if tc.setHash {
-				tx, updateErr := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, distAccount)
+				tx, updateErr := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, distAccount)
 				require.NoError(t, updateErr)
 				txJob.Transaction = *tx
 			}
@@ -1581,7 +1603,7 @@ func Test_TransactionWorker_heldBundleReselectedAfterExpiry(t *testing.T) {
 		tw := getTransactionWorkerInstance(t, dbConnectionPool, &MockTransactionHandler{})
 		tw.jobUUID = uuid.NewString()
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
-		tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, distAccount)
+		tx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, distAccount)
 		require.NoError(t, err)
 		txJob.Transaction = *tx
 
@@ -1727,7 +1749,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 			Return(nil, errReturned).
 			Once()
 		mockTxStore.
-			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber, mock.AnythingOfType("string")).
 			Return(&txJob.Transaction, nil).
 			Once()
 		transactionWorker.txModel = mockTxStore
@@ -1741,7 +1763,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		mockTxStore.AssertExpectations(t)
 	})
 
-	t.Run("returns an error if ChannelAccountModel.Unlock fails", func(t *testing.T) {
+	t.Run("returns an error if ChannelAccountModel.UnlockIfLockedUntil fails", func(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
@@ -1759,7 +1781,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 			Return(&txJob.Transaction, nil).
 			Once()
 		mockTxStore.
-			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber, mock.AnythingOfType("string")).
 			Return(&txJob.Transaction, nil).
 			Once()
 		transactionWorker.txModel = mockTxStore
@@ -1768,7 +1790,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		errReturned := fmt.Errorf("something went wrong")
 		mockChAccStore := &storeMocks.MockChannelAccountStore{}
 		mockChAccStore.
-			On("Unlock", ctx, dbConnectionPool, mock.AnythingOfType("string")).
+			On("UnlockIfLockedUntil", ctx, dbConnectionPool, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber).
 			Return(nil, errReturned).
 			Once()
 		transactionWorker.chAccModel = mockChAccStore
@@ -1796,7 +1818,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		// mock UpdateStatusToSuccess ✅
 		mockTxStore := &storeMocks.MockTransactionStore{}
 		mockTxStore.
-			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber, mock.AnythingOfType("string")).
 			Return(&txJob.Transaction, nil).
 			Once()
 		mockTxStore.
@@ -1807,7 +1829,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		// mock channelAccount Unlock ✅
 		mockChAccStore := &storeMocks.MockChannelAccountStore{}
 		mockChAccStore.
-			On("Unlock", ctx, dbConnectionPool, mock.AnythingOfType("string")).
+			On("UnlockIfLockedUntil", ctx, dbConnectionPool, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber).
 			Return(&store.ChannelAccount{}, nil).
 			Once()
 		transactionWorker.chAccModel = mockChAccStore
@@ -1815,7 +1837,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		// mock TransactionModel.Unlock (FAIL)
 		errReturned := fmt.Errorf("something went wrong")
 		mockTxStore.
-			On("Unlock", ctx, dbConnectionPool, mock.AnythingOfType("string")).
+			On("Unlock", ctx, dbConnectionPool, mock.AnythingOfType("string"), txJob.LockedUntilLedgerNumber).
 			Return(nil, errReturned).
 			Once()
 		transactionWorker.txModel = mockTxStore
@@ -1863,6 +1885,36 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		chAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
 		require.NoError(t, err)
 		assert.False(t, chAcc.IsLocked(int32(currentLedger)))
+	})
+
+	t.Run("🎉 finishes the job when another job already took the channel account", func(t *testing.T) {
+		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+		otherJobLockedUntil := lockedToLedger + 10
+		q := `UPDATE channel_accounts SET locked_at = NOW(), locked_until_ledger_number = $1 WHERE public_key = $2`
+		_, err := dbConnectionPool.ExecContext(ctx, q, otherJobLockedUntil, txJob.ChannelAccount.PublicKey)
+		require.NoError(t, err)
+
+		transactionHandler := &MockTransactionHandler{}
+		transactionHandler.On("MonitorTransactionProcessingSuccess", mock.Anything, mock.Anything, mock.Anything).Return().Once()
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, transactionHandler)
+
+		const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+		err = transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true, ResultXdr: resultXDR})
+		require.NoError(t, err)
+		transactionHandler.AssertExpectations(t)
+
+		tx, err := txModel.Get(ctx, txJob.Transaction.ID)
+		require.NoError(t, err)
+		assert.Equal(t, store.TransactionStatusSuccess, tx.Status)
+		assert.False(t, tx.LockedUntilLedgerNumber.Valid)
+
+		// the other job's lock is left alone
+		chAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+		require.NoError(t, err)
+		assert.EqualValues(t, otherJobLockedUntil, chAcc.LockedUntilLedgerNumber.Int32)
 	})
 
 	t.Run("if a transaction with successful=false is passed, we save the xdr and leave it to be checked on reconciliation", func(t *testing.T) {
@@ -1948,7 +2000,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
-			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, err)
 			txJob.Transaction = *tx
 
@@ -2123,7 +2175,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction_feeBumpInnerHash(t *te
 			envB64, outerHash, innerHash := buildFeeBumpEnvelope(t)
 
 			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
-			tx, updateErr := transactionWorker.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, outerHash, envB64, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+			tx, updateErr := transactionWorker.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, outerHash, envB64, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 			require.NoError(t, updateErr)
 			txJob.Transaction = *tx
 
@@ -2774,7 +2826,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			if tc.setHash {
 				const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 				const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
-				tx, updateErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+				tx, updateErr := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
 				require.NoError(t, updateErr)
 				txJob.Transaction = *tx
 			}
@@ -3270,7 +3322,7 @@ func Test_TransactionWorker_handleFailedTransaction_RPCErrorRebuild(t *testing.T
 
 			initialXDR := "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 			testTxHash := "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
-			_, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, testTxHash, initialXDR, "GCZJM35NKGVK47BB4SPBDV25477PZYIYPVVG453LPYFNXLS3FGHDXOCM")
+			_, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, testTxHash, initialXDR, "GCZJM35NKGVK47BB4SPBDV25477PZYIYPVVG453LPYFNXLS3FGHDXOCM")
 			require.NoError(t, err)
 
 			rpcError := &utils.RPCErrorWrapper{

@@ -357,6 +357,14 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 	})
 }
 
+// lockTransactionUntil sets the row's lock as if a job had locked it until lockedUntil.
+func lockTransactionUntil(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, txID string, lockedUntil int) {
+	t.Helper()
+	q := `UPDATE submitter_transactions SET locked_at = NOW(), locked_until_ledger_number = $1 WHERE id = $2`
+	_, err := sqlExec.ExecContext(ctx, q, lockedUntil, txID)
+	require.NoError(t, err)
+}
+
 func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
@@ -366,6 +374,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 
 	ctx := context.Background()
 	txModel := NewTransactionModel(dbConnectionPool)
+	const lockedUntil = 11
 
 	testCases := []struct {
 		name              string
@@ -434,6 +443,9 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 				Amount:             decimal.NewFromFloat(1.23),
 				TenantID:           uuid.NewString(),
 			})
+			lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil)
+			tx, err := txModel.Get(ctx, tx.ID)
+			require.NoError(t, err)
 			if (tc.transactionStatus != TransactionStatusSuccess) && (tc.transactionStatus != TransactionStatusError) {
 				assert.Empty(t, tx.CompletedAt)
 			} else {
@@ -473,6 +485,28 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 			assert.Equal(t, unphazedTx3, refreshedUnphazedTx3)
 		})
 	}
+
+	t.Run("🚧 returns ErrLockLost if the row carries another job's lock", func(t *testing.T) {
+		tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:      uuid.NewString(),
+			TransactionType: TransactionTypePayment,
+			AssetCode:       "USDC",
+			Status:          TransactionStatusProcessing,
+			Amount:          decimal.NewFromFloat(1.23),
+			TenantID:        uuid.NewString(),
+		})
+		lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil+10)
+		tx.LockedUntilLedgerNumber = sql.NullInt32{Int32: lockedUntil, Valid: true}
+
+		updatedTx, err := txModel.UpdateStatusToSuccess(ctx, *tx)
+		require.ErrorIs(t, err, ErrLockLost)
+		assert.Nil(t, updatedTx)
+
+		refreshedTx, err := txModel.Get(ctx, tx.ID)
+		require.NoError(t, err)
+		assert.Equal(t, TransactionStatusProcessing, refreshedTx.Status)
+		assert.Empty(t, refreshedTx.CompletedAt)
+	})
 }
 
 func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
@@ -484,6 +518,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 
 	ctx := context.Background()
 	txModel := NewTransactionModel(dbConnectionPool)
+	const lockedUntil = 11
 
 	testCases := []struct {
 		name              string
@@ -552,6 +587,9 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 				Amount:             decimal.NewFromFloat(1.23),
 				TenantID:           uuid.NewString(),
 			})
+			lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil)
+			tx, err := txModel.Get(ctx, tx.ID)
+			require.NoError(t, err)
 			assert.Empty(t, tx.StatusMessage)
 			if (tc.transactionStatus != TransactionStatusSuccess) && (tc.transactionStatus != TransactionStatusError) {
 				assert.Empty(t, tx.CompletedAt)
@@ -594,6 +632,28 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 			assert.Equal(t, unphazedTx3, refreshedUnphazedTx3)
 		})
 	}
+
+	t.Run("🚧 returns ErrLockLost if the row carries another job's lock", func(t *testing.T) {
+		tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:      uuid.NewString(),
+			TransactionType: TransactionTypePayment,
+			AssetCode:       "USDC",
+			Status:          TransactionStatusProcessing,
+			Amount:          decimal.NewFromFloat(1.23),
+			TenantID:        uuid.NewString(),
+		})
+		lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil+10)
+		tx.LockedUntilLedgerNumber = sql.NullInt32{Int32: lockedUntil, Valid: true}
+
+		updatedTx, err := txModel.UpdateStatusToError(ctx, *tx, "some error message")
+		require.ErrorIs(t, err, ErrLockLost)
+		assert.Nil(t, updatedTx)
+
+		refreshedTx, err := txModel.Get(ctx, tx.ID)
+		require.NoError(t, err)
+		assert.Equal(t, TransactionStatusProcessing, refreshedTx.Status)
+		assert.Empty(t, refreshedTx.StatusMessage)
+	})
 }
 
 func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAccount(t *testing.T) {
@@ -609,6 +669,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 	const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 	const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+	const lockedUntil = 11
 
 	testCases := []struct {
 		name                string
@@ -670,6 +731,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			})
 			require.NoError(t, err)
 			require.NotNil(t, tx)
+			lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil)
 
 			// verify the transaction was created
 			originalTx, err := txModel.Get(ctx, tx.ID)
@@ -687,7 +749,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			if distributionAccount == "" {
 				distributionAccount = "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU"
 			}
-			updatedTx, err := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, tc.txHash, tc.xdrSent, distributionAccount)
+			updatedTx, err := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, lockedUntil, tc.txHash, tc.xdrSent, distributionAccount)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -732,6 +794,28 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 			}
 		})
 	}
+
+	t.Run("🚧 returns ErrLockLost if the row carries another job's lock", func(t *testing.T) {
+		tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:      uuid.NewString(),
+			TransactionType: TransactionTypePayment,
+			AssetCode:       "USDC",
+			Status:          TransactionStatusProcessing,
+			Amount:          decimal.NewFromInt(1),
+			TenantID:        uuid.NewString(),
+		})
+		lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil+10)
+
+		updatedTx, err := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, lockedUntil, txHash, envelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+		require.ErrorIs(t, err, ErrLockLost)
+		assert.Nil(t, updatedTx)
+
+		refreshedTx, err := txModel.Get(ctx, tx.ID)
+		require.NoError(t, err)
+		assert.False(t, refreshedTx.StellarTransactionHash.Valid)
+		assert.False(t, refreshedTx.XDRSent.Valid)
+		assert.Equal(t, tx.AttemptsCount, refreshedTx.AttemptsCount)
+	})
 }
 
 func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
@@ -746,6 +830,7 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 
 	const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+	const lockedUntil = 11
 
 	testCases := []struct {
 		name            string
@@ -793,8 +878,9 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 
 			assert.Equal(t, false, tx.XDRReceived.Valid)
 			assert.Equal(t, "", tx.XDRReceived.String)
+			lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil)
 
-			updatedTx, err := txModel.UpdateStellarTransactionXDRReceived(ctx, tx.ID, tc.xdrReceived)
+			updatedTx, err := txModel.UpdateStellarTransactionXDRReceived(ctx, tx.ID, lockedUntil, tc.xdrReceived)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -811,6 +897,26 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("🚧 returns ErrLockLost if the row carries another job's lock", func(t *testing.T) {
+		tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:      uuid.NewString(),
+			TransactionType: TransactionTypePayment,
+			AssetCode:       "USDC",
+			Status:          TransactionStatusProcessing,
+			Amount:          decimal.NewFromInt(1),
+			TenantID:        uuid.NewString(),
+		})
+		lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil+10)
+
+		updatedTx, err := txModel.UpdateStellarTransactionXDRReceived(ctx, tx.ID, lockedUntil, resultXDR)
+		require.ErrorIs(t, err, ErrLockLost)
+		assert.Nil(t, updatedTx)
+
+		refreshedTx, err := txModel.Get(ctx, tx.ID)
+		require.NoError(t, err)
+		assert.False(t, refreshedTx.XDRReceived.Valid)
+	})
 }
 
 func Test_Transaction_validate_payment(t *testing.T) {
@@ -1666,35 +1772,51 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 		initialSyncedAt          sql.NullTime
 		initialStatus            TransactionStatus
 		initialLockedUntilLedger sql.NullInt32
+		lockedUntil              int
+		wantErr                  error
 	}{
 		{
-			name:          "🎉 successfully locks transaction without any previous lock",
+			name:          "🎉 successfully unlocks transaction without any previous lock",
 			initialStatus: TransactionStatusPending,
+			lockedUntil:   int(currentLedger),
 		},
 		{
-			name:                     "🎉 successfully locks transaction with lock expired",
+			name:                     "🎉 successfully unlocks transaction with lock expired",
 			initialStatus:            TransactionStatusPending,
 			initialLockedAt:          sql.NullTime{Time: time.Now().Add(-1 * time.Hour), Valid: true},
 			initialLockedUntilLedger: sql.NullInt32{Int32: currentLedger - 1, Valid: true},
+			lockedUntil:              int(currentLedger - 1),
 		},
 		{
 			name:                     "🎉 successfully unlocks locked transaction",
 			initialStatus:            TransactionStatusPending,
 			initialLockedAt:          sql.NullTime{Time: time.Now().Add(-1 * time.Hour), Valid: true},
 			initialLockedUntilLedger: sql.NullInt32{Int32: currentLedger, Valid: true},
+			lockedUntil:              int(currentLedger),
 		},
 		{
 			name:          "🎉 successfully unlocks transaction with status is SUCCESS",
 			initialStatus: TransactionStatusSuccess,
+			lockedUntil:   int(currentLedger),
 		},
 		{
 			name:          "🎉 successfully unlocks transaction with status is ERROR",
 			initialStatus: TransactionStatusError,
+			lockedUntil:   int(currentLedger),
 		},
 		{
 			name:            "🎉 successfully unlocks transaction with siced_at not empty",
 			initialStatus:   TransactionStatusPending,
 			initialSyncedAt: sql.NullTime{Time: time.Now().Add(-1 * time.Hour), Valid: true},
+			lockedUntil:     int(currentLedger),
+		},
+		{
+			name:                     "🚧 cannot unlock transaction locked by another job",
+			initialStatus:            TransactionStatusProcessing,
+			initialLockedAt:          sql.NullTime{Time: time.Now(), Valid: true},
+			initialLockedUntilLedger: sql.NullInt32{Int32: currentLedger + 10, Valid: true},
+			lockedUntil:              int(currentLedger),
+			wantErr:                  ErrLockLost,
 		},
 	}
 
@@ -1714,13 +1836,22 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 			_, err := dbConnectionPool.ExecContext(ctx, q, tc.initialLockedAt, tc.initialLockedUntilLedger, tc.initialSyncedAt, tc.initialStatus, tx.ID)
 			require.NoError(t, err)
 
-			tx, err = transactionModel.Unlock(ctx, dbConnectionPool, tx.ID)
-			require.NoError(t, err)
+			_, err = transactionModel.Unlock(ctx, dbConnectionPool, tx.ID, tc.lockedUntil)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
 
 			tx, err = transactionModel.Get(ctx, tx.ID)
 			require.NoError(t, err)
-			assert.Nil(t, tx.LockedAt)
-			assert.False(t, tx.LockedUntilLedgerNumber.Valid)
+			if tc.wantErr != nil {
+				assert.NotNil(t, tx.LockedAt)
+				assert.Equal(t, tc.initialLockedUntilLedger, tx.LockedUntilLedgerNumber)
+			} else {
+				assert.Nil(t, tx.LockedAt)
+				assert.False(t, tx.LockedUntilLedgerNumber.Valid)
+			}
 
 			var txRefreshed *Transaction
 			txRefreshed, err = transactionModel.Get(ctx, tx.ID)
@@ -1751,18 +1882,18 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 		{
 			name:      "cannot mark for reporcessing if the status is SUCCESS",
 			status:    TransactionStatusSuccess,
-			wantError: ErrRecordNotFound,
+			wantError: ErrLockLost,
 		},
 		{
 			name:      "cannot mark for reporcessing if the status is ERROR",
 			status:    TransactionStatusError,
-			wantError: ErrRecordNotFound,
+			wantError: ErrLockLost,
 		},
 		{
 			name:      "cannot mark for reporcessing if synced_at is not empty",
 			status:    TransactionStatusProcessing,
 			synchedAt: sql.NullTime{Time: time.Now().Add(-1 * time.Hour), Valid: true},
-			wantError: ErrRecordNotFound,
+			wantError: ErrLockLost,
 		},
 		{
 			name:   "🎉 successfully mark as processing if tx is PENDING and not synced transaction",
@@ -1795,7 +1926,7 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 			require.NoError(t, err)
 
 			// mark the transaction for reprocessing:
-			updatedTx, err := transactionModel.PrepareTransactionForReprocessing(ctx, dbConnectionPool, tx.ID)
+			updatedTx, err := transactionModel.PrepareTransactionForReprocessing(ctx, dbConnectionPool, tx.ID, lockedUntilLedger)
 
 			// check the result:
 			if tc.wantError != nil {
@@ -1819,6 +1950,48 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, refreshedTx, updatedTx)
 			}
+		})
+	}
+
+	lockTestCases := []struct {
+		name           string
+		rowLockedUntil sql.NullInt32
+	}{
+		{
+			name:           "🚧 cannot mark for reprocessing if the row carries another job's lock",
+			rowLockedUntil: sql.NullInt32{Int32: 12, Valid: true},
+		},
+		{
+			name: "🚧 cannot mark for reprocessing if the row is unlocked, so a hash awaiting reconciliation is kept",
+		},
+	}
+
+	for _, tc := range lockTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+			const lockedUntilLedger = 2
+			const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+
+			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
+				ExternalID:      uuid.NewString(),
+				TransactionType: TransactionTypePayment,
+				AssetCode:       "USDC",
+				Status:          TransactionStatusProcessing,
+				Amount:          decimal.NewFromInt(1),
+				TenantID:        uuid.NewString(),
+			})
+			q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, locked_until_ledger_number = $2 WHERE id = $3`
+			_, err := dbConnectionPool.ExecContext(ctx, q, txHash, tc.rowLockedUntil, tx.ID)
+			require.NoError(t, err)
+
+			updatedTx, err := transactionModel.PrepareTransactionForReprocessing(ctx, dbConnectionPool, tx.ID, lockedUntilLedger)
+			require.ErrorIs(t, err, ErrLockLost)
+			assert.Nil(t, updatedTx)
+
+			refreshedTx, err := transactionModel.Get(ctx, tx.ID)
+			require.NoError(t, err)
+			assert.Equal(t, txHash, refreshedTx.StellarTransactionHash.String)
+			assert.Equal(t, tc.rowLockedUntil, refreshedTx.LockedUntilLedgerNumber)
 		})
 	}
 }
