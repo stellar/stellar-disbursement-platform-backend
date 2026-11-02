@@ -23,8 +23,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-var ErrRecordNotFound = errors.New("record not found")
-var ErrLockLost = errors.New("lock lost")
+var (
+	ErrRecordNotFound = errors.New("record not found")
+	ErrLockLost       = errors.New("lock lost")
+)
 
 type TransactionType string
 
