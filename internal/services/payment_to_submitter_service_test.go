@@ -685,7 +685,8 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	assert.Equal(t, tenantID, transaction.TenantID)
 
 	// Marking the transaction as failed
-	transaction.Status = txSubStore.TransactionStatusProcessing
+	transaction, err = tssModel.Lock(ctx, tssModel.DBConnectionPool, transaction.ID, 1, 2)
+	require.NoError(t, err)
 	_, err = tssModel.UpdateStatusToError(ctx, *transaction, "Failing Test")
 	require.NoError(t, err)
 

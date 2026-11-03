@@ -22,6 +22,7 @@ type ChannelAccountStore interface {
 	// Lock management:
 	Lock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string, currentLedger, nextLedgerLock int32) (*ChannelAccount, error)
 	Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*ChannelAccount, error)
+	UnlockIfLockedUntil(ctx context.Context, sqlExec db.SQLExecuter, publicKey string, lockedUntil int) (*ChannelAccount, error)
 }
 
 //go:generate mockery --name=TransactionStore --case=underscore --structname=MockTransactionStore
@@ -34,12 +35,12 @@ type TransactionStore interface {
 	// Status & Lock management:
 	UpdateStatusToSuccess(ctx context.Context, tx Transaction) (updatedTx *Transaction, err error)
 	UpdateStatusToError(ctx context.Context, tx Transaction, message string) (updatedTx *Transaction, err error)
-	UpdateStellarTransactionXDRReceived(ctx context.Context, txID string, xdrReceived string) (*Transaction, error)
-	UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, txHash, txXDRSent, distributionAccount string) (*Transaction, error)
+	UpdateStellarTransactionXDRReceived(ctx context.Context, txID string, lockedUntil int, xdrReceived string) (*Transaction, error)
+	UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx context.Context, txID string, lockedUntil int, txHash, txXDRSent, distributionAccount string) (*Transaction, error)
 	Lock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, currentLedger, nextLedgerLock int32) (*Transaction, error)
-	Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error)
+	Unlock(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, lockedUntil int) (*Transaction, error)
 	// Queue management:
-	PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error)
+	PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string, lockedUntil int) (*Transaction, error)
 	GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string, transactionType TransactionType) (transactions []*Transaction, err error)
 	GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string, expectedTransactionType TransactionType) (transaction *Transaction, err error)
 	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error

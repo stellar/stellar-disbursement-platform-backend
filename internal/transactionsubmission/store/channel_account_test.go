@@ -557,6 +557,67 @@ func Test_ChannelAccountModel_Unlock(t *testing.T) {
 	}
 }
 
+func Test_ChannelAccountModel_UnlockIfLockedUntil(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	chAccModel := ChannelAccountModel{DBConnectionPool: dbConnectionPool}
+
+	const lockedUntil = 10
+
+	testCases := []struct {
+		name                     string
+		initialLockedUntilLedger sql.NullInt32
+		wantErr                  error
+	}{
+		{
+			name:                     "🎉 successfully unlocks channel account that carries the caller's lock",
+			initialLockedUntilLedger: sql.NullInt32{Int32: lockedUntil, Valid: true},
+		},
+		{
+			name:                     "🚧 cannot unlock channel account locked by another job",
+			initialLockedUntilLedger: sql.NullInt32{Int32: lockedUntil + 10, Valid: true},
+			wantErr:                  ErrLockLost,
+		},
+		{
+			name:    "🚧 cannot unlock channel account that is not locked",
+			wantErr: ErrLockLost,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+
+			channelAccount := CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 1)[0]
+			if tc.initialLockedUntilLedger.Valid {
+				q := `UPDATE channel_accounts SET locked_at = NOW(), locked_until_ledger_number = $1 WHERE public_key = $2`
+				_, err := dbConnectionPool.ExecContext(ctx, q, tc.initialLockedUntilLedger, channelAccount.PublicKey)
+				require.NoError(t, err)
+			}
+
+			unlockedAccount, err := chAccModel.UnlockIfLockedUntil(ctx, dbConnectionPool, channelAccount.PublicKey, lockedUntil)
+
+			channelAccountRefreshed, getErr := chAccModel.Get(ctx, chAccModel.DBConnectionPool, channelAccount.PublicKey, 0)
+			require.NoError(t, getErr)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				assert.Nil(t, unlockedAccount)
+				assert.Equal(t, tc.initialLockedUntilLedger, channelAccountRefreshed.LockedUntilLedgerNumber)
+			} else {
+				require.NoError(t, err)
+				assert.False(t, unlockedAccount.LockedAt.Valid)
+				assert.False(t, unlockedAccount.LockedUntilLedgerNumber.Valid)
+				require.Equal(t, *channelAccountRefreshed, *unlockedAccount)
+			}
+		})
+	}
+}
+
 func Test_ChannelAccountModel_Lock_Unlock(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
