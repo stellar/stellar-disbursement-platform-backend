@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Remove payment write access from Business role. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)
 - Grant export access to Business role. [#1254](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1254)
 - Remove receiver write access from Business memberships. [#1255](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1255)
+- Restore embedded wallet OTP/PII verification on pubnet. [#TBD](https://github.com/stellar/stellar-disbursement-platform-backend/pull/TBD)
+
+### Security and Dependencies
+
+- Bind the SEP-24 interactive deposit token to the authenticated SEP-10/SEP-45 subject. [#TBD](https://github.com/stellar/stellar-disbursement-platform-backend/pull/TBD)
 
 ## [7.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/7.0.0...7.1.0))
 

@@ -205,11 +205,21 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	receiver data.Receiver, otp string,
 	contactInfo string,
 ) (receiverWallet data.ReceiverWallet, wasAlreadyRegistered bool, err error) {
-	// STEP 1: find the receiver wallet for the given [receiverID, clientDomain]
-	rw, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
-	if err != nil {
-		err = fmt.Errorf("receiver wallet not found for receiverID=%s and clientDomain=%s: %w", receiver.ID, sep24Claims.ClientDomain(), err)
-		return receiverWallet, false, &InformationNotFoundError{cause: err}
+	// STEP 1: find the receiver wallet for the given [receiverID, contractAddress] (embedded wallets) or
+	// [receiverID, clientDomain] (other wallets)
+	var rw *data.ReceiverWallet
+	if sep24Claims.IsContractAccount() {
+		rw, err = v.Models.ReceiverWallet.GetByReceiverIDAndContractAddress(ctx, receiver.ID, sep24Claims.Account(), dbTx)
+		if err != nil {
+			err = fmt.Errorf("receiver wallet not found for receiverID=%s and contractAddress=%s: %w", receiver.ID, sep24Claims.Account(), err)
+			return receiverWallet, false, &InformationNotFoundError{cause: err}
+		}
+	} else {
+		rw, err = v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
+		if err != nil {
+			err = fmt.Errorf("receiver wallet not found for receiverID=%s and clientDomain=%s: %w", receiver.ID, sep24Claims.ClientDomain(), err)
+			return receiverWallet, false, &InformationNotFoundError{cause: err}
+		}
 	}
 
 	// STEP 2: check if receiver wallet status is already "REGISTERED"

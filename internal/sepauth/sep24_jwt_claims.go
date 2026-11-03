@@ -49,6 +49,10 @@ func (c *SEP24JWTClaims) Memo() string {
 	return memo
 }
 
+func (c *SEP24JWTClaims) IsContractAccount() bool {
+	return strkey.IsValidContractAddress(c.Account())
+}
+
 func (c *SEP24JWTClaims) ExpiresAt() *time.Time {
 	if c.RegisteredClaims.ExpiresAt == nil {
 		return nil

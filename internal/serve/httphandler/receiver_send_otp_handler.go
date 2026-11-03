@@ -137,7 +137,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		httperror.InternalError(ctx, "Unexpected contact info", nil, nil).WithErrorCode(httperror.Code500_6).Render(w)
 		return
 	}
-	verificationField, httpErr := h.handleOTPForReceiver(ctx, contactType, contactInfo, sep24Claims.ClientDomainClaim)
+	verificationField, httpErr := h.handleOTPForReceiver(ctx, contactType, contactInfo, sep24Claims)
 	if httpErr != nil {
 		httpErr.Render(w)
 		return
@@ -166,7 +166,7 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	ctx context.Context,
 	contactType data.ReceiverContactType,
 	contactInfo string,
-	sep24ClientDomain string,
+	sep24Claims *sepauth.SEP24JWTClaims,
 ) (data.VerificationType, *httperror.HTTPError) {
 	var err error
 	placeholderVerificationField := data.VerificationTypeDateOfBirth
@@ -187,13 +187,22 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot generate OTP for receiver wallet", err, nil).WithErrorCode(httperror.Code500_7)
 	}
 
-	// Update OTP for receiver wallet
-	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, contactInfo, sep24ClientDomain, newOTP)
+	// Update OTP for receiver wallet. Embedded wallets (contract subjects) are matched through the deployed contract,
+	// other wallets through the SEP-10 client domain.
+	var numberOfUpdatedRows int
+	var matchedBy string
+	if sep24Claims.IsContractAccount() {
+		matchedBy = fmt.Sprintf("contract address (%s)", sep24Claims.Account())
+		numberOfUpdatedRows, err = h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndContractAddress(ctx, contactInfo, sep24Claims.Account(), newOTP)
+	} else {
+		matchedBy = fmt.Sprintf("client domain (%s)", sep24Claims.ClientDomain())
+		numberOfUpdatedRows, err = h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, contactInfo, sep24Claims.ClientDomain(), newOTP)
+	}
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil).WithErrorCode(httperror.Code500_8)
 	}
 	if numberOfUpdatedRows < 1 {
-		log.Ctx(ctx).Warnf("Could not find a match between %s (%s) and client domain (%s)", contactTypeStr, truncatedContactInfo, sep24ClientDomain)
+		log.Ctx(ctx).Warnf("Could not find a match between %s (%s) and %s", contactTypeStr, truncatedContactInfo, matchedBy)
 		h.recordRegistrationAttempt(ctx, contactType, contactInfo)
 		return placeholderVerificationField, nil
 	}

@@ -698,6 +698,160 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 	})
 }
 
+func Test_GetByReceiverIDAndContractAddress(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+	embeddedWalletModel := EmbeddedWalletModel{dbConnectionPool: dbConnectionPool}
+	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "https://www.wallet.com", "", "wallet1://")
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	embedded := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token-1", "hash", contractAddress, "cred-id", "pub", SuccessWalletStatus)
+	require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, embedded.Token, EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+
+	t.Run("returns error when the contract belongs to another receiver", func(t *testing.T) {
+		actual, err := receiverWalletModel.GetByReceiverIDAndContractAddress(ctx, "invalid_id", contractAddress, dbConnectionPool)
+		require.ErrorContains(t, err, "sql: no rows in result set")
+		require.Nil(t, actual)
+	})
+
+	t.Run("returns error when no embedded wallet has the contract address", func(t *testing.T) {
+		actual, err := receiverWalletModel.GetByReceiverIDAndContractAddress(ctx, receiver.ID, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC", dbConnectionPool)
+		require.ErrorContains(t, err, "sql: no rows in result set")
+		require.Nil(t, actual)
+	})
+
+	t.Run("returns receiver_wallet", func(t *testing.T) {
+		actual, err := receiverWalletModel.GetByReceiverIDAndContractAddress(ctx, receiver.ID, contractAddress, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, receiverWallet.ID, actual.ID)
+		assert.Equal(t, wallet.ID, actual.Wallet.ID)
+	})
+}
+
+func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndContractAddress(t *testing.T) {
+	dbConnectionPool := testutils.GetDBConnectionPool(t)
+
+	ctx := context.Background()
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+	embeddedWalletModel := EmbeddedWalletModel{dbConnectionPool: dbConnectionPool}
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Embedded Wallet", "http://home.test", "", "wallet123://")
+	const contractAddress = "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+
+	// linkEmbeddedWallet deploys contractAddress for the receiver wallet.
+	linkEmbeddedWallet := func(t *testing.T, rw *ReceiverWallet) {
+		embedded := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "hash", contractAddress, "cred-id", "pub", SuccessWalletStatus)
+		require.NoError(t, embeddedWalletModel.Update(ctx, dbConnectionPool, embedded.Token, EmbeddedWalletUpdate{ReceiverWalletID: rw.ID}))
+	}
+
+	testCases := []struct {
+		name                string
+		setupReceiverWallet func(t *testing.T, receiver Receiver)
+		contactInfo         func(r Receiver, contactType ReceiverContactType) string
+		contractAddress     string
+		expectedRows        int
+	}{
+		{
+			name: "does not update OTP when the contact info belongs to another receiver",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				linkEmbeddedWallet(t, CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus))
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return "invalid_contact_info"
+			},
+			contractAddress: contractAddress,
+			expectedRows:    0,
+		},
+		{
+			name: "does not update OTP when the contract is not linked to the receiver wallet",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			contractAddress: contractAddress,
+			expectedRows:    0,
+		},
+		{
+			name: "does not update OTP for a confirmed receiver wallet",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+				linkEmbeddedWallet(t, rw)
+				_, err := dbConnectionPool.ExecContext(ctx, `UPDATE receiver_wallets SET otp_confirmed_at = NOW() WHERE id = $1`, rw.ID)
+				require.NoError(t, err)
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			contractAddress: contractAddress,
+			expectedRows:    0,
+		},
+		{
+			name: "🎉 successfully updates OTP for an unconfirmed receiver wallet",
+			setupReceiverWallet: func(t *testing.T, receiver Receiver) {
+				linkEmbeddedWallet(t, CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus))
+			},
+			contactInfo: func(r Receiver, contactType ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			contractAddress: contractAddress,
+			expectedRows:    1,
+		},
+	}
+
+	phoneNumber := "+141555555555"
+	email := "test@example.com"
+
+	for _, contactType := range GetAllReceiverContactTypes() {
+		receiverInsert := &Receiver{}
+		switch contactType {
+		case ReceiverContactTypeSMS:
+			receiverInsert.PhoneNumber = phoneNumber
+		case ReceiverContactTypeEmail:
+			receiverInsert.Email = email
+		}
+
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("%s/%s", contactType, tc.name), func(t *testing.T) {
+				defer DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				defer DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+				receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, receiverInsert)
+				tc.setupReceiverWallet(t, *receiver)
+
+				otp, err := utils.RandomString(6, utils.NumberBytes)
+				require.NoError(t, err)
+
+				contactInfo := tc.contactInfo(*receiver, contactType)
+				rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverContactInfoAndContractAddress(ctx, contactInfo, tc.contractAddress, otp)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedRows, rowsUpdated)
+
+				if tc.expectedRows > 0 {
+					var actualOTP string
+					var actualAttempts int
+					q := `SELECT otp, otp_attempts FROM receiver_wallets WHERE receiver_id = $1 AND wallet_id = $2`
+					err := dbConnectionPool.QueryRowxContext(ctx, q, receiver.ID, wallet.ID).Scan(&actualOTP, &actualAttempts)
+					require.NoError(t, err)
+					assert.Equal(t, otp, actualOTP)
+					assert.Equal(t, 0, actualAttempts)
+				}
+			})
+		}
+	}
+}
+
 func Test_ReceiverWallet_UpdateOTPByReceiverContactInfoAndWalletDomain(t *testing.T) {
 	dbConnectionPool := testutils.GetDBConnectionPool(t)
 
