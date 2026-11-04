@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	ctxHelper "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -140,15 +141,13 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	user, err := ctxHelper.GetUserFromContext(ctx, p.AuthManager)
 	if err != nil {
-		httperror.Unauthorized("", nil, nil).Render(rw)
-		return
-	}
-
-	user, err := p.AuthManager.GetUser(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		if errors.Is(err, auth.ErrUserNotFound) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot get user from context", err, nil).Render(rw)
 		return
 	}
 
