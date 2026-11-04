@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -35,18 +36,8 @@ type SEP24RequestQuery struct {
 	TransactionID string `query:"transaction_id"`
 }
 
-// checkSEP24ClientAndHomeDomains check if the sep24 token has a client domain and a home domain,
-// if there is not a client domain it checks in which network the API is running on, only testnet can have an empty client domain,
-// and home domain is always mandatory.
-func checkSEP24ClientAndHomeDomains(ctx context.Context, sep24Claims *SEP24JWTClaims, networkPassphrase string) error {
-	if sep24Claims.ClientDomain() == "" {
-		missingDomain := "missing client domain in the token claims"
-		if networkPassphrase == network.PublicNetworkPassphrase {
-			log.Ctx(ctx).Error(missingDomain)
-			return errors.New(missingDomain)
-		}
-		log.Ctx(ctx).Warn(missingDomain)
-	}
+// checkSEP24HomeDomain checks that the sep24 token has a home domain, which is always mandatory.
+func checkSEP24HomeDomain(ctx context.Context, sep24Claims *SEP24JWTClaims) error {
 	if sep24Claims.HomeDomain() == "" {
 		missingDomain := "missing home domain in the token claims"
 		log.Ctx(ctx).Error(missingDomain)
@@ -55,9 +46,35 @@ func checkSEP24ClientAndHomeDomains(ctx context.Context, sep24Claims *SEP24JWTCl
 	return nil
 }
 
+// checkSEP24ClientDomain rejects an empty client domain on pubnet, unless the subject is a contract account deployed by
+// this tenant (SEP-24: without client_domain the subject is the origin). It must run after the tenant is set in ctx.
+func checkSEP24ClientDomain(ctx context.Context, sep24Claims *SEP24JWTClaims, networkPassphrase string, models *data.Models) *httperror.HTTPError {
+	if sep24Claims.ClientDomain() != "" {
+		return nil
+	}
+
+	if sep24Claims.IsContractAccount() {
+		_, err := models.EmbeddedWallets.GetByContractAddress(ctx, models.DBConnectionPool, sep24Claims.Account())
+		if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
+			return httperror.InternalError(ctx, "Failed to look up contract account", err, nil)
+		}
+		if err == nil {
+			return nil
+		}
+	}
+
+	missingDomain := "missing client domain in the token claims"
+	if networkPassphrase == network.PublicNetworkPassphrase {
+		log.Ctx(ctx).Error(missingDomain)
+		return httperror.BadRequest("", errors.New(missingDomain), nil)
+	}
+	log.Ctx(ctx).Warn(missingDomain)
+	return nil
+}
+
 // SEP24QueryTokenAuthenticateMiddleware is a middleware that validates if the token passed in as a query
 // parameter with ?token={token} is valid for the authenticated endpoints.
-func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface, singleTenantMode bool) func(http.Handler) http.Handler {
+func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface, singleTenantMode bool, models *data.Models) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -100,7 +117,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				return
 			}
 
-			err = checkSEP24ClientAndHomeDomains(ctx, sep24Claims, networkPassphrase)
+			err = checkSEP24HomeDomain(ctx, sep24Claims)
 			if err != nil {
 				httperror.BadRequest("", err, nil).Render(rw)
 				return
@@ -111,10 +128,15 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				httpErr.Render(rw)
 				return
 			}
+			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
+
+			if httpErr = checkSEP24ClientDomain(ctx, sep24Claims, networkPassphrase, models); httpErr != nil {
+				httpErr.Render(rw)
+				return
+			}
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, SEP24ClaimsContextKey, sep24Claims)
-			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
@@ -124,7 +146,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 
 // SEP24HeaderTokenAuthenticateMiddleware is a middleware that validates if the token passed in
 // the 'Authorization' header is valid for the authenticated endpoints.
-func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface, singleTenantMode bool) func(http.Handler) http.Handler {
+func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface, singleTenantMode bool, models *data.Models) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -156,7 +178,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				return
 			}
 
-			err = checkSEP24ClientAndHomeDomains(ctx, sep24Claims, networkPassphrase)
+			err = checkSEP24HomeDomain(ctx, sep24Claims)
 			if err != nil {
 				httperror.BadRequest("", err, nil).Render(rw)
 				return
@@ -167,10 +189,15 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				httpErr.Render(rw)
 				return
 			}
+			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
+
+			if httpErr = checkSEP24ClientDomain(ctx, sep24Claims, networkPassphrase, models); httpErr != nil {
+				httpErr.Render(rw)
+				return
+			}
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, SEP24ClaimsContextKey, sep24Claims)
-			ctx = sdpcontext.SetTenantInContext(ctx, currentTenant)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)

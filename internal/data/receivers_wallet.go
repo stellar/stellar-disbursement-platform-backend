@@ -431,6 +431,46 @@ func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndWalletDomain(ctx
 	return int(updatedRowsAffected), nil
 }
 
+// UpdateOTPByReceiverContactInfoAndContractAddress updates the OTP of the receiver wallet linked to the embedded
+// wallet contract, if the contact info is its receiver's and it is not verified yet. Returns the updated row count.
+func (rw *ReceiverWalletModel) UpdateOTPByReceiverContactInfoAndContractAddress(ctx context.Context, receiverContactInfo, contractAddress, otp string) (numberOfUpdatedRows int, err error) {
+	query := `
+		WITH rw_cte AS (
+			SELECT
+				rw.id
+			FROM
+				receiver_wallets rw
+				INNER JOIN receivers r ON rw.receiver_id = r.id
+				INNER JOIN embedded_wallets ew ON ew.receiver_wallet_id = rw.id
+			WHERE
+				(r.phone_number = $1 OR r.email = $1)
+				AND ew.contract_address = $2
+				AND rw.otp_confirmed_at IS NULL
+		)
+		UPDATE
+			receiver_wallets
+		SET
+			otp = $3,
+			otp_created_at = NOW(),
+			otp_attempts = 0
+		FROM rw_cte
+		WHERE
+			receiver_wallets.id = rw_cte.id
+	`
+
+	rows, err := rw.dbConnectionPool.ExecContext(ctx, query, receiverContactInfo, contractAddress, otp)
+	if err != nil {
+		return 0, fmt.Errorf("updating receiver wallets otp by contract address: %w", err)
+	}
+
+	updatedRowsAffected, err := rows.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("getting updated rows of receiver wallets otp by contract address: %w", err)
+	}
+
+	return int(updatedRowsAffected), nil
+}
+
 // GetOrInsertReceiverWallet inserts a new receiver wallet into the database.
 func (rw *ReceiverWalletModel) GetOrInsertReceiverWallet(ctx context.Context, sqlExec db.SQLExecuter, insert ReceiverWalletInsert) (string, error) {
 	var newID string
@@ -447,7 +487,7 @@ func (rw *ReceiverWalletModel) GetOrInsertReceiverWallet(ctx context.Context, sq
 	return newID, nil
 }
 
-// GetByReceiverIDAndWalletDomain returns a receiver wallet that match the receiver ID and wallet domain.
+// GetByReceiverIDAndWalletDomain returns a receiver wallet that matches the receiver ID and wallet domain.
 func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Context, receiverID string, walletDomain string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
 	query := `
 		SELECT
@@ -465,7 +505,39 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	var receiverWallet ReceiverWallet
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletDomain)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
 		return nil, fmt.Errorf("error querying receiver wallet: %w", err)
+	}
+
+	return &receiverWallet, nil
+}
+
+// GetByReceiverIDAndContractAddress returns a receiver wallet that matches the receiver ID and embedded wallet contract.
+func (rw *ReceiverWalletModel) GetByReceiverIDAndContractAddress(ctx context.Context, receiverID string, contractAddress string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
+	query := `
+		SELECT
+			` + ReceiverWalletColumnNames("rw", "") + `,
+			` + WalletColumnNames("w", "wallet", false) + `
+		FROM
+			receiver_wallets rw
+		JOIN
+			wallets w ON rw.wallet_id = w.id
+		JOIN
+			embedded_wallets ew ON ew.receiver_wallet_id = rw.id
+		WHERE
+			rw.receiver_id = $1
+			AND ew.contract_address = $2
+	`
+
+	var receiverWallet ReceiverWallet
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, contractAddress)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("error querying receiver wallet by contract address: %w", err)
 	}
 
 	return &receiverWallet, nil

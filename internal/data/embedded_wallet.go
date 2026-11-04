@@ -127,6 +127,27 @@ func (ew *EmbeddedWalletModel) GetByCredentialID(ctx context.Context, sqlExec db
 	return &wallet, nil
 }
 
+func (ew *EmbeddedWalletModel) GetByContractAddress(ctx context.Context, sqlExec db.SQLExecuter, contractAddress string) (*EmbeddedWallet, error) {
+	query := fmt.Sprintf(`
+        SELECT
+            %s
+        FROM embedded_wallets ew
+        WHERE
+            ew.contract_address = $1
+        `, EmbeddedWalletColumnNames("ew", ""))
+
+	var wallet EmbeddedWallet
+	err := sqlExec.GetContext(ctx, &wallet, query, contractAddress)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("querying embedded wallet by contract address: %w", err)
+	}
+
+	return &wallet, nil
+}
+
 func (ew *EmbeddedWalletModel) GetByReceiverWalletIDAndStatuses(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string, statuses []EmbeddedWalletStatus) (*EmbeddedWallet, error) {
 	if strings.TrimSpace(receiverWalletID) == "" {
 		return nil, ErrMissingInput

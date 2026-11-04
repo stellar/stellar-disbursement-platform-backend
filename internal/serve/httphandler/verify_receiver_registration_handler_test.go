@@ -383,10 +383,27 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 		},
 	}
 
+	const contractAddress = "CBMPN7ISGRAUPESOBG6DCWM5XPM5O3SW5TRUXFACY63EDOF6G7YS3NUP"
+	contractSEP24JWTClaims := &sepauth.SEP24JWTClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   contractAddress,
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+
+	// a third-party contract wallet: contract subject attributed to a client domain
+	contractWithDomainSEP24JWTClaims := &sepauth.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims:  contractSEP24JWTClaims.RegisteredClaims,
+	}
+
 	testCases := []struct {
 		name                        string
 		sep24Claims                 *sepauth.SEP24JWTClaims
 		currentReceiverWalletStatus data.ReceiversWalletStatus
+		// linkContract deploys contractAddress for the receiver wallet (embedded wallet)
+		linkContract bool
 		// shouldOTPMatch is used to simulate the case where the OTP provided in the request body is equals or different from the one saved in the DB
 		shouldOTPMatch           bool
 		wantWasAlreadyRegistered bool
@@ -396,7 +413,29 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			name:                        "returns an error if the receiver wallet cannot be found",
 			sep24Claims:                 sep24JWTClaims,
 			currentReceiverWalletStatus: "", // <--- no receiver wallet exists
-			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and clientDomain=home.page: error querying receiver wallet: sql: no rows in result set"},
+			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and clientDomain=home.page: " + data.ErrRecordNotFound.Error()},
+		},
+		{
+			name:                        "returns an error if no embedded wallet links the contract subject to the receiver wallet",
+			sep24Claims:                 contractSEP24JWTClaims,
+			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
+			shouldOTPMatch:              true,
+			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and contractAddress=" + contractAddress + ": " + data.ErrRecordNotFound.Error()},
+		},
+		{
+			name:                        "🎉 successfully updates a receiverWallet to REGISTERED for a contract subject",
+			sep24Claims:                 contractSEP24JWTClaims,
+			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
+			linkContract:                true,
+			shouldOTPMatch:              true,
+			wantWasAlreadyRegistered:    false,
+		},
+		{
+			name:                        "🎉 successfully updates a receiverWallet to REGISTERED for a contract subject with a client domain (matched by domain)",
+			sep24Claims:                 contractWithDomainSEP24JWTClaims,
+			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
+			shouldOTPMatch:              true,
+			wantWasAlreadyRegistered:    false,
 		},
 		{
 			name:                        "🎉 successfully identifies a receiverWallet that has already been marked as REGISTERED",
@@ -462,6 +501,12 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 				`
 				_, err = dbConnectionPool.ExecContext(ctx, q, correctOTP, sql.NullString{String: stellarAddress, Valid: stellarAddress != ""}, otpConfirmedAt, otpConfirmedWith, receiverWallet.ID)
 				require.NoError(t, err)
+
+				if tc.linkContract {
+					t.Cleanup(func() { data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool) })
+					embedded := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", contractAddress, "cred-id", "pub", data.SuccessWalletStatus)
+					require.NoError(t, models.EmbeddedWallets.Update(ctx, dbConnectionPool, embedded.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+				}
 			}
 
 			// assertions
@@ -477,7 +522,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 				require.NoError(t, err)
 				assert.Equal(t, data.RegisteredReceiversWalletStatus, rw.Status)
 				assert.Equal(t, rwUpdated.Status, rw.Status)
-				assert.NotEmpty(t, rw.StellarAddress)
+				assert.Equal(t, tc.sep24Claims.Account(), rw.StellarAddress)
 				assert.Equal(t, rwUpdated.StellarAddress, rw.StellarAddress)
 				assert.NotNil(t, rw.OTPConfirmedAt)
 				assert.NotNil(t, rwUpdated.OTPConfirmedAt)
