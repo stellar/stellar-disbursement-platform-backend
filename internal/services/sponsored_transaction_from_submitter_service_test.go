@@ -161,7 +161,7 @@ func Test_SponsoredTransactionFromSubmitterService_SyncBatchTransactions(t *test
 		require.NoError(t, err)
 
 		// Update transactions states PENDING->PROCESSING with both stellar_transaction_hash and distribution_account:
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account=$3 WHERE id = $4 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account=$3, locked_until_ledger_number = 1 WHERE id = $4 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, tx, q, testTransactionHash, txSubStore.TransactionStatusProcessing, testSponsoredAccount, tx.ID)
 		require.NoError(t, err)
 
@@ -192,7 +192,7 @@ func Test_SponsoredTransactionFromSubmitterService_SyncBatchTransactions(t *test
 		require.NoError(t, err)
 
 		// Update payment transaction to SUCCESS
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'payment_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'payment_hash_123', status=$1, locked_until_ledger_number = 1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, paymentTx, q, txSubStore.TransactionStatusProcessing, paymentTx.ID)
 		require.NoError(t, err)
 
@@ -260,7 +260,7 @@ func prepareSponsoredTxsForSync(t *testing.T, testCtx *testContext, transactions
 		require.NoError(t, err)
 		txHash := hex.EncodeToString(hashBytes)
 
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account=$3 WHERE id = $4`
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account=$3, locked_until_ledger_number = 1 WHERE id = $4`
 		_, err = testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, txHash, txSubStore.TransactionStatusProcessing, testSponsoredAccount, tx.ID)
 		require.NoError(t, err)
 

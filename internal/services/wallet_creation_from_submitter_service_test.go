@@ -166,7 +166,7 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 		require.NoError(t, err)
 
 		// Update transactions states PENDING->PROCESSING:
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'orphan_hash_123', status=$1, distribution_account=$2 WHERE id = $3 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'orphan_hash_123', status=$1, distribution_account=$2, locked_until_ledger_number = 1 WHERE id = $3 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, tx, q, txSubStore.TransactionStatusProcessing, testDistributionAccount, tx.ID)
 		require.NoError(t, err)
 
@@ -197,7 +197,7 @@ func Test_WalletCreationFromSubmitterService_SyncBatchTransactions(t *testing.T)
 		require.NoError(t, err)
 
 		// Update payment transaction to SUCCESS
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'payment_hash_123', status=$1, distribution_account=$2 WHERE id = $3 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'payment_hash_123', status=$1, distribution_account=$2, locked_until_ledger_number = 1 WHERE id = $3 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, paymentTx, q, txSubStore.TransactionStatusProcessing, testDistributionAccount, paymentTx.ID)
 		require.NoError(t, err)
 
@@ -555,7 +555,7 @@ func prepareEmbeddedWalletTxsForSync(t *testing.T, testCtx *testContext, transac
 	var err error
 
 	for _, tx := range transactions {
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account=$3 WHERE id = $4`
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account=$3, locked_until_ledger_number = 1 WHERE id = $4`
 		_, err = testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, "test-hash-"+tx.ID, txSubStore.TransactionStatusProcessing, testDistributionAccount, tx.ID)
 		require.NoError(t, err)
 

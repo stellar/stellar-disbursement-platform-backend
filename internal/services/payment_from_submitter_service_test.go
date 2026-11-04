@@ -235,7 +235,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update transactions states PENDING->PROCESSING:
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'dummy_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'dummy_hash_123', status=$1, locked_until_ledger_number = 1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, tx, q, txSubStore.TransactionStatusProcessing, tx.ID)
 		require.NoError(t, err)
 
@@ -266,7 +266,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update wallet transaction to SUCCESS
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'wallet_hash_123', status=$1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = 'wallet_hash_123', status=$1, locked_until_ledger_number = 1 WHERE id = $2 RETURNING ` + txSubStore.TransactionColumnNames("", "")
 		err = dbConnectionPool.GetContext(ctx, walletTx, q, txSubStore.TransactionStatusProcessing, walletTx.ID)
 		require.NoError(t, err)
 
@@ -366,7 +366,7 @@ func prepareTxsForSync(t *testing.T, testCtx *testContext, transactions []*txSub
 	const testDistributionAccount = "GDOSPKDCGMYZTPHXPFAZSSVIHNKBPEGQXQVEWEJ4JXMKYZNXEVCFGMC2"
 
 	for _, tx := range transactions {
-		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account = $3 WHERE id = $4`
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = $1, status=$2, distribution_account = $3, locked_until_ledger_number = 1 WHERE id = $4`
 		_, err = testCtx.tssModel.DBConnectionPool.ExecContext(testCtx.ctx, q, "test-hash-"+tx.ID, txSubStore.TransactionStatusProcessing, testDistributionAccount, tx.ID)
 		require.NoError(t, err)
 

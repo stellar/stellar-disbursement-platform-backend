@@ -368,4 +368,29 @@ func (ca *ChannelAccountModel) Unlock(ctx context.Context, sqlExec db.SQLExecute
 	return &channelAccount, nil
 }
 
+// UnlockIfLockedUntil lifts the lock from the channel account with the provided publicKey if it still carries lockedUntil.
+func (ca *ChannelAccountModel) UnlockIfLockedUntil(ctx context.Context, sqlExec db.SQLExecuter, publicKey string, lockedUntil int) (*ChannelAccount, error) {
+	q := `
+		UPDATE
+			channel_accounts
+		SET
+			locked_at = NULL,
+			locked_until_ledger_number = NULL
+		WHERE
+			public_key = $1
+			AND locked_until_ledger_number = $2
+		RETURNING *
+	`
+	var channelAccount ChannelAccount
+	err := sqlExec.GetContext(ctx, &channelAccount, q, publicKey, lockedUntil)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrLockLost
+		}
+		return nil, fmt.Errorf("unlocking channel account %q: %w", publicKey, err)
+	}
+
+	return &channelAccount, nil
+}
+
 var _ ChannelAccountStore = &ChannelAccountModel{}

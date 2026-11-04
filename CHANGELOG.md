@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security and Dependencies
 
+- Fence TSS job writes with the job's lock. [#1258](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1258)
 - Bind the SEP-24 interactive deposit token to the authenticated SEP-10/SEP-45 subject. [#1259](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1259)
 
 ## [7.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/7.0.0...7.1.0))
