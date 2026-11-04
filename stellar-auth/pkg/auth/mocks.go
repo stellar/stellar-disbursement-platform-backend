@@ -293,26 +293,26 @@ func (am *AuthManagerMock) GetTenantID(ctx context.Context, tokenString string) 
 	return args.Get(0).(string), args.Error(1)
 }
 
-func (am *AuthManagerMock) GetAllUsers(ctx context.Context, tokenString string) ([]User, error) {
-	args := am.Called(ctx, tokenString)
+func (am *AuthManagerMock) GetAllUsers(ctx context.Context) ([]User, error) {
+	args := am.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]User), args.Error(1)
 }
 
-func (am *AuthManagerMock) UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error {
-	args := am.Called(ctx, tokenString, userID, roles)
+func (am *AuthManagerMock) UpdateUserRoles(ctx context.Context, userID string, roles []string) error {
+	args := am.Called(ctx, userID, roles)
 	return args.Error(0)
 }
 
-func (am *AuthManagerMock) DeactivateUser(ctx context.Context, tokenString, userID string) error {
-	args := am.Called(ctx, tokenString, userID)
+func (am *AuthManagerMock) DeactivateUser(ctx context.Context, userID string) error {
+	args := am.Called(ctx, userID)
 	return args.Error(0)
 }
 
-func (am *AuthManagerMock) ActivateUser(ctx context.Context, tokenString, userID string) error {
-	args := am.Called(ctx, tokenString, userID)
+func (am *AuthManagerMock) ActivateUser(ctx context.Context, userID string) error {
+	args := am.Called(ctx, userID)
 	return args.Error(0)
 }
 
