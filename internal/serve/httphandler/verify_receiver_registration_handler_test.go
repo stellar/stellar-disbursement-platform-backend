@@ -392,6 +392,12 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 		},
 	}
 
+	// a third-party contract wallet: contract subject attributed to a client domain
+	contractWithDomainSEP24JWTClaims := &sepauth.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims:  contractSEP24JWTClaims.RegisteredClaims,
+	}
+
 	testCases := []struct {
 		name                        string
 		sep24Claims                 *sepauth.SEP24JWTClaims
@@ -407,20 +413,27 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			name:                        "returns an error if the receiver wallet cannot be found",
 			sep24Claims:                 sep24JWTClaims,
 			currentReceiverWalletStatus: "", // <--- no receiver wallet exists
-			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and clientDomain=home.page: error querying receiver wallet: sql: no rows in result set"},
+			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and clientDomain=home.page: " + data.ErrRecordNotFound.Error()},
 		},
 		{
 			name:                        "returns an error if no embedded wallet links the contract subject to the receiver wallet",
 			sep24Claims:                 contractSEP24JWTClaims,
 			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
 			shouldOTPMatch:              true,
-			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and contractAddress=" + contractAddress + ": error querying receiver wallet by contract address: sql: no rows in result set"},
+			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and contractAddress=" + contractAddress + ": " + data.ErrRecordNotFound.Error()},
 		},
 		{
 			name:                        "🎉 successfully updates a receiverWallet to REGISTERED for a contract subject",
 			sep24Claims:                 contractSEP24JWTClaims,
 			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
 			linkContract:                true,
+			shouldOTPMatch:              true,
+			wantWasAlreadyRegistered:    false,
+		},
+		{
+			name:                        "🎉 successfully updates a receiverWallet to REGISTERED for a contract subject with a client domain (matched by domain)",
+			sep24Claims:                 contractWithDomainSEP24JWTClaims,
+			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
 			shouldOTPMatch:              true,
 			wantWasAlreadyRegistered:    false,
 		},

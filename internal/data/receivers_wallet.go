@@ -505,6 +505,9 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	var receiverWallet ReceiverWallet
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, walletDomain)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
 		return nil, fmt.Errorf("error querying receiver wallet: %w", err)
 	}
 
@@ -531,6 +534,9 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndContractAddress(ctx context.Con
 	var receiverWallet ReceiverWallet
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverID, contractAddress)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
 		return nil, fmt.Errorf("error querying receiver wallet by contract address: %w", err)
 	}
 

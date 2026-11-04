@@ -725,6 +725,56 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		require.Contains(t, buf.String(), "missing client domain in the token claims")
 	})
 
+	t.Run("token with empty client domain and a contract subject in pubnet", func(t *testing.T) {
+		deployedContract := "CBMPN7ISGRAUPESOBG6DCWM5XPM5O3SW5TRUXFACY63EDOF6G7YS3NUP"
+		data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", deployedContract, "cred-id", "pub", data.SuccessWalletStatus)
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		var contextClaims *SEP24JWTClaims
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager, false, models)).Get("/authenticated_pubnet_contract", func(w http.ResponseWriter, r *http.Request) {
+			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
+			require.NoError(t, err)
+		})
+
+		testCases := []struct {
+			name           string
+			subject        string
+			wantStatusCode int
+		}{
+			{name: "🎉 contract deployed by the tenant is accepted", subject: deployedContract, wantStatusCode: http.StatusOK},
+			{name: "unknown contract is rejected", subject: "CAAAODQVDQRSUMJYH5DE2VC3MJUXA536QWGJHGVBVCX3NPOEZPJNTXZU", wantStatusCode: http.StatusBadRequest},
+		}
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				contextClaims = nil
+				buf := new(strings.Builder)
+				log.DefaultLogger.SetOutput(buf)
+
+				validToken, err := jwtManager.GenerateSEP24Token(tc.subject, "", "", "tenant.test.com:8080", "valid-transaction-id")
+				require.NoError(t, err)
+
+				req, err := http.NewRequest(http.MethodGet, "/authenticated_pubnet_contract", nil)
+				require.NoError(t, err)
+				req.Header.Set("Authorization", "Bearer "+validToken)
+				w := httptest.NewRecorder()
+				r.ServeHTTP(w, req)
+
+				resp := w.Result()
+				require.Equal(t, tc.wantStatusCode, resp.StatusCode)
+				if tc.wantStatusCode == http.StatusOK {
+					require.NotNil(t, contextClaims)
+					require.Equal(t, tc.subject, contextClaims.Account())
+					require.NotContains(t, buf.String(), "missing client domain in the token claims")
+				} else {
+					require.Nil(t, contextClaims)
+					require.Contains(t, buf.String(), "missing client domain in the token claims")
+				}
+			})
+		}
+	})
+
 	t.Run("token with empty home domain returns error", func(t *testing.T) {
 		// set the logger to a buffer so we can check the error message
 		buf := new(strings.Builder)

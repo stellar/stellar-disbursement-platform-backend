@@ -631,7 +631,7 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		actual, errGetReceiverWallet := receiverWalletModel.GetByReceiverIDAndWalletDomain(ctx, "invalid_id", "invalid_domain", dbConnectionPool)
-		require.Error(t, errGetReceiverWallet, "error querying receiver wallet: sql: no rows in result set")
+		require.ErrorIs(t, errGetReceiverWallet, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
 
@@ -656,13 +656,13 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 
 	t.Run("returns error when receiver wallet not found for receiver id", func(t *testing.T) {
 		actual, errGetReceiverWallet := receiverWalletModel.GetByReceiverIDAndWalletDomain(ctx, "invalid_id", wallet.SEP10ClientDomain, dbConnectionPool)
-		require.Error(t, errGetReceiverWallet, "error querying receiver wallet: sql: no rows in result set")
+		require.ErrorIs(t, errGetReceiverWallet, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
 
 	t.Run("returns error when receiver wallet not found with wallet domain", func(t *testing.T) {
 		actual, errGetReceiverWallet := receiverWalletModel.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, "invalid_domain", dbConnectionPool)
-		require.Error(t, errGetReceiverWallet, "error querying receiver wallet: sql: no rows in result set")
+		require.ErrorIs(t, errGetReceiverWallet, ErrRecordNotFound)
 		require.Empty(t, actual)
 	})
 
@@ -720,13 +720,13 @@ func Test_GetByReceiverIDAndContractAddress(t *testing.T) {
 
 	t.Run("returns error when the contract belongs to another receiver", func(t *testing.T) {
 		actual, err := receiverWalletModel.GetByReceiverIDAndContractAddress(ctx, "invalid_id", contractAddress, dbConnectionPool)
-		require.ErrorContains(t, err, "sql: no rows in result set")
+		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Nil(t, actual)
 	})
 
 	t.Run("returns error when no embedded wallet has the contract address", func(t *testing.T) {
 		actual, err := receiverWalletModel.GetByReceiverIDAndContractAddress(ctx, receiver.ID, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC", dbConnectionPool)
-		require.ErrorContains(t, err, "sql: no rows in result set")
+		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Nil(t, actual)
 	})
 

@@ -187,11 +187,11 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot generate OTP for receiver wallet", err, nil).WithErrorCode(httperror.Code500_7)
 	}
 
-	// Update OTP for receiver wallet. Embedded wallets (contract subjects) are matched through the deployed contract,
-	// other wallets through the SEP-10 client domain.
+	// Update OTP for receiver wallet. Embedded wallets (contract subjects without a client domain) are matched through
+	// the deployed contract, other wallets through the client domain.
 	var numberOfUpdatedRows int
 	var matchedBy string
-	if sep24Claims.IsContractAccount() {
+	if sep24Claims.ClientDomain() == "" && sep24Claims.IsContractAccount() {
 		matchedBy = fmt.Sprintf("contract address (%s)", sep24Claims.Account())
 		numberOfUpdatedRows, err = h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndContractAddress(ctx, contactInfo, sep24Claims.Account(), newOTP)
 	} else {
