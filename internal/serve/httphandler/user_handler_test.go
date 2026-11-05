@@ -32,36 +32,29 @@ import (
 func Test_UserHandler_UserActivation(t *testing.T) {
 	type testMocks struct {
 		AuthenticatorMock *auth.AuthenticatorMock
-		JWTManagerMock    *auth.JWTManagerMock
 		Handler           UserHandler
 	}
 
 	setupMocks := func(t *testing.T) *testMocks {
 		t.Helper()
 		authenticatorMock := &auth.AuthenticatorMock{}
-		jwtManagerMock := &auth.JWTManagerMock{}
-
-		authManager := auth.NewAuthManager(
-			auth.WithCustomAuthenticatorOption(authenticatorMock),
-			auth.WithCustomJWTManagerOption(jwtManagerMock),
-		)
+		authManager := auth.NewAuthManager(auth.WithCustomAuthenticatorOption(authenticatorMock))
 
 		return &testMocks{
 			AuthenticatorMock: authenticatorMock,
-			JWTManagerMock:    jwtManagerMock,
 			Handler:           UserHandler{AuthManager: authManager},
 		}
 	}
 
-	executePatchRequest := func(t *testing.T, handler UserHandler, token string, body string) *http.Response {
+	executePatchRequest := func(t *testing.T, handler UserHandler, userID string, body string) *http.Response {
 		t.Helper()
 		const url = "/users/activation"
 		r := chi.NewRouter()
 		r.Patch(url, handler.UserActivation)
 
 		ctx := context.Background()
-		if token != "" {
-			ctx = sdpcontext.SetTokenInContext(ctx, token)
+		if userID != "" {
+			ctx = sdpcontext.SetUserIDInContext(ctx, userID)
 		}
 
 		var bodyReader io.Reader
@@ -76,7 +69,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		return w.Result()
 	}
 
-	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
+	t.Run("returns Unauthorized when no user ID is in the request context", func(t *testing.T) {
 		mocks := setupMocks(t)
 		resp := executePatchRequest(t, mocks.Handler, "", "")
 		respBody, err := io.ReadAll(resp.Body)
@@ -89,7 +82,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
 		// is_active and user_id are required
 		mocks := setupMocks(t)
-		resp := executePatchRequest(t, mocks.Handler, "mytoken", "{}")
+		resp := executePatchRequest(t, mocks.Handler, "authenticated-user-id", "{}")
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -104,7 +97,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// is_active is required
-		resp = executePatchRequest(t, mocks.Handler, "mytoken", `{"user_id": "user-id"}`)
+		resp = executePatchRequest(t, mocks.Handler, "authenticated-user-id", `{"user_id": "user-id"}`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -118,7 +111,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// user_id is required
-		resp = executePatchRequest(t, mocks.Handler, "mytoken", `{"is_active": true}`)
+		resp = executePatchRequest(t, mocks.Handler, "authenticated-user-id", `{"is_active": true}`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -133,7 +126,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 		// invalid body format:
 		getLogEntries := log.DefaultLogger.StartTest(log.InfoLevel)
-		resp = executePatchRequest(t, mocks.Handler, "mytoken", `"invalid"`)
+		resp = executePatchRequest(t, mocks.Handler, "authenticated-user-id", `"invalid"`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -143,60 +136,15 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.Contains(t, getLogEntries()[0].Message, "decoding the request body")
 	})
 
-	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
-		mocks := setupMocks(t)
-		token := "mytoken"
-
-		mocks.JWTManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(false, nil).
-			Twice()
-		defer mocks.JWTManagerMock.AssertExpectations(t)
-
-		// Activating the user
-		reqBody := `{
-			"user_id": "user-id",
-			"is_active": true
-		}`
-		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-
-		// Deactivating the user
-		reqBody = `{
-			"user_id": "user-id",
-			"is_active": false
-		}`
-		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
 	t.Run("returns BadRequest when trying to update self activation state", func(t *testing.T) {
 		mocks := setupMocks(t)
-		token := "mytoken"
-
-		mocks.JWTManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Twice().
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "user-id"}, nil).
-			Twice()
-		defer mocks.JWTManagerMock.AssertExpectations(t)
 
 		// Activating the user
 		reqBody := `{
 			"user_id": "user-id",
 			"is_active": true
 		}`
-		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp := executePatchRequest(t, mocks.Handler, "user-id", reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -208,7 +156,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			"user_id": "user-id",
 			"is_active": false
 		}`
-		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp = executePatchRequest(t, mocks.Handler, "user-id", reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -218,16 +166,6 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 	t.Run("returns BadRequest when user doesn't exist", func(t *testing.T) {
 		mocks := setupMocks(t)
-		token := "mytoken"
-
-		mocks.JWTManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Times(4).
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{}, nil).
-			Twice()
-		defer mocks.JWTManagerMock.AssertExpectations(t)
 
 		mocks.AuthenticatorMock.
 			On("ActivateUser", mock.Anything, "user-id").
@@ -243,7 +181,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			"user_id": "user-id",
 			"is_active": true
 		}`
-		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp := executePatchRequest(t, mocks.Handler, "authenticated-user-id", reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -255,7 +193,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			"user_id": "user-id",
 			"is_active": false
 		}`
-		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp = executePatchRequest(t, mocks.Handler, "authenticated-user-id", reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -265,16 +203,6 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 	t.Run("returns BadRequest when deactivating the last active owner", func(t *testing.T) {
 		mocks := setupMocks(t)
-		token := "mytoken"
-
-		mocks.JWTManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Twice().
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{}, nil).
-			Once()
-		defer mocks.JWTManagerMock.AssertExpectations(t)
 
 		mocks.AuthenticatorMock.
 			On("DeactivateUser", mock.Anything, "user-id").
@@ -286,7 +214,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			"user_id": "user-id",
 			"is_active": false
 		}`
-		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp := executePatchRequest(t, mocks.Handler, "authenticated-user-id", reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -296,40 +224,31 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {
 		mocks := setupMocks(t)
-		token := "mytoken"
 
-		mocks.JWTManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(false, errors.New("unexpected error")).
+		mocks.AuthenticatorMock.
+			On("ActivateUser", mock.Anything, "user-id").
+			Return(errors.New("unexpected error")).
 			Once()
-		defer mocks.JWTManagerMock.AssertExpectations(t)
+		defer mocks.AuthenticatorMock.AssertExpectations(t)
 
 		getTestEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 		reqBody := `{
 			"user_id": "user-id",
 			"is_active": true
 		}`
-		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp := executePatchRequest(t, mocks.Handler, "authenticated-user-id", reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
-		assert.Contains(t, getTestEntries()[0].Message, "getting user from token: validating token: validating token: unexpected error")
+		entries := getTestEntries()
+		require.NotEmpty(t, entries)
+		assert.Contains(t, entries[len(entries)-1].Message, "error activating user ID user-id: unexpected error")
 	})
 
 	t.Run("updates the user activation correctly", func(t *testing.T) {
 		mocks := setupMocks(t)
-		token := "mytoken"
-
-		mocks.JWTManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Times(4).
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "authenticated-user-id"}, nil).
-			Twice()
-		defer mocks.JWTManagerMock.AssertExpectations(t)
 
 		mocks.AuthenticatorMock.
 			On("ActivateUser", mock.Anything, "user-id").
@@ -347,7 +266,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			"user_id": "user-id",
 			"is_active": true
 		}`
-		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp := executePatchRequest(t, mocks.Handler, "authenticated-user-id", reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -359,7 +278,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			"user_id": "user-id",
 			"is_active": false
 		}`
-		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
+		resp = executePatchRequest(t, mocks.Handler, "authenticated-user-id", reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -596,8 +515,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	r.Post(url, handler.CreateUser)
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
@@ -715,14 +633,23 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.Contains(t, buf.String(), "decoding the request body")
 	})
 
-	t.Run("returns error when Auth Manager fails", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+	t.Run("returns Unauthorized when no user ID is in the request context", func(t *testing.T) {
+		req, err := http.NewRequestWithContext(sdpcontext.SetTenantInContext(context.Background(), &tnt), http.MethodPost, url, strings.NewReader(`{}`))
+		require.NoError(t, err)
 
-		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("", errors.New("unexpected error")).
-			Once()
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns error when Auth Manager fails", func(t *testing.T) {
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		body := `
 			{
@@ -732,6 +659,18 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
+		u := &auth.User{
+			FirstName: "First",
+			LastName:  "Last",
+			Email:     "email@email.com",
+			Roles:     []string{data.DeveloperUserRole.String()},
+		}
+
+		authManagerMock.
+			On("CreateUser", mock.Anything, u, "").
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
@@ -746,42 +685,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Not authorized."
-			}
-		`
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-
-		u := &auth.User{
-			FirstName: "First",
-			LastName:  "Last",
-			Email:     "email@email.com",
-			Roles:     []string{data.DeveloperUserRole.String()},
-		}
-
-		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
-			On("CreateUser", mock.Anything, u, "").
-			Return(nil, errors.New("unexpected error")).
-			Once()
-
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody = `
-			{
 				"error": "Cannot create user"
 			}
 		`
@@ -791,8 +694,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns Bad Request when user is duplicated", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		u := &auth.User{
 			FirstName: "First",
@@ -802,9 +704,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(nil, auth.ErrUserEmailAlreadyExists).
 			Once()
@@ -834,8 +733,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("logs and reports error when sending email fails", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		u := &auth.User{
 			FirstName: "First",
@@ -853,9 +751,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(expectedUser, nil).
 			Once()
@@ -931,9 +826,8 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		tntInvalidUIBaseURL := schema.Tenant{
 			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
-		token := "mytoken"
 		ctxTenantWithInvalidUIBaseURL := sdpcontext.SetTenantInContext(context.Background(), &tntInvalidUIBaseURL)
-		ctxTenantWithInvalidUIBaseURL = sdpcontext.SetTokenInContext(ctxTenantWithInvalidUIBaseURL, token)
+		ctxTenantWithInvalidUIBaseURL = sdpcontext.SetUserIDInContext(ctxTenantWithInvalidUIBaseURL, "authenticated-user-id")
 
 		u := &auth.User{
 			FirstName: "First",
@@ -951,9 +845,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(expectedUser, nil).
 			Once()
@@ -1003,8 +894,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("creates user successfully", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
@@ -1027,9 +917,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		}
 
 		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(expectedUser, nil).
 			Once()
@@ -1134,8 +1021,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("scopes the new user to the wallet named in the request", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		walletB, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
 			Name:        "wallet-b",
@@ -1146,9 +1032,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		require.NoError(t, err)
 
 		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
 			On("CreateUser", mock.Anything, mock.Anything, "").
 			Return(&auth.User{
 				ID:        "user-id-wallet-b",
@@ -1185,13 +1068,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns BadRequest when the requested wallet does not exist", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
-
-		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once()
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		body := `
 			{
@@ -1217,8 +1094,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns Conflict when the requested wallet is archived", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		archived, err := models.DistributionWallets.Insert(ctx, dbConnectionPool, data.DistributionWalletInsert{
 			Name:        "wallet-archived",
@@ -1229,11 +1105,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		require.NoError(t, err)
 		_, err = models.DistributionWallets.Archive(ctx, dbConnectionPool, archived.ID)
 		require.NoError(t, err)
-
-		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once()
 
 		body := `
 			{
@@ -1260,14 +1131,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	for _, role := range []data.UserRole{data.OwnerUserRole, data.DeveloperUserRole} {
 		t.Run("grants no membership to a tenant-wide "+role.String()+", and the owner flag only to an owner", func(t *testing.T) {
-			token := "mytoken"
-			ctx = sdpcontext.SetTokenInContext(ctx, token)
+			ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 			isOwner := role == data.OwnerUserRole
 
 			authManagerMock.
-				On("GetUserID", mock.Anything, token).
-				Return("authenticated-user-id", nil).
-				Once().
 				On("CreateUser", mock.Anything, &auth.User{
 					FirstName: "First",
 					LastName:  "Last",
@@ -1311,8 +1178,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	}
 
 	t.Run("deactivates the user when the membership grant fails", func(t *testing.T) {
-		token := "mytoken"
-		ctx = sdpcontext.SetTokenInContext(ctx, token)
+		ctx = sdpcontext.SetUserIDInContext(ctx, "authenticated-user-id")
 
 		defaultWallet := data.EnsureDefaultDistributionWalletFixture(t, ctx, dbConnectionPool)
 
@@ -1323,9 +1189,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		require.NoError(t, err)
 
 		authManagerMock.
-			On("GetUserID", mock.Anything, token).
-			Return("authenticated-user-id", nil).
-			Once().
 			On("CreateUser", mock.Anything, mock.Anything, "").
 			Return(&auth.User{
 				ID:        orphanUserID,
@@ -1336,7 +1199,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				IsActive:  true,
 			}, nil).
 			Once().
-			On("DeactivateUser", mock.Anything, token, orphanUserID).
+			On("DeactivateUser", mock.Anything, orphanUserID).
 			Return(nil).
 			Once()
 
@@ -1356,7 +1219,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		// the user must not be left live-but-invisible, and no invitation may go out
 		assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-		authManagerMock.AssertCalled(t, "DeactivateUser", mock.Anything, token, orphanUserID)
+		authManagerMock.AssertCalled(t, "DeactivateUser", mock.Anything, orphanUserID)
 	})
 
 	authManagerMock.AssertExpectations(t)
@@ -1421,11 +1284,9 @@ func Test_UpdateRolesRequest_validate(t *testing.T) {
 func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 	r := chi.NewRouter()
 
-	jwtManagerMock := &auth.JWTManagerMock{}
 	roleManagerMock := &auth.RoleManagerMock{}
 	authenticatorMock := &auth.AuthenticatorMock{}
 	authManager := auth.NewAuthManager(
-		auth.WithCustomJWTManagerOption(jwtManagerMock),
 		auth.WithCustomRoleManagerOption(roleManagerMock),
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
@@ -1435,7 +1296,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 	const url = "/users/roles"
 	r.Patch(url, handler.UpdateUserRoles)
 
-	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
+	t.Run("returns Unauthorized when no user ID is in the request context", func(t *testing.T) {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, url, nil)
 		require.NoError(t, err)
 
@@ -1452,7 +1313,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 	})
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
-		ctx := sdpcontext.SetTokenInContext(context.Background(), "mytoken")
+		ctx := sdpcontext.SetUserIDInContext(context.Background(), "authenticated-user-id")
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
@@ -1564,55 +1425,13 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		assert.Contains(t, buf.String(), "decoding the request body")
 	})
 
-	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
-		token := "mytoken"
-
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(false, nil).
-			Once()
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		reqBody := `
-			{	
-				"user_id": "user-id",
-				"roles": ["developer"]
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
 	t.Run("returns BadRequest when user doesn't exist", func(t *testing.T) {
-		token := "mytoken"
-
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Twice().
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "authenticated-user-id"}, nil).
-			Once()
-
 		authenticatorMock.
 			On("GetAllUsers", mock.Anything).
 			Return([]auth.User{{ID: "someone-else"}}, nil).
 			Once()
 
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		ctx := sdpcontext.SetUserIDInContext(context.Background(), "authenticated-user-id")
 
 		reqBody := `
 			{
@@ -1637,19 +1456,6 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 	})
 
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {
-		token := "mytoken"
-
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Twice().
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "authenticated-user-id"}, nil).
-			Once().
-			On("ValidateToken", mock.Anything, token).
-			Return(false, errors.New("unexpected error")).
-			Once()
-
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
@@ -1658,7 +1464,12 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Return([]auth.User{{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}}, nil).
 			Once()
 
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		roleManagerMock.
+			On("UpdateRoles", mock.Anything, &auth.User{ID: "user-id"}, []string{data.DeveloperUserRole.String()}).
+			Return(errors.New("unexpected error")).
+			Once()
+
+		ctx := sdpcontext.SetUserIDInContext(context.Background(), "authenticated-user-id")
 
 		reqBody := `
 			{
@@ -1684,16 +1495,6 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 	})
 
 	t.Run("updates the user activation correctly", func(t *testing.T) {
-		token := "mytoken"
-
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, token).
-			Return(true, nil).
-			Times(3).
-			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "authenticated-user-id"}, nil).
-			Once()
-
 		roleManagerMock.
 			On("UpdateRoles", mock.Anything, &auth.User{ID: "user-id"}, []string{data.BusinessUserRole.String()}).
 			Return(nil).
@@ -1704,7 +1505,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			Return([]auth.User{{ID: "user-id", Roles: []string{data.BusinessUserRole.String()}}}, nil).
 			Once()
 
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
+		ctx := sdpcontext.SetUserIDInContext(context.Background(), "authenticated-user-id")
 
 		reqBody := `
 			{
@@ -1730,73 +1531,23 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 }
 
 func Test_UserHandler_GetAllUsers(t *testing.T) {
-	jwtManagerMock := &auth.JWTManagerMock{}
 	authenticatorMock := &auth.AuthenticatorMock{}
-	authManager := auth.NewAuthManager(
-		auth.WithCustomJWTManagerOption(jwtManagerMock),
-		auth.WithCustomAuthenticatorOption(authenticatorMock),
-	)
+	authManager := auth.NewAuthManager(auth.WithCustomAuthenticatorOption(authenticatorMock))
 
 	handler := &UserHandler{AuthManager: authManager}
 
 	const url = "/users"
 
-	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		http.HandlerFunc(handler.GetAllUsers).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
-		token := "mytoken"
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), token).
-			Return(false, nil).
-			Once()
-
-		w := httptest.NewRecorder()
-
-		http.HandlerFunc(handler.GetAllUsers).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {
-		token := "mytoken"
-
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 		require.NoError(t, err)
 
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), token).
-			Return(false, errors.New("unexpected error")).
+		authenticatorMock.
+			On("GetAllUsers", req.Context()).
+			Return(nil, errors.New("unexpected error")).
 			Once()
 
 		w := httptest.NewRecorder()
@@ -1819,17 +1570,8 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	const orderByIsActiveDescURL = "/users?sort=is_active&direction=DESC"
 
 	t.Run("returns all users ordered by email ASC", func(t *testing.T) {
-		token := "mytoken"
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByEmailAscURL, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, orderByEmailAscURL, nil)
 		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), token).
-			Return(true, nil).
-			Once()
 
 		authenticatorMock.
 			On("GetAllUsers", req.Context()).
@@ -1913,17 +1655,8 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	})
 
 	t.Run("returns all users ordered by email DESC", func(t *testing.T) {
-		token := "mytoken"
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByEmailDescURL, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, orderByEmailDescURL, nil)
 		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), token).
-			Return(true, nil).
-			Once()
 
 		authenticatorMock.
 			On("GetAllUsers", req.Context()).
@@ -2007,17 +1740,8 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	})
 
 	t.Run("returns all users ordered by is_active ASC", func(t *testing.T) {
-		token := "mytoken"
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByIsActiveAscURL, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, orderByIsActiveAscURL, nil)
 		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), token).
-			Return(true, nil).
-			Once()
 
 		authenticatorMock.
 			On("GetAllUsers", req.Context()).
@@ -2082,17 +1806,8 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 	})
 
 	t.Run("returns all users ordered by is_active DESC", func(t *testing.T) {
-		token := "mytoken"
-
-		ctx := sdpcontext.SetTokenInContext(context.Background(), token)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByIsActiveDescURL, nil)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, orderByIsActiveDescURL, nil)
 		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), token).
-			Return(true, nil).
-			Once()
 
 		authenticatorMock.
 			On("GetAllUsers", req.Context()).
@@ -2168,14 +1883,13 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	const token, actorID = "token", "owner-actor"
+	const actorID = "owner-actor"
 	patch := func(t *testing.T, subject *auth.User, newRole data.UserRole, expectUpdate bool) *httptest.ResponseRecorder {
 		t.Helper()
 		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.On("GetUserID", mock.Anything, token).Return(actorID, nil)
-		authManagerMock.On("GetAllUsers", mock.Anything, token).Return([]auth.User{*subject}, nil)
+		authManagerMock.On("GetAllUsers", mock.Anything).Return([]auth.User{*subject}, nil)
 		if expectUpdate {
-			authManagerMock.On("UpdateUserRoles", mock.Anything, token, subject.ID, []string{newRole.String()}).Return(nil).Once()
+			authManagerMock.On("UpdateUserRoles", mock.Anything, subject.ID, []string{newRole.String()}).Return(nil).Once()
 		}
 		defer authManagerMock.AssertExpectations(t)
 
@@ -2183,7 +1897,7 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 		body := fmt.Sprintf(`{"user_id": %q, "roles": [%q]}`, subject.ID, newRole)
 		req := httptest.NewRequest(http.MethodPatch, "/users/roles", strings.NewReader(body))
 		rr := httptest.NewRecorder()
-		handler.UpdateUserRoles(rr, req.WithContext(sdpcontext.SetTokenInContext(req.Context(), token)))
+		handler.UpdateUserRoles(rr, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), actorID)))
 		return rr
 	}
 	rolesOf := func(t *testing.T, userID string) map[string]data.UserRole {
@@ -2240,9 +1954,8 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 	t.Run("the last active owner cannot leave: 400 and no default-wallet grant", func(t *testing.T) {
 		owner := &auth.User{ID: "last-owner", IsOwner: true, Roles: []string{data.OwnerUserRole.String()}}
 		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.On("GetUserID", mock.Anything, token).Return(owner.ID, nil)
-		authManagerMock.On("GetAllUsers", mock.Anything, token).Return([]auth.User{*owner}, nil)
-		authManagerMock.On("UpdateUserRoles", mock.Anything, token, owner.ID, []string{data.BusinessUserRole.String()}).
+		authManagerMock.On("GetAllUsers", mock.Anything).Return([]auth.User{*owner}, nil)
+		authManagerMock.On("UpdateUserRoles", mock.Anything, owner.ID, []string{data.BusinessUserRole.String()}).
 			Return(auth.ErrLastOwner).Once()
 		defer authManagerMock.AssertExpectations(t)
 
@@ -2250,7 +1963,7 @@ func Test_UserHandler_UpdateUserRoles_walletMemberships(t *testing.T) {
 		body := fmt.Sprintf(`{"user_id": %q, "roles": ["business"]}`, owner.ID)
 		req := httptest.NewRequest(http.MethodPatch, "/users/roles", strings.NewReader(body))
 		rr := httptest.NewRecorder()
-		handler.UpdateUserRoles(rr, req.WithContext(sdpcontext.SetTokenInContext(req.Context(), token)))
+		handler.UpdateUserRoles(rr, req.WithContext(sdpcontext.SetUserIDInContext(req.Context(), owner.ID)))
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.JSONEq(t, `{"error": "a tenant must keep at least one active owner"}`, rr.Body.String())

@@ -910,41 +910,13 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		VerificationField: data.VerificationTypeDateOfBirth,
 	})
 
-	t.Run("returns Unauthorized when no token in the context", func(t *testing.T) {
-		// Prepare the handler
-		handler := PaymentsHandler{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
-		require.NoError(t, err)
-
-		rw := httptest.NewRecorder()
-		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
-
-		resp := rw.Result()
-		defer resp.Body.Close()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns InternalServerError when fails getting user from token", func(t *testing.T) {
-		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
-
+	t.Run("returns InternalServerError when the user lookup fails", func(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
 		require.NoError(t, err)
 
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", ctx, "mytoken").
 			Return(nil, errors.New("unexpected error")).
 			Once()
 		handler := PaymentsHandler{
@@ -963,12 +935,37 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
+		assert.JSONEq(t, `{"error": "Cannot get user from context"}`, string(respBody))
+	})
+
+	t.Run("returns Unauthorized when the acting user no longer exists", func(t *testing.T) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
+		require.NoError(t, err)
+
+		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(nil, auth.ErrUserNotFound).
+			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
+
+		rw := httptest.NewRecorder()
+		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
+
+		resp := rw.Result()
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
 	})
 
 	t.Run("returns BadRequest when fails decoding body request", func(t *testing.T) {
-		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
-
 		payload := strings.NewReader("invalid")
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
@@ -976,11 +973,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{Email: "email@test.com"}, nil).
-			Once()
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil)
 		handler := PaymentsHandler{
 			Models:           models,
 			DBConnectionPool: dbConnectionPool,
@@ -1001,8 +994,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	})
 
 	t.Run("returns BadRequest when fails when payload is invalid", func(t *testing.T) {
-		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
-
 		payload := strings.NewReader("{}")
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
@@ -1010,11 +1001,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{Email: "email@test.com"}, nil).
-			Once()
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil)
 		handler := PaymentsHandler{
 			Models:           models,
 			DBConnectionPool: dbConnectionPool,
@@ -1077,8 +1064,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
-
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
 				"payment_ids": [%q, %q, %q, %q]
@@ -1090,11 +1075,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{Email: "email@test.com"}, nil).
-			Once()
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil)
 		handler := PaymentsHandler{
 			Models:           models,
 			DBConnectionPool: dbConnectionPool,
@@ -1169,8 +1150,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctx = sdpcontext.SetTokenInContext(ctx, "mytoken")
-
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
 				"payment_ids": [%q, %q]
@@ -1182,11 +1161,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{Email: "email@test.com"}, nil).
-			Once()
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil)
 
 		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
 		// distAccountResolverMock.
@@ -1235,6 +1210,58 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		assert.Equal(t, "User email@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
 	})
 
+	t.Run("retries with an API key acting as its creator", func(t *testing.T) {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		// The key middleware stores the key and its creator's user ID; the payment's source wallet is in the key's scope.
+		keyCtx := sdpcontext.SetAPIKeyInContext(ctx, &data.APIKey{
+			Permissions:           []data.APIKeyPermission{data.WritePayments},
+			DistributionWalletIDs: []string{payment.SourceWalletID},
+			CreatedBy:             "retry-owner",
+		})
+		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] }`, payment.ID))
+		req, err := http.NewRequestWithContext(keyCtx, http.MethodPatch, "/retry", payload)
+		require.NoError(t, err)
+
+		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil).
+			Once()
+		handler := PaymentsHandler{
+			Models:                      models,
+			DBConnectionPool:            dbConnectionPool,
+			AuthManager:                 authManagerMock,
+			DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
+		}
+
+		rw := httptest.NewRecorder()
+		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
+
+		resp := rw.Result()
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "Payments retried successfully"}`, string(respBody))
+
+		paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, data.ReadyPaymentStatus, paymentDB.Status)
+		assert.Equal(t, "User email@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-1", paymentDB.StatusHistory[1].StatusMessage)
+	})
+
 	t.Run("successfully retries failed circle payment", func(t *testing.T) {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		data.DeleteAllCircleRecipientsFixtures(t, ctx, dbConnectionPool)
@@ -1259,7 +1286,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		circleTnt := schema.Tenant{ID: "tenant-id", DistributionAccountType: schema.DistributionAccountCircleDBVault}
 		circleCtx := sdpcontext.SetUserIDInContext(sdpcontext.SetTenantInContext(context.Background(), &circleTnt), "retry-owner")
-		circleCtx = sdpcontext.SetTokenInContext(circleCtx, "mytoken")
 
 		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] } `, failedPayment.ID))
 		req, err := http.NewRequestWithContext(circleCtx, http.MethodPatch, "/retry", payload)
@@ -1268,11 +1294,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", circleCtx, "mytoken").
-			Return(&auth.User{Email: "email@test.com"}, nil).
-			Once()
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil)
 
 		handler := PaymentsHandler{
 			Models:                      models,
@@ -1329,7 +1351,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		ctxWithoutTenant := sdpcontext.SetTokenInContext(sdpcontext.SetUserIDInContext(context.Background(), "retry-owner"), "mytoken")
+		ctxWithoutTenant := sdpcontext.SetUserIDInContext(context.Background(), "retry-owner")
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
@@ -1342,11 +1364,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		// Prepare the handler and its mocks
 		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.On("GetUserByID", mock.Anything, "retry-owner").
-			Return(&auth.User{ID: "retry-owner", IsOwner: true}, nil).Maybe()
-		authManagerMock.
-			On("GetUser", ctxWithoutTenant, "mytoken").
-			Return(&auth.User{Email: "email@test.com"}, nil).
-			Once()
+			Return(&auth.User{ID: "retry-owner", Email: "email@test.com", IsOwner: true}, nil)
 		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
 		handler := PaymentsHandler{
 			Models:                      models,
