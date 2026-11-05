@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- Stop accepting API keys on the `/api-keys`, `/profile` and `/refresh-token` endpoints. [#1261](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1261)
+
 ### Fixed
 
 - Remove payment write access from Business role. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)

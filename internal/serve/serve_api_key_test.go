@@ -651,6 +651,53 @@ func Test_handleHTTP_APIKeyOnUsersAndRetry(t *testing.T) {
 	}
 }
 
+// Test_handleHTTP_APIKeyRefusedOnSignedInOnlyRoutes pins the routes that sit behind a bare role check instead of
+// RequirePermission: an API key carries no session token, so it is refused there whatever it holds (SDP-2252).
+func Test_handleHTTP_APIKeyRefusedOnSignedInOnlyRoutes(t *testing.T) {
+	res := setupAPIKeyTestResources(t)
+	mux := handleHTTP(getServeOptionsForTests(t, res.DBPool))
+
+	fullAccessKey := createTestAPIKey(t, res.DBPool, "full access",
+		[]data.APIKeyPermission{data.ReadAll, data.WriteAll}, nil, 30, res.TestUserID)
+	unrelatedKey := createTestAPIKey(t, res.DBPool, "read statistics",
+		[]data.APIKeyPermission{data.ReadStatistics}, nil, 30, res.TestUserID)
+
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api-keys"},
+		{http.MethodPost, "/api-keys"},
+		{http.MethodGet, "/api-keys/" + unrelatedKey.ID},
+		{http.MethodPatch, "/api-keys/" + unrelatedKey.ID},
+		{http.MethodDelete, "/api-keys/" + unrelatedKey.ID},
+		{http.MethodGet, "/profile"},
+		{http.MethodPatch, "/profile"},
+		{http.MethodPatch, "/profile/reset-password"},
+		{http.MethodPost, "/refresh-token"},
+	}
+	keys := []struct {
+		name string
+		key  string
+	}{
+		{"read:all and write:all", fullAccessKey.Key},
+		{"an unrelated permission", unrelatedKey.Key},
+	}
+
+	for _, route := range routes {
+		for _, k := range keys {
+			name := route.method + " " + strings.ReplaceAll(route.path, unrelatedKey.ID, "{id}") + " with " + k.name
+			t.Run(name, func(t *testing.T) {
+				resp := executeRequest(t, mux, route.method, route.path, nil, k.key)
+				b, readErr := io.ReadAll(resp.Body)
+				require.NoError(t, readErr)
+				assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, string(b))
+				assert.Contains(t, string(b), "Not authorized.")
+			})
+		}
+	}
+}
+
 // Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately reproduces (and
 // guards against regressing) a bug where the API-key auth cache kept serving a
 // key's pre-PATCH permissions/allowed_ips: a revoked scope kept being accepted
@@ -678,13 +725,21 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		Return(nil).
 		Maybe()
 
-	mux := createHandler(t, res, authMock, monitorMock)
+	// The PATCH calls come from a signed-in owner: /api-keys does not accept API keys.
+	const adminSession = "Bearer admin-session-token"
+	authMock.On("GetUserID", mock.Anything, "admin-session-token").Return(res.TestUserID, nil)
+	authMock.On("GetTenantID", mock.Anything, "admin-session-token").Return("tenant1", nil)
+	authMock.On("AnyRolesInTokenUser", mock.Anything, "admin-session-token", mock.Anything).Return(true, nil)
 
-	// adminKey only exists to authenticate the PATCH call itself. In production
-	// this would be an owner's JWT session; an API key with WriteAll satisfies
-	// the same RequirePermission check and keeps this test self-contained.
-	adminKey := createTestAPIKey(t, res.DBPool, "Ordo Fiscus Admin Key",
-		[]data.APIKeyPermission{data.WriteAll}, nil, 30, res.TestUserID)
+	tenantManagerMock := &tenant.TenantManagerMock{}
+	tenantManagerMock.On("GetTenantByName", mock.Anything, "aid-org").Return(&schema.Tenant{ID: "tenant1"}, nil)
+	tenantManagerMock.On("GetTenantByID", mock.Anything, "tenant1").Return(&schema.Tenant{ID: "tenant1"}, nil)
+
+	srvOpts := getServeOptionsForTests(t, res.DBPool)
+	srvOpts.authManager = authMock
+	srvOpts.MonitorService = monitorMock
+	srvOpts.tenantManager = tenantManagerMock
+	mux := handleHTTP(srvOpts)
 
 	// The key under test: starts with read:statistics only, and an allowed_ips
 	// restriction that will be reverted back to its original value later.
@@ -703,7 +758,7 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		patchResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
 			"permissions": []string{"read:receivers"},
 			"allowed_ips": []string{"192.168.1.0"},
-		}, adminKey.Key)
+		}, adminSession)
 		body, readErr := io.ReadAll(patchResp.Body)
 		require.NoError(t, readErr)
 		require.Equal(t, http.StatusOK, patchResp.StatusCode, "PATCH /api-keys/%s failed: %s", targetKey.ID, string(body))
@@ -724,7 +779,7 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		tightenResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
 			"permissions": []string{"read:receivers"},
 			"allowed_ips": []string{"10.10.10.10"},
-		}, adminKey.Key)
+		}, adminSession)
 		require.Equal(t, http.StatusOK, tightenResp.StatusCode)
 
 		blockedResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
@@ -737,7 +792,7 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		revertResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
 			"permissions": []string{"read:receivers"},
 			"allowed_ips": []string{"192.168.1.0"},
-		}, adminKey.Key)
+		}, adminSession)
 		require.Equal(t, http.StatusOK, revertResp.StatusCode)
 
 		// No sleep, no duplicate PATCH: access from the original, now-restored IP

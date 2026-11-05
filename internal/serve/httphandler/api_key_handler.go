@@ -64,8 +64,6 @@ func normalizeWalletIDs(requested []string) []string {
 // account archived after the fact stays on its key — keeping it grants nothing new, and refusing it
 // would make an unrelated permissions edit impossible to save. Such a wallet goes on serving reads
 // and failing writes, exactly as it does for a membership that predates the archive.
-//
-// Minting via API key is capped at the acting key's own scope, so a key cannot mint a broader one.
 func (h APIKeyHandler) grantableWallets(ctx context.Context, alreadyHeld []string) ([]string, *httperror.HTTPError) {
 	wallets, err := h.Models.DistributionWallets.GetAll(ctx, h.Models.DBConnectionPool, false)
 	if err != nil {
@@ -86,10 +84,6 @@ func (h APIKeyHandler) grantableWallets(ctx context.Context, alreadyHeld []strin
 		return grantable
 	}
 
-	if actingKey, keyErr := sdpcontext.GetAPIKeyFromContext(ctx); keyErr == nil {
-		return withinReach(actingKey.WalletScope()), nil
-	}
-
 	scope, httpErr := resolveWalletReadScope(ctx, h.AuthManager, h.Models)
 	if httpErr != nil {
 		return nil, httpErr
@@ -99,16 +93,6 @@ func (h APIKeyHandler) grantableWallets(ctx context.Context, alreadyHeld []strin
 		return withinReach(activeIDs), nil
 	}
 	return withinReach(scope), nil
-}
-
-// managementScope bounds which keys this caller may list, read, edit or delete: an API key reaches only keys
-// whose scope it covers. A signed-in user (nil) is unbounded.
-func managementScope(ctx context.Context) []string {
-	if actingKey, err := sdpcontext.GetAPIKeyFromContext(ctx); err == nil {
-		// WalletScope is never nil: an unscoped key reaches only unscoped keys, not everything.
-		return actingKey.WalletScope()
-	}
-	return nil
 }
 
 type UpdateAPIKeyRequest struct {
@@ -207,7 +191,7 @@ func (h APIKeyHandler) GetAPIKeyByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key, err := h.Models.APIKeys.GetByID(ctx, keyID, userID, managementScope(ctx))
+	key, err := h.Models.APIKeys.GetByID(ctx, keyID, userID)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
@@ -229,7 +213,7 @@ func (h APIKeyHandler) GetAllAPIKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKeys, err := h.Models.APIKeys.GetAll(ctx, userID, managementScope(ctx))
+	apiKeys, err := h.Models.APIKeys.GetAll(ctx, userID)
 	if err != nil {
 		httperror.InternalError(ctx, "Failed to retrieve API keys", err, nil).Render(w)
 		return
@@ -274,10 +258,10 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scope := managementScope(ctx)
+	// Omitting the field leaves the key's scope untouched, so there is nothing to authorize.
 	var walletIDs []string
 	if req.DistributionWalletIDs != nil {
-		current, getErr := h.Models.APIKeys.GetByID(ctx, keyID, userID, scope)
+		current, getErr := h.Models.APIKeys.GetByID(ctx, keyID, userID)
 		if getErr != nil {
 			if errors.Is(getErr, data.ErrRecordNotFound) {
 				httperror.NotFound("API key not found", nil, nil).Render(w)
@@ -302,7 +286,7 @@ func (h APIKeyHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	updated, err := h.Models.APIKeys.Update(ctx, keyID, userID, scope, req.Permissions, ips, walletIDs)
+	updated, err := h.Models.APIKeys.Update(ctx, keyID, userID, req.Permissions, ips, walletIDs)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
@@ -332,7 +316,7 @@ func (h APIKeyHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Models.APIKeys.Delete(ctx, keyID, userID, managementScope(ctx)); err != nil {
+	if err := h.Models.APIKeys.Delete(ctx, keyID, userID); err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("API key not found", nil, nil).Render(w)
 		} else {
