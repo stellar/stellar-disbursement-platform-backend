@@ -708,15 +708,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			PasswordValidator:           o.PasswordValidator,
 			NetworkType:                 o.NetworkType,
 		}
-		r.Route("/profile", func(r chi.Router) {
-			// Read operations
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Get("/", profileHandler.GetProfile)
-
-			// Write operations
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Group(func(r chi.Router) {
-				r.Patch("/", profileHandler.PatchUserProfile)
-				r.Patch("/reset-password", profileHandler.PatchUserPassword)
-			})
+		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/profile", func(r chi.Router) {
+			r.Get("/", profileHandler.GetProfile)
+			r.Patch("/", profileHandler.PatchUserProfile)
+			r.Patch("/reset-password", profileHandler.PatchUserPassword)
 		})
 
 		r.Route("/organization", func(r chi.Router) {
