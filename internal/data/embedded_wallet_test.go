@@ -531,6 +531,34 @@ func Test_EmbeddedWalletModel_GetByReceiverWalletIDAndStatuses(t *testing.T) {
 	})
 }
 
+func Test_EmbeddedWalletModel_GetByContractAddress(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	embeddedWalletModel := EmbeddedWalletModel{dbConnectionPool: dbConnectionPool}
+	defer DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+	contractAddress := "CBGTG3VGUMVDZE6O4CRZ2LBCFP7O5XY2VQQQU7AVXLVDQHZLVQFRMHKX"
+	embedded := CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "token-1", "hash", contractAddress, "cred-id", "pub", SuccessWalletStatus)
+
+	t.Run("success", func(t *testing.T) {
+		wallet, err := embeddedWalletModel.GetByContractAddress(ctx, dbConnectionPool, contractAddress)
+		require.NoError(t, err)
+		assert.Equal(t, embedded.Token, wallet.Token)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		wallet, err := embeddedWalletModel.GetByContractAddress(ctx, dbConnectionPool, "CDZMG22Z66UUW3Q7X7XZV3CNPAQWT7DAVBBFZTCTRAESJ5AZAVOMHFXC")
+		assert.ErrorIs(t, err, ErrRecordNotFound)
+		assert.Nil(t, wallet)
+	})
+}
+
 func Test_EmbeddedWalletModel_GetReceiverWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

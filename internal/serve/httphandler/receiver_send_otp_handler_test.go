@@ -685,6 +685,7 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 		contactInfo           func(r data.Receiver, contactType data.ReceiverContactType) string
 		dateOfBirth           string
 		sep24ClientDomain     string
+		contractAddress       string // when set, the subject is this contract, deployed for the receiver wallet
 		prepareMocksFn        func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher)
 		assertLogsFn          func(t *testing.T, contactType data.ReceiverContactType, r data.Receiver, entries []logrus.Entry)
 		wantVerificationField data.VerificationType
@@ -772,6 +773,24 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 			wantVerificationField: data.VerificationTypePin,
 			wantHTTPErr:           nil,
 		},
+		{
+			name: "🟢 successful for a contract subject matched through its embedded wallet",
+			contactInfo: func(r data.Receiver, contactType data.ReceiverContactType) string {
+				return r.ContactByType(contactType)
+			},
+			contractAddress: "CBMPN7ISGRAUPESOBG6DCWM5XPM5O3SW5TRUXFACY63EDOF6G7YS3NUP",
+			prepareMocksFn: func(t *testing.T, mockMessageDispatcher *message.MockMessageDispatcher) {
+				mockMessageDispatcher.
+					On("SendMessage",
+						mock.Anything,
+						mock.AnythingOfType("message.Message"),
+						[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
+					Return(message.MessengerTypeTwilioSMS, nil).
+					Once()
+			},
+			wantVerificationField: data.VerificationTypePin,
+			wantHTTPErr:           nil,
+		},
 	}
 
 	for _, contactType := range data.GetAllReceiverContactTypes() {
@@ -811,12 +830,20 @@ func Test_ReceiverSendOTPHandler_handleOTPForReceiver(t *testing.T) {
 					VerificationField: data.VerificationTypePin,
 					VerificationValue: "123456",
 				})
-				_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverWithWallet.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+				claims := &sepauth.SEP24JWTClaims{ClientDomainClaim: tc.sep24ClientDomain, RegisteredClaims: validClaims.RegisteredClaims}
+				if tc.contractAddress != "" {
+					defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+					embedded := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", tc.contractAddress, "cred-id", "pub", data.SuccessWalletStatus)
+					require.NoError(t, models.EmbeddedWallets.Update(ctx, dbConnectionPool, embedded.Token, data.EmbeddedWalletUpdate{ReceiverWalletID: receiverWallet.ID}))
+					claims.Subject = tc.contractAddress
+				}
 
 				getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
 
 				contactInfo := tc.contactInfo(*receiverWithWallet, contactType)
-				verificationField, httpErr := handler.handleOTPForReceiver(ctx, contactType, contactInfo, tc.sep24ClientDomain)
+				verificationField, httpErr := handler.handleOTPForReceiver(ctx, contactType, contactInfo, claims)
 				if tc.wantHTTPErr != nil {
 					wantHTTPErr := tc.wantHTTPErr(contactType, *receiverWithWallet)
 					require.NotNil(t, httpErr)

@@ -263,9 +263,13 @@ func (h SEP24Handler) PostDepositInteractive(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if account == "" {
-		account, memo = sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
+	// The deposit account must be the authenticated one, since it becomes the receiver's payout address.
+	subjectAccount, subjectMemo := sepauth.ParseAccountAndMemo(webAuthClaims.Subject)
+	if account != "" && account != subjectAccount {
+		httperror.BadRequest("account must match the authenticated account", nil, nil).Render(w)
+		return
 	}
+	account, memo = subjectAccount, subjectMemo
 
 	if lang == "" {
 		lang = "en"

@@ -706,10 +706,10 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		assert.Equal(t, memo, sep24Claims.Memo())
 	})
 
-	t.Run("explicit account in request body does not use memo from subject", func(t *testing.T) {
-		explicitAccount := "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU"
+	t.Run("explicit account equal to subject keeps memo from subject", func(t *testing.T) {
+		account := "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP"
 		webAuthClaims := &sepauth.WebAuthClaims{
-			Subject:      "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP:99999",
+			Subject:      account + ":99999",
 			ClientDomain: "client.example.com",
 			HomeDomain:   "example.com",
 			TokenType:    sepauth.WebAuthTokenTypeSEP10,
@@ -717,7 +717,7 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 
 		requestBody := map[string]string{
 			"asset_code": "USDC",
-			"account":    explicitAccount,
+			"account":    account,
 		}
 		bodyBytes, err := json.Marshal(requestBody)
 		require.NoError(t, err)
@@ -734,7 +734,6 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &response)
 		require.NoError(t, err)
 
-		// When account is explicitly provided, memo from subject should NOT be used
 		interactiveURL := response["url"].(string)
 		parsedURL, err := url.Parse(interactiveURL)
 		require.NoError(t, err)
@@ -744,8 +743,39 @@ func Test_SEP24Handler_PostDepositInteractive(t *testing.T) {
 
 		sep24Claims, err := jwtManager.ParseSEP24TokenClaims(tokenStr)
 		require.NoError(t, err)
-		assert.Equal(t, explicitAccount, sep24Claims.Account())
-		assert.Empty(t, sep24Claims.Memo())
+		assert.Equal(t, account, sep24Claims.Account())
+		assert.Equal(t, "99999", sep24Claims.Memo())
+	})
+
+	t.Run("explicit account different from subject is rejected", func(t *testing.T) {
+		for _, tokenType := range []sepauth.WebAuthTokenType{sepauth.WebAuthTokenTypeSEP10, sepauth.WebAuthTokenTypeSEP45} {
+			subject := "GDQOE23CFSUMSVQK4Y5JHPPYK73VYCNHZHA7ENKCV37P6SUEO6XQBKPP:99999"
+			if tokenType == sepauth.WebAuthTokenTypeSEP45 {
+				subject = "CBMPN7ISGRAUPESOBG6DCWM5XPM5O3SW5TRUXFACY63EDOF6G7YS3NUP"
+			}
+			webAuthClaims := &sepauth.WebAuthClaims{
+				Subject:      subject,
+				ClientDomain: "client.example.com",
+				HomeDomain:   "example.com",
+				TokenType:    tokenType,
+			}
+
+			requestBody := map[string]string{
+				"asset_code": "USDC",
+				"account":    "GBVFTZL5HIPT4PFQVTZVIWR77V7LWYCXU4CLYWWHHOEXB64XPG5LDMTU",
+			}
+			bodyBytes, err := json.Marshal(requestBody)
+			require.NoError(t, err)
+
+			rr := httptest.NewRecorder()
+			req := setupRequestWithWebAuthClaims("POST", "/deposit/interactive", bytes.NewReader(bodyBytes), webAuthClaims)
+			req.Header.Set("Content-Type", "application/json")
+			http.HandlerFunc(handler.PostDepositInteractive).ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			assert.JSONEq(t, `{"error":"account must match the authenticated account"}`, rr.Body.String())
+		}
 	})
 
 	t.Run("invalid JSON in request body", func(t *testing.T) {
