@@ -353,16 +353,7 @@ func (m *APIKeyModel) Insert(
 	return apiKey, nil
 }
 
-// managementScopeArg binds the caller's reach: nil (a signed-in user) binds NULL and lifts the restriction;
-// an API key passes its own accounts and reaches only keys whose scope they contain (<@), empty reaching only empty.
-func managementScopeArg(withinWallets []string) any {
-	if withinWallets == nil {
-		return nil
-	}
-	return pq.StringArray(withinWallets)
-}
-
-func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string, withinWallets []string) ([]*APIKey, error) {
+func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string) ([]*APIKey, error) {
 	apiKeys := []*APIKey{}
 	query := `
         SELECT
@@ -381,12 +372,11 @@ func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string, withinWallet
             api_keys
         WHERE
             created_by = $1
-            AND ($2::VARCHAR(36)[] IS NULL OR distribution_wallet_ids <@ $2::VARCHAR(36)[])
         ORDER BY
             created_at DESC
     `
 
-	err := m.dbConnectionPool.SelectContext(ctx, &apiKeys, query, createdBy, managementScopeArg(withinWallets))
+	err := m.dbConnectionPool.SelectContext(ctx, &apiKeys, query, createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("selecting api keys: %w", err)
 	}
@@ -394,7 +384,7 @@ func (m *APIKeyModel) GetAll(ctx context.Context, createdBy string, withinWallet
 	return apiKeys, nil
 }
 
-func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string, withinWallets []string) (*APIKey, error) {
+func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string) (*APIKey, error) {
 	const q = `
       SELECT
         id, name,
@@ -405,11 +395,10 @@ func (m *APIKeyModel) GetByID(ctx context.Context, id, createdBy string, withinW
       FROM api_keys
       WHERE id = $1
         AND created_by = $2
-        AND ($3::VARCHAR(36)[] IS NULL OR distribution_wallet_ids <@ $3::VARCHAR(36)[])
       LIMIT 1
     `
 	var key APIKey
-	if err := m.dbConnectionPool.GetContext(ctx, &key, q, id, createdBy, managementScopeArg(withinWallets)); err != nil {
+	if err := m.dbConnectionPool.GetContext(ctx, &key, q, id, createdBy); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
@@ -485,9 +474,9 @@ func (m *APIKeyModel) ValidateRawKeyAndUpdateLastUsed(ctx context.Context, raw s
 	return result, nil
 }
 
-// Update replaces the key's permissions and allowed IPs; nil walletIDs keeps its scope, non-nil (even empty)
-// replaces it. The write lands only if the current scope is within withinWallets.
-func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, withinWallets []string, perms APIKeyPermissions, ips []string, walletIDs []string) (*APIKey, error) {
+// Update replaces the key's permissions and allowed IPs. A nil walletIDs leaves the key's wallet
+// scope as it is; a non-nil one replaces it (including empty, meaning no wallet access).
+func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, perms APIKeyPermissions, ips []string, walletIDs []string) (*APIKey, error) {
 	var walletParam any
 	if walletIDs != nil {
 		walletParam = pq.StringArray(walletIDs)
@@ -502,7 +491,6 @@ func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, withinWa
 				updated_by = $4
 			WHERE id = $3
 			AND created_by = $4
-			AND ($6::VARCHAR(36)[] IS NULL OR distribution_wallet_ids <@ $6::VARCHAR(36)[])
 		 RETURNING
 		   id, name,
 		   expiry_date, permissions, allowed_ips, distribution_wallet_ids,
@@ -512,7 +500,7 @@ func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, withinWa
 	`
 
 	var key APIKey
-	if err := m.dbConnectionPool.GetContext(ctx, &key, query, perms, IPList(ips), id, createdBy, walletParam, managementScopeArg(withinWallets)); err != nil {
+	if err := m.dbConnectionPool.GetContext(ctx, &key, query, perms, IPList(ips), id, createdBy, walletParam); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
@@ -526,13 +514,11 @@ func (m *APIKeyModel) Update(ctx context.Context, id, createdBy string, withinWa
 	return &key, nil
 }
 
-func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string, withinWallets []string) error {
+func (m *APIKeyModel) Delete(ctx context.Context, id string, createdBy string) error {
 	res, err := m.dbConnectionPool.ExecContext(ctx,
 		`DELETE FROM api_keys
            WHERE id = $1
-             AND created_by = $2
-             AND ($3::VARCHAR(36)[] IS NULL OR distribution_wallet_ids <@ $3::VARCHAR(36)[])`,
-		id, createdBy, managementScopeArg(withinWallets),
+             AND created_by = $2`, id, createdBy,
 	)
 	if err != nil {
 		return fmt.Errorf("delete api key: %w", err)
