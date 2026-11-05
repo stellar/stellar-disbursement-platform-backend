@@ -686,7 +686,8 @@ func Test_handleHTTP_APIKeyRefusedOnSignedInOnlyRoutes(t *testing.T) {
 
 	for _, route := range routes {
 		for _, k := range keys {
-			t.Run(route.method+" "+route.path+" with "+k.name, func(t *testing.T) {
+			name := route.method + " " + strings.ReplaceAll(route.path, unrelatedKey.ID, "{id}") + " with " + k.name
+			t.Run(name, func(t *testing.T) {
 				resp := executeRequest(t, mux, route.method, route.path, nil, k.key)
 				b, readErr := io.ReadAll(resp.Body)
 				require.NoError(t, readErr)
