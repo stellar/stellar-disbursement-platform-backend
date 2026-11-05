@@ -29,10 +29,10 @@ type AuthManager interface {
 	GetUserByID(ctx context.Context, userID string) (*User, error)
 	GetUserID(ctx context.Context, tokenString string) (string, error)
 	GetTenantID(ctx context.Context, tokenString string) (string, error)
-	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
-	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
-	DeactivateUser(ctx context.Context, tokenString, userID string) error
-	ActivateUser(ctx context.Context, tokenString, userID string) error
+	GetAllUsers(ctx context.Context) ([]User, error)
+	UpdateUserRoles(ctx context.Context, userID string, roles []string) error
+	DeactivateUser(ctx context.Context, userID string) error
+	ActivateUser(ctx context.Context, userID string) error
 	ExpirationTimeInMinutes() time.Duration
 	MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error)
 	GetMFACode(ctx context.Context, deviceID, userID string) (string, error)
@@ -243,17 +243,8 @@ func (am *defaultAuthManager) UpdatePassword(ctx context.Context, tokenString, c
 	return nil
 }
 
-func (am *defaultAuthManager) ActivateUser(ctx context.Context, tokenString, userID string) error {
-	isValid, err := am.ValidateToken(ctx, tokenString)
-	if err != nil {
-		return fmt.Errorf("validating token: %w", err)
-	}
-
-	if !isValid {
-		return ErrInvalidToken
-	}
-
-	err = am.authenticator.ActivateUser(ctx, userID)
+func (am *defaultAuthManager) ActivateUser(ctx context.Context, userID string) error {
+	err := am.authenticator.ActivateUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("error activating user ID %s: %w", userID, err)
 	}
@@ -261,17 +252,8 @@ func (am *defaultAuthManager) ActivateUser(ctx context.Context, tokenString, use
 	return nil
 }
 
-func (am *defaultAuthManager) DeactivateUser(ctx context.Context, tokenString, userID string) error {
-	isValid, err := am.ValidateToken(ctx, tokenString)
-	if err != nil {
-		return fmt.Errorf("validating token: %w", err)
-	}
-
-	if !isValid {
-		return ErrInvalidToken
-	}
-
-	err = am.authenticator.DeactivateUser(ctx, userID)
+func (am *defaultAuthManager) DeactivateUser(ctx context.Context, userID string) error {
+	err := am.authenticator.DeactivateUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("error deactivating user ID %s: %w", userID, err)
 	}
@@ -279,18 +261,9 @@ func (am *defaultAuthManager) DeactivateUser(ctx context.Context, tokenString, u
 	return nil
 }
 
-func (am *defaultAuthManager) UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error {
-	isValid, err := am.ValidateToken(ctx, tokenString)
-	if err != nil {
-		return fmt.Errorf("validating token: %w", err)
-	}
-
-	if !isValid {
-		return ErrInvalidToken
-	}
-
+func (am *defaultAuthManager) UpdateUserRoles(ctx context.Context, userID string, roles []string) error {
 	// TODO: pass all fields of the user
-	err = am.roleManager.UpdateRoles(ctx, &User{ID: userID}, roles)
+	err := am.roleManager.UpdateRoles(ctx, &User{ID: userID}, roles)
 	if err != nil {
 		return fmt.Errorf("error updating user roles: %w", err)
 	}
@@ -298,16 +271,7 @@ func (am *defaultAuthManager) UpdateUserRoles(ctx context.Context, tokenString, 
 	return nil
 }
 
-func (am *defaultAuthManager) GetAllUsers(ctx context.Context, tokenString string) ([]User, error) {
-	isValid, err := am.ValidateToken(ctx, tokenString)
-	if err != nil {
-		return nil, fmt.Errorf("validating token: %w", err)
-	}
-
-	if !isValid {
-		return nil, ErrInvalidToken
-	}
-
+func (am *defaultAuthManager) GetAllUsers(ctx context.Context) ([]User, error) {
 	users, err := am.authenticator.GetAllUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting all users: %w", err)

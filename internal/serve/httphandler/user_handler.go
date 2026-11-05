@@ -128,9 +128,8 @@ func validateRoles(validator *validators.Validator, roles []data.UserRole) {
 func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	userID, err := sdpcontext.GetUserIDFromContext(ctx)
 	if err != nil {
-		log.Ctx(ctx).Warn("token not found when updating user activation")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
@@ -148,16 +147,6 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check if the users are trying to update their own activation
-	userID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		if errors.Is(err, auth.ErrInvalidToken) {
-			httperror.Unauthorized("", err, nil).Render(rw)
-			return
-		}
-		err = fmt.Errorf("getting user from token: %w", err)
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
-		return
-	}
 	if userID == reqBody.UserID {
 		httperror.BadRequest("", nil, map[string]interface{}{"user_id": "cannot update your own activation"}).Render(rw)
 		return
@@ -166,16 +155,14 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 	var activationErr error
 	if *reqBody.IsActive {
 		log.Ctx(ctx).Infof("[ActivateUserAccount] - User ID %s activating user with account ID %s", userID, reqBody.UserID)
-		activationErr = h.AuthManager.ActivateUser(ctx, token, reqBody.UserID)
+		activationErr = h.AuthManager.ActivateUser(ctx, reqBody.UserID)
 	} else {
 		log.Ctx(ctx).Infof("[DeactivateUserAccount] - User ID %s deactivating user with account ID %s", userID, reqBody.UserID)
-		activationErr = h.AuthManager.DeactivateUser(ctx, token, reqBody.UserID)
+		activationErr = h.AuthManager.DeactivateUser(ctx, reqBody.UserID)
 	}
 
 	if activationErr != nil {
-		if errors.Is(activationErr, auth.ErrInvalidToken) {
-			httperror.Unauthorized("", activationErr, nil).Render(rw)
-		} else if errors.Is(activationErr, auth.ErrNoRowsAffected) {
+		if errors.Is(activationErr, auth.ErrNoRowsAffected) {
 			httperror.BadRequest("", activationErr, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
 		} else if errors.Is(activationErr, auth.ErrLastOwner) {
 			httperror.BadRequest(auth.ErrLastOwner.Error(), activationErr, nil).Render(rw)
@@ -198,9 +185,8 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	authenticatedUserID, err := sdpcontext.GetUserIDFromContext(ctx)
 	if err != nil {
-		log.Ctx(ctx).Warn("token not found when updating user activation")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
@@ -215,14 +201,6 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 	if err := reqBody.validate(); err != nil {
 		err.Render(rw)
-		return
-	}
-
-	authenticatedUserID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		err = fmt.Errorf("getting request authenticated user ID: %w", err)
-		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).Render(rw)
 		return
 	}
 
@@ -264,7 +242,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		// user rather than leave a live account with no wallet access — an account that can log
 		// in and see nothing is the exact silent failure this membership prevents.
 		if _, err = h.Models.WalletMemberships.Insert(ctx, h.Models.DBConnectionPool, u.ID, membershipWallet.ID, role, &authenticatedUserID); err != nil {
-			if deactivateErr := h.AuthManager.DeactivateUser(ctx, token, u.ID); deactivateErr != nil {
+			if deactivateErr := h.AuthManager.DeactivateUser(ctx, u.ID); deactivateErr != nil {
 				h.CrashTrackerClient.LogAndReportErrors(ctx, deactivateErr, "Cannot deactivate user left without a wallet membership")
 			}
 			httperror.InternalError(ctx, "Cannot grant wallet membership to new user", err, nil).Render(rw)
@@ -317,9 +295,8 @@ func (h UserHandler) resolveMembershipWallet(ctx context.Context, walletID strin
 func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	authenticatedUserID, err := sdpcontext.GetUserIDFromContext(ctx)
 	if err != nil {
-		log.Ctx(ctx).Warn("token not found when updating user roles")
 		httperror.Unauthorized("", nil, nil).Render(rw)
 		return
 	}
@@ -337,21 +314,9 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	authenticatedUserID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		err = fmt.Errorf("getting request authenticated user ID: %w", err)
-		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).Render(rw)
-		return
-	}
-
 	// Includes deactivated users, whose role can still be changed.
-	users, err := h.AuthManager.GetAllUsers(ctx, token)
+	users, err := h.AuthManager.GetAllUsers(ctx)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidToken) {
-			httperror.Unauthorized("", err, nil).Render(rw)
-			return
-		}
 		httperror.InternalError(ctx, "Cannot get users", err, nil).Render(rw)
 		return
 	}
@@ -374,13 +339,8 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	updateUserRolesErr := h.AuthManager.UpdateUserRoles(ctx, token, reqBody.UserID, data.FromUserRoleArrayToStringArray(reqBody.Roles))
+	updateUserRolesErr := h.AuthManager.UpdateUserRoles(ctx, reqBody.UserID, data.FromUserRoleArrayToStringArray(reqBody.Roles))
 	if updateUserRolesErr != nil {
-		if errors.Is(updateUserRolesErr, auth.ErrInvalidToken) {
-			httperror.Unauthorized("", updateUserRolesErr, nil).Render(rw)
-			return
-		}
-
 		if errors.Is(updateUserRolesErr, auth.ErrNoRowsAffected) {
 			httperror.BadRequest("", updateUserRolesErr, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
 			return
@@ -424,19 +384,8 @@ func (h UserHandler) GetAllUsers(rw http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 
-	token, err := sdpcontext.GetTokenFromContext(ctx)
+	users, err := h.AuthManager.GetAllUsers(ctx)
 	if err != nil {
-		log.Ctx(ctx).Warn("token not found when getting all users")
-		httperror.Unauthorized("", nil, nil).Render(rw)
-		return
-	}
-
-	users, err := h.AuthManager.GetAllUsers(ctx, token)
-	if err != nil {
-		if errors.Is(err, auth.ErrInvalidToken) {
-			httperror.Unauthorized("", err, nil).Render(rw)
-			return
-		}
 		httperror.InternalError(ctx, "Cannot get all users", err, nil).Render(rw)
 		return
 	}
