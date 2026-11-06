@@ -30,7 +30,8 @@ jobs:
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
           - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
-          - "Stellar-embeddedWallet" # Embedded wallet (contract account) E2E test with disbursement to C-address
+          - "Stellar-embeddedWallet-noVerification" # Embedded wallet (contract account), verification type None: auto-registered at deployment, disbursement to C-address
+          - "Stellar-embeddedWallet-verification" # Embedded wallet (contract account), verification type DATE_OF_BIRTH: OTP + PII over SEP-45 → SEP-24, disbursement to C-address
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
@@ -77,7 +78,7 @@ jobs:
             DISBURSED_ASSET_CODE: "XLM"
             NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
             HORIZON_URL: "https://horizon-futurenet.stellar.org"
-          - platform: "Stellar-embeddedWallet"
+          - platform: "Stellar-embeddedWallet-noVerification"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_embedded_wallet.csv"
@@ -87,6 +88,18 @@ jobs:
             HORIZON_URL: "https://horizon-testnet.stellar.org"
             RPC_URL: "https://soroban-testnet.stellar.org"
             TEST_TYPE: "embedded-wallet"
+          - platform: "Stellar-embeddedWallet-verification"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "XLM"
+            NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+            HORIZON_URL: "https://horizon-testnet.stellar.org"
+            RPC_URL: "https://soroban-testnet.stellar.org"
+            TEST_TYPE: "embedded-wallet"
+            ENABLE_SEP45: "true"
+            EMBEDDED_WALLET_VERIFICATION_FIELD: "DATE_OF_BIRTH"
     environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
@@ -101,6 +114,8 @@ jobs:
       ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS}}
       EMBEDDED_WALLETS_WASM_HASH: ${{ matrix.EMBEDDED_WALLETS_WASM_HASH }}
       TEST_TYPE: ${{ matrix.TEST_TYPE }}
+      ENABLE_SEP45: ${{ matrix.ENABLE_SEP45 }}
+      EMBEDDED_WALLET_VERIFICATION_FIELD: ${{ matrix.EMBEDDED_WALLET_VERIFICATION_FIELD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1

@@ -342,6 +342,8 @@ func TestSDPSepServicesIntegrationTests_ValidateSEP10Challenge(t *testing.T) {
 func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 	t.Parallel()
 
+	const receiverAccount = "GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU"
+
 	testCases := []struct {
 		name          string
 		sep10Token    *SEP10AuthToken
@@ -361,7 +363,10 @@ func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 					TransactionID: "tx-123",
 				}
 
-				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
+				mockClient.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+					var body map[string]string
+					return json.NewDecoder(req.Body).Decode(&body) == nil && body["account"] == receiverAccount
+				})).Return(
 					createMockResponse(http.StatusOK, expectedResponse), nil,
 				).Once()
 			},
@@ -398,7 +403,7 @@ func TestSDPSepServicesIntegrationTests_InitiateSEP24Deposit(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			response, err := service.InitiateSEP24Deposit(ctx, tc.sep10Token)
+			response, err := service.InitiateSEP24Deposit(ctx, tc.sep10Token, receiverAccount)
 
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -588,6 +593,181 @@ func TestSDPSepServicesIntegrationTests_CompleteReceiverRegistration(t *testing.
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestSDPSepServicesIntegrationTests_GetSEP45Challenge(t *testing.T) {
+	t.Parallel()
+
+	const contractAddress = "CBMPN7ISAPVGZFKHXAOCLXW3QOIYTQAGZ7JC6XJGZSGBVBZQDWKUKE7L"
+
+	testCases := []struct {
+		name          string
+		setupMock     func(*httpclientMocks.HTTPClientMock)
+		expectedError string
+	}{
+		{
+			name: "✅ successful challenge retrieval",
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
+				mockClient.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+					q := req.URL.Query()
+					return req.Method == http.MethodGet && req.URL.Path == "/sep45/auth" &&
+						q.Get("account") == contractAddress && q.Get("home_domain") == "test-tenant.stellar.local:8000" &&
+						req.Header.Get("SDP-Tenant-Name") == "test-tenant"
+				})).Return(
+					createMockResponse(http.StatusOK, SEP45ChallengeResponse{
+						AuthorizationEntries: "entries-xdr",
+						NetworkPassphrase:    "Test SDF Network ; September 2015",
+					}), nil,
+				).Once()
+			},
+		},
+		{
+			name: "❌ server returns error",
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
+				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
+					createMockResponse(http.StatusBadRequest, "home_domain must match stellar.local:8000"), nil,
+				).Once()
+			},
+			expectedError: "unexpected status 400: home_domain must match stellar.local:8000",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockClient := &httpclientMocks.HTTPClientMock{}
+			tc.setupMock(mockClient)
+
+			service := &SDPSepServicesIntegrationTests{
+				HTTPClient: mockClient,
+				SDPBaseURL: "https://test.stellar.local:8000",
+				TenantName: "test-tenant",
+			}
+
+			response, err := service.GetSEP45Challenge(context.Background(), contractAddress)
+
+			if tc.expectedError != "" {
+				assert.EqualError(t, err, tc.expectedError)
+				assert.Nil(t, response)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "entries-xdr", response.AuthorizationEntries)
+				assert.Equal(t, "Test SDF Network ; September 2015", response.NetworkPassphrase)
+			}
+
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestSDPSepServicesIntegrationTests_ValidateSEP45Challenge(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		setupMock     func(*httpclientMocks.HTTPClientMock)
+		expectedError string
+	}{
+		{
+			name: "✅ successful validation",
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
+				mockClient.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+					var body map[string]string
+					return req.Method == http.MethodPost && req.URL.Path == "/sep45/auth" &&
+						json.NewDecoder(req.Body).Decode(&body) == nil && body["authorization_entries"] == "signed-entries-xdr"
+				})).Return(
+					createMockResponse(http.StatusOK, SEP10AuthToken{Token: "sep45-jwt-token"}), nil,
+				).Once()
+			},
+		},
+		{
+			name: "❌ invalid signature",
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
+				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
+					createMockResponse(http.StatusBadRequest, "challenge validation failed"), nil,
+				).Once()
+			},
+			expectedError: "unexpected status 400: challenge validation failed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockClient := &httpclientMocks.HTTPClientMock{}
+			tc.setupMock(mockClient)
+
+			service := &SDPSepServicesIntegrationTests{
+				HTTPClient: mockClient,
+				SDPBaseURL: "https://test.stellar.local:8000",
+			}
+
+			token, err := service.ValidateSEP45Challenge(context.Background(), "signed-entries-xdr")
+
+			if tc.expectedError != "" {
+				assert.EqualError(t, err, tc.expectedError)
+				assert.Nil(t, token)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "sep45-jwt-token", token.Token)
+			}
+
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestSDPSepServicesIntegrationTests_RequestReceiverOTP(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name          string
+		setupMock     func(*httpclientMocks.HTTPClientMock)
+		expectedError string
+	}{
+		{
+			name: "✅ successful OTP request",
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
+				mockClient.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+					var body map[string]string
+					return req.Method == http.MethodPost && req.URL.Path == "/sep24-interactive-deposit/otp" &&
+						req.Header.Get("Authorization") == "Bearer sep24-token" &&
+						json.NewDecoder(req.Body).Decode(&body) == nil && body["phone_number"] == "+12025550191"
+				})).Return(
+					createMockResponse(http.StatusOK, `{"message":"if your phone number is registered, you'll receive an OTP"}`), nil,
+				).Once()
+			},
+		},
+		{
+			name: "❌ unauthorized",
+			setupMock: func(mockClient *httpclientMocks.HTTPClientMock) {
+				mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(
+					createMockResponse(http.StatusUnauthorized, "Unauthorized"), nil,
+				).Once()
+			},
+			expectedError: "unexpected status 401: Unauthorized",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockClient := &httpclientMocks.HTTPClientMock{}
+			tc.setupMock(mockClient)
+
+			service := &SDPSepServicesIntegrationTests{
+				HTTPClient: mockClient,
+				SDPBaseURL: "https://test.stellar.local:8000",
+			}
+
+			err := service.RequestReceiverOTP(context.Background(), "sep24-token", "+12025550191")
+
+			if tc.expectedError != "" {
+				assert.EqualError(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
 			}
 
 			mockClient.AssertExpectations(t)

@@ -22,9 +22,14 @@ type SDPSepServicesIntegrationTestsInterface interface {
 	SignSEP10Challenge(challengeResp *SEP10ChallengeResponse) (*SignedSEP10Challenge, error)
 	ValidateSEP10Challenge(ctx context.Context, signedChallenge *SignedSEP10Challenge) (*SEP10AuthToken, error)
 
+	// SEP-45 Methods
+	GetSEP45Challenge(ctx context.Context, contractAddress string) (*SEP45ChallengeResponse, error)
+	ValidateSEP45Challenge(ctx context.Context, signedAuthorizationEntries string) (*SEP10AuthToken, error)
+
 	// SEP-24 Methods
-	InitiateSEP24Deposit(ctx context.Context, sep10Token *SEP10AuthToken) (*SEP24DepositResponse, error)
+	InitiateSEP24Deposit(ctx context.Context, webAuthToken *SEP10AuthToken, account string) (*SEP24DepositResponse, error)
 	GetSEP24Transaction(ctx context.Context, sep10Token *SEP10AuthToken, transactionID string) (*SEP24TransactionStatus, error)
+	RequestReceiverOTP(ctx context.Context, sep24Token, phoneNumber string) error
 	CompleteReceiverRegistration(ctx context.Context, sep24Token string, registrationData *ReceiverRegistrationRequest) error
 }
 
@@ -56,6 +61,11 @@ type SignedSEP10Challenge struct {
 
 type SEP10AuthToken struct {
 	Token string `json:"token"`
+}
+
+type SEP45ChallengeResponse struct {
+	AuthorizationEntries string `json:"authorization_entries"`
+	NetworkPassphrase    string `json:"network_passphrase"`
 }
 
 type SEP24DepositResponse struct {
@@ -255,8 +265,113 @@ func (s *SDPSepServicesIntegrationTests) ValidateSEP10Challenge(ctx context.Cont
 	return &token, nil
 }
 
-// InitiateSEP24Deposit starts SEP-24 deposit flow with SDP's internal implementation
-func (s *SDPSepServicesIntegrationTests) InitiateSEP24Deposit(ctx context.Context, sep10Token *SEP10AuthToken) (*SEP24DepositResponse, error) {
+// GetSEP45Challenge requests a SEP-45 challenge for a contract account
+func (s *SDPSepServicesIntegrationTests) GetSEP45Challenge(ctx context.Context, contractAddress string) (*SEP45ChallengeResponse, error) {
+	authURL, err := url.JoinPath(s.SDPBaseURL, "sep45/auth")
+	if err != nil {
+		return nil, fmt.Errorf("creating auth URL: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, authURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	// Set tenant header for multi-tenant context
+	if s.TenantName != "" {
+		req.Header.Set("SDP-Tenant-Name", s.TenantName)
+	}
+
+	// Use configurable home domain if provided, otherwise use tenant-based domain
+	homeDomain := s.HomeDomain
+	if homeDomain == "" && s.TenantName != "" {
+		homeDomain = fmt.Sprintf("%s.stellar.local:8000", s.TenantName)
+	}
+
+	q := req.URL.Query()
+	q.Add("account", contractAddress)
+	q.Add("home_domain", homeDomain)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, bodyErr := io.ReadAll(resp.Body)
+		if bodyErr != nil {
+			return nil, fmt.Errorf("reading response body: %w", bodyErr)
+		}
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var challenge SEP45ChallengeResponse
+	if err = json.NewDecoder(resp.Body).Decode(&challenge); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	return &challenge, nil
+}
+
+// ValidateSEP45Challenge submits the signed authorization entries. The returned token has the same shape as the
+// SEP-10 one, so the SEP-24 methods accept either.
+func (s *SDPSepServicesIntegrationTests) ValidateSEP45Challenge(ctx context.Context, signedAuthorizationEntries string) (*SEP10AuthToken, error) {
+	authURL, err := url.JoinPath(s.SDPBaseURL, "sep45/auth")
+	if err != nil {
+		return nil, fmt.Errorf("creating auth URL: %w", err)
+	}
+
+	payload := map[string]string{
+		"authorization_entries": signedAuthorizationEntries,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	// Set tenant header for multi-tenant context
+	if s.TenantName != "" {
+		req.Header.Set("SDP-Tenant-Name", s.TenantName)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, bodyErr := io.ReadAll(resp.Body)
+		if bodyErr != nil {
+			return nil, fmt.Errorf("reading response body: %w", bodyErr)
+		}
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var token SEP10AuthToken
+	if err = json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	return &token, nil
+}
+
+// InitiateSEP24Deposit starts SEP-24 deposit flow for the given account, with a SEP-10 or SEP-45 token
+func (s *SDPSepServicesIntegrationTests) InitiateSEP24Deposit(ctx context.Context, webAuthToken *SEP10AuthToken, account string) (*SEP24DepositResponse, error) {
 	depositURL, err := url.JoinPath(s.SDPBaseURL, "sep24", "transactions", "deposit", "interactive")
 	if err != nil {
 		return nil, fmt.Errorf("creating deposit URL: %w", err)
@@ -264,7 +379,7 @@ func (s *SDPSepServicesIntegrationTests) InitiateSEP24Deposit(ctx context.Contex
 
 	payload := map[string]string{
 		"asset_code":                  s.DisbursedAssetCode,
-		"account":                     s.ReceiverAccountPublicKey,
+		"account":                     account,
 		"lang":                        "en",
 		"claimable_balance_supported": "false",
 	}
@@ -285,7 +400,7 @@ func (s *SDPSepServicesIntegrationTests) InitiateSEP24Deposit(ctx context.Contex
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+sep10Token.Token)
+	req.Header.Set("Authorization", "Bearer "+webAuthToken.Token)
 
 	resp, err := s.HTTPClient.Do(req)
 	if err != nil {
@@ -364,6 +479,54 @@ func (s *SDPSepServicesIntegrationTests) GetSEP24Transaction(ctx context.Context
 	}
 
 	return &status, nil
+}
+
+// RequestReceiverOTP asks the SDP to send the registration OTP to the receiver's phone number
+func (s *SDPSepServicesIntegrationTests) RequestReceiverOTP(ctx context.Context, sep24Token, phoneNumber string) error {
+	otpURL, err := url.JoinPath(s.SDPBaseURL, "sep24-interactive-deposit", "otp")
+	if err != nil {
+		return fmt.Errorf("creating OTP URL: %w", err)
+	}
+
+	payload := map[string]string{
+		"phone_number": phoneNumber,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshaling payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, otpURL, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	// Set tenant header for multi-tenant context
+	if s.TenantName != "" {
+		req.Header.Set("SDP-Tenant-Name", s.TenantName)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+sep24Token)
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing request: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close() //nolint:errcheck // No need to handle this error since it only returns error when body is not a string and its a mock
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading response body: %w", err)
+		}
+		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
 // CompleteReceiverRegistration finishes the receiver registration process

@@ -2,10 +2,8 @@ package integrationtests
 
 import (
 	"context"
-	"crypto/ecdh"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -75,6 +73,8 @@ type IntegrationTestsOpts struct {
 	NetworkPassphrase          string
 	SingleTenantMode           bool
 	EmbeddedWalletsWasmHash    string
+	// EmbeddedWalletVerificationField is the verification type of the embedded wallet disbursement; empty means none.
+	EmbeddedWalletVerificationField string
 }
 
 type IntegrationTestsService struct {
@@ -240,8 +240,10 @@ func (it *IntegrationTestsService) createAndValidateDisbursement(ctx context.Con
 		}
 		walletID = wallet.ID
 
-		// Only set verification field for non-embedded wallets
-		if !wallet.Embedded {
+		// Classic wallets always verify; embedded wallets verify only when the scenario asks for it.
+		if wallet.Embedded {
+			verificationField = data.VerificationType(opts.EmbeddedWalletVerificationField)
+		} else {
 			verificationField = data.VerificationTypeDateOfBirth
 		}
 	}
@@ -321,7 +323,7 @@ func (it *IntegrationTestsService) registerWithInternalSEP(ctx context.Context, 
 	log.Ctx(ctx).Info("Received SEP-10 JWT token")
 
 	// Step 4: Initiate SEP-24 deposit
-	depositResp, err := it.sdpSepServices.InitiateSEP24Deposit(ctx, sep10Token)
+	depositResp, err := it.sdpSepServices.InitiateSEP24Deposit(ctx, sep10Token, opts.ReceiverAccountPublicKey)
 	if err != nil {
 		return fmt.Errorf("initiating SEP-24 deposit: %w", err)
 	}
@@ -548,6 +550,9 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 // EMBEDDED WALLET (CONTRACT ACCOUNT) INTEGRATION TESTS
 // ========================================
 
+// sep45SignatureValidityLedgers is how many ledgers (about 5 minutes) the passkey signature of a SEP-45 challenge is valid for.
+const sep45SignatureValidityLedgers = 60
+
 func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error {
 	log.Ctx(ctx).Info("Starting embedded wallet (contract account) integration tests...")
 	it.initServices(ctx, opts)
@@ -593,7 +598,8 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 
 	// Phase 3: Simulate receiver creating embedded wallet
 	log.Ctx(ctx).Info("=== Phase 3: Simulating receiver creating embedded wallet ===")
-	if err = it.createEmbeddedWallet(ctx, embeddedWallet.Token); err != nil {
+	receiverPasskey, err := it.createEmbeddedWallet(ctx, embeddedWallet.Token)
+	if err != nil {
 		return fmt.Errorf("simulating receiver registration: %w", err)
 	}
 	log.Ctx(ctx).Info("✅ Receiver registration API called - waiting for contract deployment")
@@ -606,8 +612,16 @@ func (it *IntegrationTestsService) StartEmbeddedWalletIntegrationTests(ctx conte
 	}
 	log.Ctx(ctx).Infof("✅ Contract deployed at: %s", contractAddress)
 
-	// Phase 5: Complete verification if required (OTP + DOB)
-	log.Ctx(ctx).Info("=== Phase 5: Skipping OTP and PII verification (RequiresVerification=false) ===")
+	// Phase 5: Complete verification if required (OTP + PII)
+	if opts.EmbeddedWalletVerificationField == "" {
+		log.Ctx(ctx).Info("=== Phase 5: Skipping OTP and PII verification ===")
+	} else {
+		log.Ctx(ctx).Info("=== Phase 5: Completing OTP and PII verification over SEP-45 and SEP-24 ===")
+		if err = it.verifyEmbeddedWallet(ctx, opts, receiverWalletID, contractAddress, receiverPasskey); err != nil {
+			return fmt.Errorf("verifying embedded wallet: %w", err)
+		}
+		log.Ctx(ctx).Info("✅ Receiver verified with OTP and PII")
+	}
 
 	// Phase 6: Verify receiver wallet was registered
 	log.Ctx(ctx).Info("=== Phase 6: Verifying receiver wallet registration ===")
@@ -700,11 +714,16 @@ func (it *IntegrationTestsService) waitForEmbeddedWalletToken(ctx context.Contex
 	return embeddedWallet, nil
 }
 
-// createEmbeddedWallet simulates a receiver clicks the invitation link and creates embedded wallet.
-func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context, token string) error {
-	publicKeyHex, err := generateP256PublicKeyHex()
+// createEmbeddedWallet simulates a receiver clicks the invitation link and creates embedded wallet. It returns the
+// passkey that controls the wallet.
+func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context, token string) (*passkey, error) {
+	receiverPasskey, err := newPasskey()
 	if err != nil {
-		return fmt.Errorf("generating P256 public key: %w", err)
+		return nil, fmt.Errorf("creating passkey: %w", err)
+	}
+	publicKeyHex, err := receiverPasskey.publicKeyHex()
+	if err != nil {
+		return nil, fmt.Errorf("getting passkey public key: %w", err)
 	}
 	credentialID := generateCredentialID()
 	log.Ctx(ctx).Infof("Generated credential ID: %s for token: %s", credentialID, token)
@@ -715,11 +734,11 @@ func (it *IntegrationTestsService) createEmbeddedWallet(ctx context.Context, tok
 		CredentialID: credentialID,
 	})
 	if err != nil {
-		return fmt.Errorf("creating embedded wallet: %w", err)
+		return nil, fmt.Errorf("creating embedded wallet: %w", err)
 	}
 	log.Ctx(ctx).Info("Embedded wallet created successfully")
 
-	return nil
+	return receiverPasskey, nil
 }
 
 // waitForContractDeployment waits for the embedded wallet contract to be deployed.
@@ -763,6 +782,92 @@ func (it *IntegrationTestsService) waitForContractDeployment(ctx context.Context
 	}
 
 	return contractAddress, nil
+}
+
+// verifyEmbeddedWallet registers the embedded wallet like its receiver would: a SEP-45 login signed by the passkey,
+// then the OTP and the verification value on the SEP-24 interactive flow.
+func (it *IntegrationTestsService) verifyEmbeddedWallet(ctx context.Context, opts IntegrationTestsOpts, receiverWalletID, contractAddress string, receiverPasskey *passkey) error {
+	// Step 1: Get SEP-45 challenge
+	challenge, err := it.sdpSepServices.GetSEP45Challenge(ctx, contractAddress)
+	if err != nil {
+		return fmt.Errorf("getting SEP-45 challenge: %w", err)
+	}
+	log.Ctx(ctx).Info("Received SEP-45 challenge from SDP")
+
+	// Step 2: Sign challenge with the passkey
+	latestLedger, err := it.rpcClient.GetLatestLedgerSequence(ctx)
+	if err != nil {
+		return fmt.Errorf("getting latest ledger: %w", err)
+	}
+	signedEntries, err := receiverPasskey.signSEP45AuthEntries(challenge.AuthorizationEntries, contractAddress, latestLedger+sep45SignatureValidityLedgers, challenge.NetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("signing SEP-45 challenge: %w", err)
+	}
+	log.Ctx(ctx).Info("Signed SEP-45 challenge")
+
+	// Step 3: Validate and get JWT token
+	sep45Token, err := it.sdpSepServices.ValidateSEP45Challenge(ctx, signedEntries)
+	if err != nil {
+		return fmt.Errorf("validating SEP-45 challenge: %w", err)
+	}
+	log.Ctx(ctx).Info("Received SEP-45 JWT token")
+
+	// Step 4: A SEP-24 deposit for an account other than the authenticated one must be rejected
+	_, err = it.sdpSepServices.InitiateSEP24Deposit(ctx, sep45Token, keypair.MustRandom().Address())
+	if err == nil {
+		return fmt.Errorf("SEP-24 deposit for another account was not rejected")
+	}
+	if !strings.Contains(err.Error(), "account must match the authenticated account") {
+		return fmt.Errorf("rejecting SEP-24 deposit for another account: %w", err)
+	}
+	log.Ctx(ctx).Info("SEP-24 deposit for another account was rejected")
+
+	// Step 5: Initiate SEP-24 deposit
+	depositResp, err := it.sdpSepServices.InitiateSEP24Deposit(ctx, sep45Token, contractAddress)
+	if err != nil {
+		return fmt.Errorf("initiating SEP-24 deposit: %w", err)
+	}
+	log.Ctx(ctx).Infof("Initiated SEP-24 deposit, transaction ID: %s", depositResp.TransactionID)
+
+	// Step 6: Request the OTP and read it from the receiver wallet it was issued to
+	disbursementInstructions, err := readDisbursementCSV(opts.DisbursementCSVFilePath, opts.DisbursementCSVFileName)
+	if err != nil {
+		return fmt.Errorf("reading disbursement CSV: %w", err)
+	}
+	if err = it.sdpSepServices.RequestReceiverOTP(ctx, depositResp.Token, disbursementInstructions[0].Phone); err != nil {
+		return fmt.Errorf("requesting OTP: %w", err)
+	}
+	receiverWallet, err := it.models.ReceiverWallet.GetByID(ctx, it.mtnDBConnectionPool, receiverWalletID)
+	if err != nil {
+		return fmt.Errorf("getting receiver wallet: %w", err)
+	}
+	if receiverWallet.OTP == "" || receiverWallet.OTPCreatedAt == nil {
+		return fmt.Errorf("OTP was not issued to receiver wallet %s", receiverWalletID)
+	}
+	log.Ctx(ctx).Info("OTP issued to the receiver wallet")
+
+	// Step 7: Complete registration
+	registrationData := &ReceiverRegistrationRequest{
+		OTP:               receiverWallet.OTP,
+		PhoneNumber:       disbursementInstructions[0].Phone,
+		VerificationValue: disbursementInstructions[0].VerificationValue,
+		VerificationField: opts.EmbeddedWalletVerificationField,
+	}
+	if err = it.sdpSepServices.CompleteReceiverRegistration(ctx, depositResp.Token, registrationData); err != nil {
+		return fmt.Errorf("completing receiver registration: %w", err)
+	}
+	log.Ctx(ctx).Info("Completed receiver registration")
+
+	// Step 8: Verify transaction is completed for the contract
+	txStatus, err := it.sdpSepServices.GetSEP24Transaction(ctx, sep45Token, depositResp.TransactionID)
+	if err != nil {
+		return fmt.Errorf("checking final transaction status: %w", err)
+	}
+	if txStatus.Transaction.Status != "completed" || txStatus.Transaction.To != contractAddress {
+		return fmt.Errorf("transaction not completed for the contract, status: %s, to: %s", txStatus.Transaction.Status, txStatus.Transaction.To)
+	}
+
+	return nil
 }
 
 // verifyReceiverWalletRegistration verifies that the receiver wallet was registered.
@@ -980,16 +1085,6 @@ func (it *IntegrationTestsService) getContractTokenBalance(
 		return decimal.Zero, fmt.Errorf("parsing balance string: %w", err)
 	}
 	return balance, nil
-}
-
-// generateP256PublicKeyHex generates a random P256 key pair and returns the public key.
-func generateP256PublicKeyHex() (string, error) {
-	privateKey, err := ecdh.P256().GenerateKey(rand.Reader)
-	if err != nil {
-		return "", fmt.Errorf("generating P256 private key: %w", err)
-	}
-	publicKeyBytes := privateKey.PublicKey().Bytes()
-	return hex.EncodeToString(publicKeyBytes), nil
 }
 
 // generateCredentialID generates a random credential ID for WebAuthn registration.
