@@ -80,26 +80,8 @@ Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
   "BASE_URL=http://stellar.local:8000"
 )
 
-Config_Stellar_EmbeddedWallet_NoVerification_XLM_Testnet=(
-  "platform=Stellar-EmbeddedWallet-NoVerification"
-  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_embedded_wallet.csv"
-  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
-  "DISBURSED_ASSET_CODE=XLM"
-  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
-  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
-  "HORIZON_URL=https://horizon-testnet.stellar.org"
-  "USER_EMAIL=integration-test-user@stellar.local"
-  "USER_PASSWORD=Password123!"
-  "BASE_URL=http://stellar.local:8000"
-  "RPC_URL=https://soroban-testnet.stellar.org"
-  "ENABLE_EMBEDDED_WALLETS=true"
-  # EMBEDDED_WALLETS_WASM_HASH is loaded from .env file - don't override here
-  "TEST_TYPE=embedded-wallet"
-)
-
-Config_Stellar_EmbeddedWallet_Verification_XLM_Testnet=(
-  "platform=Stellar-EmbeddedWallet-Verification"
+Config_Stellar_EmbeddedWallet_XLM_Testnet=(
+  "platform=Stellar-EmbeddedWallet"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
   "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
@@ -118,13 +100,31 @@ Config_Stellar_EmbeddedWallet_Verification_XLM_Testnet=(
   "TEST_TYPE=embedded-wallet"
 )
 
+Config_Stellar_EmbeddedWallet_NoVerification_XLM_Testnet=(
+  "platform=Stellar-EmbeddedWallet-NoVerification"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_embedded_wallet.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=XLM"
+  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
+  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
+  "HORIZON_URL=https://horizon-testnet.stellar.org"
+  "USER_EMAIL=integration-test-user@stellar.local"
+  "USER_PASSWORD=Password123!"
+  "BASE_URL=http://stellar.local:8000"
+  "RPC_URL=https://soroban-testnet.stellar.org"
+  "ENABLE_EMBEDDED_WALLETS=true"
+  # EMBEDDED_WALLETS_WASM_HASH is loaded from .env file - don't override here
+  "TEST_TYPE=embedded-wallet"
+)
+
 echo "🔧 Test Mode: Running SEP tests"
 options=(
   Config_Stellar_Env_Phone_XLM_Testnet[@]
   Config_Stellar_Env_Email_XLM_Testnet[@]
   Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
+  Config_Stellar_EmbeddedWallet_XLM_Testnet[@]
   Config_Stellar_EmbeddedWallet_NoVerification_XLM_Testnet[@]
-  Config_Stellar_EmbeddedWallet_Verification_XLM_Testnet[@]
 )
 
 echo "📋 Running ${#options[@]} test configuration(s)"
