@@ -605,13 +605,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			// Read operations
 			r.With(middleware.RequirePermission(
-				data.ReadAll,
+				data.ReadAssets,
 				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 			)).Get("/", assetsHandler.GetAssets)
 
 			// Write operations
 			r.With(middleware.RequirePermission(
-				data.WriteAll,
+				data.WriteAssets,
 				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", assetsHandler.CreateAsset)
