@@ -340,6 +340,13 @@ func (c *IntegrationTestsCommand) StartEmbeddedWalletTestsCommand(integrationTes
 			ConfigKey: &integrationTestsOpts.DisbursementCSVFilePath,
 			Required:  true,
 		},
+		{
+			Name:      "embedded-wallet-verification-field",
+			Usage:     "Verification type of the embedded wallet disbursement; empty means no verification.",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.EmbeddedWalletVerificationField,
+			Required:  false,
+		},
 	}
 
 	startEmbeddedWalletTestsCmd := &cobra.Command{

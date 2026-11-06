@@ -83,6 +83,26 @@ Config_Stellar_Env_PhoneWithWallet_XLM_Testnet=(
 Config_Stellar_EmbeddedWallet_XLM_Testnet=(
   "platform=Stellar-EmbeddedWallet"
   "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_phone.csv"
+  "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
+  "DISBURSED_ASSET_CODE=XLM"
+  "DISBURSED_ASSET_ISSUER="  # Empty for native XLM
+  "NETWORK_PASSPHRASE=Test SDF Network ; September 2015"
+  "HORIZON_URL=https://horizon-testnet.stellar.org"
+  "USER_EMAIL=integration-test-user@stellar.local"
+  "USER_PASSWORD=Password123!"
+  "BASE_URL=http://stellar.local:8000"
+  "RPC_URL=https://soroban-testnet.stellar.org"
+  "ENABLE_EMBEDDED_WALLETS=true"
+  # EMBEDDED_WALLETS_WASM_HASH is loaded from .env file - don't override here
+  "ENABLE_SEP45=true"
+  "EMBEDDED_WALLET_VERIFICATION_FIELD=DATE_OF_BIRTH"
+  "TEST_TYPE=embedded-wallet"
+)
+
+Config_Stellar_EmbeddedWallet_NoVerification_XLM_Testnet=(
+  "platform=Stellar-EmbeddedWallet-NoVerification"
+  "DISTRIBUTION_ACCOUNT_TYPE=DISTRIBUTION_ACCOUNT.STELLAR.ENV"
   "DISBURSEMENT_CSV_FILE_NAME=disbursement_instructions_embedded_wallet.csv"
   "REGISTRATION_CONTACT_TYPE=PHONE_NUMBER"
   "DISBURSED_ASSET_CODE=XLM"
@@ -104,6 +124,7 @@ options=(
   Config_Stellar_Env_Email_XLM_Testnet[@]
   Config_Stellar_Env_PhoneWithWallet_XLM_Testnet[@]
   Config_Stellar_EmbeddedWallet_XLM_Testnet[@]
+  Config_Stellar_EmbeddedWallet_NoVerification_XLM_Testnet[@]
 )
 
 echo "📋 Running ${#options[@]} test configuration(s)"
@@ -115,6 +136,8 @@ for config_name in "${options[@]}"; do
   echo -e "\n====> 👀 Starting e2e setup and integration test for ${config_name}"
   export CIRCLE_API_TYPE=""
   export TEST_TYPE=""
+  export ENABLE_SEP45=""
+  export EMBEDDED_WALLET_VERIFICATION_FIELD=""
 
   # Parse and export key-value pairs
   for pair in "${config[@]}"; do

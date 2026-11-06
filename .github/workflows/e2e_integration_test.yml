@@ -30,7 +30,8 @@ jobs:
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
           - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
-          - "Stellar-embeddedWallet" # Embedded wallet (contract account) E2E test with disbursement to C-address
+          - "Stellar-embeddedWallet" # Embedded wallet (contract account) with disbursement to C-address (OTP + PII verification)
+          - "Stellar-embeddedWallet-noVerification" # Embedded wallet (contract account) with disbursement to C-address (no verification)
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
@@ -80,6 +81,18 @@ jobs:
           - platform: "Stellar-embeddedWallet"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
             DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+            DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_phone.csv"
+            REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
+            DISBURSED_ASSET_CODE: "XLM"
+            NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+            HORIZON_URL: "https://horizon-testnet.stellar.org"
+            RPC_URL: "https://soroban-testnet.stellar.org"
+            TEST_TYPE: "embedded-wallet"
+            ENABLE_SEP45: "true"
+            EMBEDDED_WALLET_VERIFICATION_FIELD: "DATE_OF_BIRTH"
+          - platform: "Stellar-embeddedWallet-noVerification"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
             DISBURSEMENT_CSV_FILE_NAME: "disbursement_instructions_embedded_wallet.csv"
             REGISTRATION_CONTACT_TYPE: "PHONE_NUMBER"
             DISBURSED_ASSET_CODE: "XLM"
@@ -101,6 +114,8 @@ jobs:
       ENABLE_EMBEDDED_WALLETS: ${{ matrix.ENABLE_EMBEDDED_WALLETS}}
       EMBEDDED_WALLETS_WASM_HASH: ${{ matrix.EMBEDDED_WALLETS_WASM_HASH }}
       TEST_TYPE: ${{ matrix.TEST_TYPE }}
+      ENABLE_SEP45: ${{ matrix.ENABLE_SEP45 }}
+      EMBEDDED_WALLET_VERIFICATION_FIELD: ${{ matrix.EMBEDDED_WALLET_VERIFICATION_FIELD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Add embedded wallet verification scenario to e2e tests [#1262](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1262)
+
 ### Changed
 
 - Stop accepting API keys on the `/api-keys`, `/profile` and `/refresh-token` endpoints. [#1261](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1261)
