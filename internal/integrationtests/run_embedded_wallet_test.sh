@@ -23,9 +23,9 @@ export TEST_TYPE="embedded-wallet"
 export RPC_URL="${RPC_URL:-https://soroban-testnet.stellar.org}"
 export EMBEDDED_WALLETS_WASM_HASH="${EMBEDDED_WALLETS_WASM_HASH:-9b784817dff1620a3e2b223fe1eb8dac56e18980dea9726f692847ccbbd3a853}"
 export EMBEDDED_WALLET_VERIFICATION_FIELD="${EMBEDDED_WALLET_VERIFICATION_FIELD:-}"
-export ENABLE_SEP45="${ENABLE_SEP45:-true}"
 if [ -n "$EMBEDDED_WALLET_VERIFICATION_FIELD" ]; then
   export DISBURSEMENT_CSV_FILE_NAME="disbursement_instructions_phone.csv"
+  export ENABLE_SEP45="true"
 fi
 
 # Cleanup
