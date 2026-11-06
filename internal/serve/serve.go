@@ -409,11 +409,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Use(apiKeyAuthenticator.Middleware(middleware.AuthenticateMiddleware(authManager, o.tenantManager)))
 		r.Use(middleware.EnsureTenantMiddleware)
 
+		// Routes wrapped in RequirePermission accept API keys. Routes behind a bare AnyRoleMiddleware
+		// are for signed-in users carrying a token.
+
 		// API Key management endpoints
-		r.With(middleware.RequirePermission(
-			data.WriteAll,
-			middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole),
-		)).Route("/api-keys", func(r chi.Router) {
+		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.DeveloperUserRole)).Route("/api-keys", func(r chi.Router) {
 			apiKeyHandler := httphandler.APIKeyHandler{
 				Models:           o.Models,
 				AuthManager:      authManager,
@@ -462,10 +462,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				r.Patch("/activation", userHandler.UserActivation)
 			})
 		})
-		r.With(middleware.RequirePermission(
-			data.ReadAll,
-			middleware.AnyRoleMiddleware(authManager),
-		)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager, TenantManager: o.tenantManager}.PostRefreshToken)
+		r.With(middleware.AnyRoleMiddleware(authManager)).Post("/refresh-token", httphandler.RefreshTokenHandler{AuthManager: authManager, TenantManager: o.tenantManager}.PostRefreshToken)
 
 		// Disbursement endpoints
 		r.Route("/disbursements", func(r chi.Router) {
@@ -711,21 +708,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			PasswordValidator:           o.PasswordValidator,
 			NetworkType:                 o.NetworkType,
 		}
-		r.Route("/profile", func(r chi.Router) {
-			// Read operations
-			r.With(middleware.RequirePermission(
-				data.ReadAll,
-				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
-			)).Get("/", profileHandler.GetProfile)
-
-			// Write operations
-			r.With(middleware.RequirePermission(
-				data.WriteAll,
-				middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
-			)).Group(func(r chi.Router) {
-				r.Patch("/", profileHandler.PatchUserProfile)
-				r.Patch("/reset-password", profileHandler.PatchUserPassword)
-			})
+		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/profile", func(r chi.Router) {
+			r.Get("/", profileHandler.GetProfile)
+			r.Patch("/", profileHandler.PatchUserProfile)
+			r.Patch("/reset-password", profileHandler.PatchUserPassword)
 		})
 
 		r.Route("/organization", func(r chi.Router) {

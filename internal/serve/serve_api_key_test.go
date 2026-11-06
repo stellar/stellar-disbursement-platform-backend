@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,7 +20,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type TestResources struct {
@@ -509,6 +512,192 @@ func Test_handleHTTP_APIKeySpecificPermissions(t *testing.T) {
 	}
 }
 
+// Test_handleHTTP_APIKeyOnUsersAndRetry covers the routes whose handlers used to read the JWT and
+// so answered every key with 401 after RequirePermission had already let it through (SDP-2235).
+// It runs against the real auth manager so the user endpoints hit auth_users.
+func Test_handleHTTP_APIKeyOnUsersAndRetry(t *testing.T) {
+	res := setupAPIKeyTestResources(t)
+	ctx := context.Background()
+
+	// A Developer may mint keys; what its key can do is decided by the key's permissions alone (SDP-2182).
+	developerID := "00000000-0000-0000-0000-000000000077"
+	_, err := res.DBPool.ExecContext(ctx, `
+		INSERT INTO auth_users (id, encrypted_password, email, first_name, last_name, is_owner, roles)
+		VALUES ($1, 'x', 'api-key-developer@test.com', 'API', 'Developer', FALSE, ARRAY['developer'])
+		ON CONFLICT (id) DO NOTHING`, developerID)
+	require.NoError(t, err)
+
+	// POST /users sends an invitation that needs the tenant's dashboard URL.
+	uiBaseURL := "https://aid-org.test.com"
+	tenantManagerMock := &tenant.TenantManagerMock{}
+	tenantManagerMock.
+		On("GetTenantByName", mock.Anything, "aid-org").
+		Return(&schema.Tenant{ID: "tenant1", SDPUIBaseURL: &uiBaseURL}, nil)
+
+	srvOpts := getServeOptionsForTests(t, res.DBPool)
+	srvOpts.tenantManager = tenantManagerMock
+	mux := handleHTTP(srvOpts)
+
+	readUsersKey := createTestAPIKey(t, res.DBPool, "read users", []data.APIKeyPermission{data.ReadUsers}, nil, 30, res.TestUserID)
+	writeUsersKey := createTestAPIKey(t, res.DBPool, "write users", []data.APIKeyPermission{data.WriteUsers}, nil, 30, res.TestUserID)
+	writePaymentsKey := createTestAPIKey(t, res.DBPool, "write payments", []data.APIKeyPermission{data.WritePayments}, nil, 30, res.TestUserID)
+	unrelatedKey := createTestAPIKey(t, res.DBPool, "read statistics", []data.APIKeyPermission{data.ReadStatistics}, nil, 30, res.TestUserID)
+	developerWriteUsersKey := createTestAPIKey(t, res.DBPool, "developer write users", []data.APIKeyPermission{data.WriteUsers}, nil, 30, developerID)
+
+	const unknownID = "00000000-0000-0000-0000-0000000000aa"
+
+	tests := []struct {
+		name           string
+		method         string
+		path           string
+		body           map[string]any
+		apiKey         string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "retry: write:payments reaches the handler",
+			method:         http.MethodPatch,
+			path:           "/payments/retry",
+			body:           map[string]any{"payment_ids": []string{unknownID}},
+			apiKey:         writePaymentsKey.Key,
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   "payment not found",
+		},
+		{
+			name:           "retry: unrelated permission is refused",
+			method:         http.MethodPatch,
+			path:           "/payments/retry",
+			body:           map[string]any{"payment_ids": []string{unknownID}},
+			apiKey:         unrelatedKey.Key,
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:           "list users: read:users is served",
+			method:         http.MethodGet,
+			path:           "/users",
+			apiKey:         readUsersKey.Key,
+			expectedStatus: http.StatusOK,
+			expectedBody:   "api-key-owner@test.com",
+		},
+		{
+			name:           "create user: write:users creates the user",
+			method:         http.MethodPost,
+			path:           "/users",
+			body:           map[string]any{"first_name": "Probe", "last_name": "Business", "email": "probe-business@test.com", "roles": []string{"business"}},
+			apiKey:         writeUsersKey.Key,
+			expectedStatus: http.StatusCreated,
+		},
+		{
+			name:           "create user: read:users is refused",
+			method:         http.MethodPost,
+			path:           "/users",
+			body:           map[string]any{"first_name": "Probe", "last_name": "Business", "email": "probe-refused@test.com", "roles": []string{"business"}},
+			apiKey:         readUsersKey.Key,
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:           "update roles: write:users reaches the handler",
+			method:         http.MethodPatch,
+			path:           "/users/roles",
+			body:           map[string]any{"user_id": unknownID, "roles": []string{"business"}},
+			apiKey:         writeUsersKey.Key,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "user_id is invalid",
+		},
+		{
+			name:           "activation: write:users reaches the handler",
+			method:         http.MethodPatch,
+			path:           "/users/activation",
+			body:           map[string]any{"user_id": unknownID, "is_active": true},
+			apiKey:         writeUsersKey.Key,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "user_id is invalid",
+		},
+		{
+			// A key acts as its creator, so the self-edit guard protects the creator's account.
+			name:           "activation: a key cannot change its creator's activation",
+			method:         http.MethodPatch,
+			path:           "/users/activation",
+			body:           map[string]any{"user_id": res.TestUserID, "is_active": false},
+			apiKey:         writeUsersKey.Key,
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "cannot update your own activation",
+		},
+		{
+			// Accepted in SDP-2235: key permissions are independent of the minter's role, so a
+			// Developer-minted write:users key can create an Owner. Change deliberately, not by accident.
+			name:           "create user: a developer-minted write:users key can create an owner",
+			method:         http.MethodPost,
+			path:           "/users",
+			body:           map[string]any{"first_name": "Minted", "last_name": "Owner", "email": "minted-owner@test.com", "roles": []string{"owner"}},
+			apiKey:         developerWriteUsersKey.Key,
+			expectedStatus: http.StatusCreated,
+			expectedBody:   `"roles": [ "owner" ]`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := executeRequest(t, mux, tc.method, tc.path, tc.body, tc.apiKey)
+			b, readErr := io.ReadAll(resp.Body)
+			require.NoError(t, readErr)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode, string(b))
+			if tc.expectedBody != "" {
+				// Responses are indented JSON; compare with runs of whitespace collapsed.
+				assert.Contains(t, strings.Join(strings.Fields(string(b)), " "), tc.expectedBody)
+			}
+		})
+	}
+}
+
+// Test_handleHTTP_APIKeyRefusedOnSignedInOnlyRoutes pins the routes that sit behind a bare role check instead of
+// RequirePermission: an API key carries no session token, so it is refused there whatever it holds (SDP-2252).
+func Test_handleHTTP_APIKeyRefusedOnSignedInOnlyRoutes(t *testing.T) {
+	res := setupAPIKeyTestResources(t)
+	mux := handleHTTP(getServeOptionsForTests(t, res.DBPool))
+
+	fullAccessKey := createTestAPIKey(t, res.DBPool, "full access",
+		[]data.APIKeyPermission{data.ReadAll, data.WriteAll}, nil, 30, res.TestUserID)
+	unrelatedKey := createTestAPIKey(t, res.DBPool, "read statistics",
+		[]data.APIKeyPermission{data.ReadStatistics}, nil, 30, res.TestUserID)
+
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api-keys"},
+		{http.MethodPost, "/api-keys"},
+		{http.MethodGet, "/api-keys/" + unrelatedKey.ID},
+		{http.MethodPatch, "/api-keys/" + unrelatedKey.ID},
+		{http.MethodDelete, "/api-keys/" + unrelatedKey.ID},
+		{http.MethodGet, "/profile"},
+		{http.MethodPatch, "/profile"},
+		{http.MethodPatch, "/profile/reset-password"},
+		{http.MethodPost, "/refresh-token"},
+	}
+	keys := []struct {
+		name string
+		key  string
+	}{
+		{"read:all and write:all", fullAccessKey.Key},
+		{"an unrelated permission", unrelatedKey.Key},
+	}
+
+	for _, route := range routes {
+		for _, k := range keys {
+			name := route.method + " " + strings.ReplaceAll(route.path, unrelatedKey.ID, "{id}") + " with " + k.name
+			t.Run(name, func(t *testing.T) {
+				resp := executeRequest(t, mux, route.method, route.path, nil, k.key)
+				b, readErr := io.ReadAll(resp.Body)
+				require.NoError(t, readErr)
+				assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, string(b))
+				assert.Contains(t, string(b), "Not authorized.")
+			})
+		}
+	}
+}
+
 // Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately reproduces (and
 // guards against regressing) a bug where the API-key auth cache kept serving a
 // key's pre-PATCH permissions/allowed_ips: a revoked scope kept being accepted
@@ -536,13 +725,21 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		Return(nil).
 		Maybe()
 
-	mux := createHandler(t, res, authMock, monitorMock)
+	// The PATCH calls come from a signed-in owner: /api-keys does not accept API keys.
+	const adminSession = "Bearer admin-session-token"
+	authMock.On("GetUserID", mock.Anything, "admin-session-token").Return(res.TestUserID, nil)
+	authMock.On("GetTenantID", mock.Anything, "admin-session-token").Return("tenant1", nil)
+	authMock.On("AnyRolesInTokenUser", mock.Anything, "admin-session-token", mock.Anything).Return(true, nil)
 
-	// adminKey only exists to authenticate the PATCH call itself. In production
-	// this would be an owner's JWT session; an API key with WriteAll satisfies
-	// the same RequirePermission check and keeps this test self-contained.
-	adminKey := createTestAPIKey(t, res.DBPool, "Ordo Fiscus Admin Key",
-		[]data.APIKeyPermission{data.WriteAll}, nil, 30, res.TestUserID)
+	tenantManagerMock := &tenant.TenantManagerMock{}
+	tenantManagerMock.On("GetTenantByName", mock.Anything, "aid-org").Return(&schema.Tenant{ID: "tenant1"}, nil)
+	tenantManagerMock.On("GetTenantByID", mock.Anything, "tenant1").Return(&schema.Tenant{ID: "tenant1"}, nil)
+
+	srvOpts := getServeOptionsForTests(t, res.DBPool)
+	srvOpts.authManager = authMock
+	srvOpts.MonitorService = monitorMock
+	srvOpts.tenantManager = tenantManagerMock
+	mux := handleHTTP(srvOpts)
 
 	// The key under test: starts with read:statistics only, and an allowed_ips
 	// restriction that will be reverted back to its original value later.
@@ -561,7 +758,7 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		patchResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
 			"permissions": []string{"read:receivers"},
 			"allowed_ips": []string{"192.168.1.0"},
-		}, adminKey.Key)
+		}, adminSession)
 		body, readErr := io.ReadAll(patchResp.Body)
 		require.NoError(t, readErr)
 		require.Equal(t, http.StatusOK, patchResp.StatusCode, "PATCH /api-keys/%s failed: %s", targetKey.ID, string(body))
@@ -582,7 +779,7 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		tightenResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
 			"permissions": []string{"read:receivers"},
 			"allowed_ips": []string{"10.10.10.10"},
-		}, adminKey.Key)
+		}, adminSession)
 		require.Equal(t, http.StatusOK, tightenResp.StatusCode)
 
 		blockedResp := executeRequest(t, mux, http.MethodGet, "/receivers", nil, targetKey.Key)
@@ -595,7 +792,7 @@ func Test_handleHTTP_APIKeyPermissionChangeTakesEffectImmediately(t *testing.T) 
 		revertResp := executeRequest(t, mux, http.MethodPatch, "/api-keys/"+targetKey.ID, map[string]any{
 			"permissions": []string{"read:receivers"},
 			"allowed_ips": []string{"192.168.1.0"},
-		}, adminKey.Key)
+		}, adminSession)
 		require.Equal(t, http.StatusOK, revertResp.StatusCode)
 
 		// No sleep, no duplicate PATCH: access from the original, now-restored IP

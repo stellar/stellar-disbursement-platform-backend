@@ -7,7 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+
 - Add embedded wallet verification scenario to e2e tests [#1262](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1262)
+
+### Changed
+
+- Stop accepting API keys on the `/api-keys`, `/profile` and `/refresh-token` endpoints. [#1261](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1261)
 
 ### Fixed
 
@@ -15,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Grant export access to Business role. [#1254](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1254)
 - Remove receiver write access from Business memberships. [#1255](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1255)
 - Restore embedded wallet OTP/PII verification on pubnet. [#1259](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1259)
+- Accept API keys on `PATCH /payments/retry` and the `/users` endpoints. [#1260](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1260)
 
 ### Security and Dependencies
 
