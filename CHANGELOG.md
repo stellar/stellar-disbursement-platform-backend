@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Stop accepting API keys on the `/api-keys`, `/profile` and `/refresh-token` endpoints. [#1261](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1261)
+- Accept named API key permissions on `/assets`, `/balances` and `/registration-contact-types`. [#1263](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1263)
 
 ### Fixed
 
