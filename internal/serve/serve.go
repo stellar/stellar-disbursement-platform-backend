@@ -591,7 +591,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.RequirePermission(
-			data.ReadAll,
+			data.ReadDisbursements,
 			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Get("/registration-contact-types", httphandler.RegistrationContactTypesHandler{}.Get)
 
@@ -766,7 +766,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}
 
 		r.With(middleware.RequirePermission(
-			data.ReadAll,
+			data.ReadDistributionWallets,
 			middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...),
 		)).Get("/balances", httphandler.BalancesHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
