@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- Add embedded wallet verification scenario to e2e tests [#1262](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1262)
+
 ### Fixed
 
 - Remove payment write access from Business role. [#1253](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1253)
