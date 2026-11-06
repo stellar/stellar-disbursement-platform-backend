@@ -73,7 +73,6 @@ type IntegrationTestsOpts struct {
 	NetworkPassphrase          string
 	SingleTenantMode           bool
 	EmbeddedWalletsWasmHash    string
-	// EmbeddedWalletVerificationField is the verification type of the embedded wallet disbursement; empty means none.
 	EmbeddedWalletVerificationField string
 }
 

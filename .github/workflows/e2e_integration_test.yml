@@ -30,8 +30,8 @@ jobs:
           - "Stellar-email" # Stellar distribution account where receivers are registered with their email
           - "Circle-transfers-phone" # Circle(Transfers) distribution account where receivers are registered with their phone number
           - "Circle-payouts-phoneWallet" # Circle(Payouts) distribution account where receivers are registered with their phone number and wallet address
-          - "Stellar-embeddedWallet" # Embedded wallet (contract account), verification type DATE_OF_BIRTH: OTP + PII over SEP-45 → SEP-24, disbursement to C-address
-          - "Stellar-embeddedWallet-noVerification" # Embedded wallet (contract account), verification type None: auto-registered at deployment, disbursement to C-address
+          - "Stellar-embeddedWallet" # Embedded wallet (contract account) with disbursement to C-address (OTP + PII verification))
+          - "Stellar-embeddedWallet-noVerification" # Embedded wallet (contract account) with disbursement to C-address (no verification)
         include:
           - platform: "Stellar-phone"
             environment: "Receiver Registration - E2E Integration Tests (Stellar)"
