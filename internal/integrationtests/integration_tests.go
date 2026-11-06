@@ -41,38 +41,38 @@ type IntegrationTestsInterface interface {
 }
 
 type IntegrationTestsOpts struct {
-	DatabaseDSN                string
-	TenantName                 string
-	UserEmail                  string
-	UserPassword               string
-	RegistrationContactType    data.RegistrationContactType
-	DistributionAccountType    string
-	DisbursedAssetCode         string
-	DisbursedAssetIssuer       string
-	WalletName                 string
-	WalletHomepage             string
-	WalletDeepLink             string
-	WalletSEP10Domain          string
-	WalletIsEmbedded           bool
-	DisbursementName           string
-	DisbursementCSVFilePath    string
-	DisbursementCSVFileName    string
-	ReceiverAccountPublicKey   string
-	ReceiverAccountPrivateKey  string
-	ReceiverAccountStellarMemo string
-	Sep10SigningPublicKey      string
-	RecaptchaSiteKey           string
-	ServerAPIBaseURL           string
-	AdminServerBaseURL         string
-	AdminServerAccountID       string
-	AdminServerAPIKey          string
-	CircleUSDCWalletID         string
-	CircleAPIKey               string
-	HorizonURL                 string
-	RPCUrl                     string
-	NetworkPassphrase          string
-	SingleTenantMode           bool
-	EmbeddedWalletsWasmHash    string
+	DatabaseDSN                     string
+	TenantName                      string
+	UserEmail                       string
+	UserPassword                    string
+	RegistrationContactType         data.RegistrationContactType
+	DistributionAccountType         string
+	DisbursedAssetCode              string
+	DisbursedAssetIssuer            string
+	WalletName                      string
+	WalletHomepage                  string
+	WalletDeepLink                  string
+	WalletSEP10Domain               string
+	WalletIsEmbedded                bool
+	DisbursementName                string
+	DisbursementCSVFilePath         string
+	DisbursementCSVFileName         string
+	ReceiverAccountPublicKey        string
+	ReceiverAccountPrivateKey       string
+	ReceiverAccountStellarMemo      string
+	Sep10SigningPublicKey           string
+	RecaptchaSiteKey                string
+	ServerAPIBaseURL                string
+	AdminServerBaseURL              string
+	AdminServerAccountID            string
+	AdminServerAPIKey               string
+	CircleUSDCWalletID              string
+	CircleAPIKey                    string
+	HorizonURL                      string
+	RPCUrl                          string
+	NetworkPassphrase               string
+	SingleTenantMode                bool
+	EmbeddedWalletsWasmHash         string
 	EmbeddedWalletVerificationField string
 }
 
