@@ -29,7 +29,7 @@ jobs:
         uses: stellar/actions/rust-cache@main
 
       - name: Install stellar-cli
-        uses: stellar/stellar-cli@v28.1.0
+        uses: stellar/stellar-cli@v30.0.1
 
       - name: Build contracts
         shell: bash
