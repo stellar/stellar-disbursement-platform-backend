@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Remove receiver write access from Business memberships. [#1255](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1255)
 - Restore embedded wallet OTP/PII verification on pubnet. [#1259](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1259)
 - Accept API keys on `PATCH /payments/retry` and the `/users` endpoints. [#1260](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1260)
+- Read the SEP-10/SEP-45 client domain signing key without parsing the whole TOML file. [#NNNN](https://github.com/stellar/stellar-disbursement-platform-backend/pull/NNNN)
 
 ### Security and Dependencies
 

@@ -218,7 +218,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 		sep45Service, sep45Err := services.NewSEP45Service(services.SEP45ServiceOptions{
 			RPCClient:               rpcClient,
-			TOMLClient:              nil,
+			HTTPClient:              httpclient.DefaultClient(),
 			JWTManager:              sep24JWTManager,
 			NetworkPassphrase:       opts.NetworkPassphrase,
 			WebAuthVerifyContractID: opts.Sep45ContractID,
