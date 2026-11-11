@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -46,15 +45,17 @@ func (r StartPasskeyRegistrationRequest) Validate() *httperror.HTTPError {
 }
 
 type PasskeyRegistrationResponse struct {
-	Token        string `json:"token"`
-	CredentialID string `json:"credential_id"`
-	PublicKey    string `json:"public_key"`
+	Token          string `json:"token"`
+	CredentialID   string `json:"credential_id"`
+	PublicKey      string `json:"public_key"`
+	BackupEligible bool   `json:"backup_eligible"`
 }
 
 type PasskeyAuthenticationResponse struct {
 	Token           string `json:"token"`
 	CredentialID    string `json:"credential_id"`
 	ContractAddress string `json:"contract_address"`
+	BackupEligible  bool   `json:"backup_eligible"`
 }
 
 func (h PasskeyHandler) StartPasskeyRegistration(rw http.ResponseWriter, req *http.Request) {
@@ -106,7 +107,7 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 			httperror.BadRequest("Session not found or expired", err, nil).Render(rw)
 		case errors.Is(err, wallet.ErrSessionTypeMismatch):
 			httperror.BadRequest("Invalid session type", err, nil).Render(rw)
-		case errors.Is(err, protocol.ErrChallengeMismatch), errors.Is(err, protocol.ErrVerification):
+		case errors.Is(err, wallet.ErrRegistrationVerificationFailed):
 			httperror.BadRequest("Registration verification failed", err, nil).Render(rw)
 		default:
 			httperror.InternalError(ctx, "Failed to finish passkey registration", err, nil).Render(rw)
@@ -134,9 +135,10 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 	}
 
 	resp := PasskeyRegistrationResponse{
-		Token:        jwtToken,
-		CredentialID: credentialID,
-		PublicKey:    publicKeyHex,
+		Token:          jwtToken,
+		CredentialID:   credentialID,
+		PublicKey:      publicKeyHex,
+		BackupEligible: credential.Flags.BackupEligible,
 	}
 
 	httpjson.RenderStatus(rw, http.StatusCreated, resp, httpjson.JSON)
@@ -157,7 +159,7 @@ func (h PasskeyHandler) StartPasskeyAuthentication(rw http.ResponseWriter, req *
 func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	embeddedWallet, err := h.WebAuthnService.FinishPasskeyAuthentication(ctx, req)
+	embeddedWallet, credential, err := h.WebAuthnService.FinishPasskeyAuthentication(ctx, req)
 	if err != nil {
 		if errors.Is(err, wallet.ErrWalletNotReady) {
 			httperror.BadRequest("Wallet not ready for authentication", err, nil).Render(rw)
@@ -165,7 +167,7 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 			httperror.BadRequest("Session not found or expired", err, nil).Render(rw)
 		} else if errors.Is(err, wallet.ErrSessionTypeMismatch) {
 			httperror.BadRequest("Invalid session type", err, nil).Render(rw)
-		} else if errors.Is(err, protocol.ErrChallengeMismatch) || errors.Is(err, protocol.ErrVerification) {
+		} else if errors.Is(err, wallet.ErrAuthenticationVerificationFailed) {
 			httperror.Unauthorized("Authentication verification failed", err, nil).Render(rw)
 		} else {
 			httperror.InternalError(ctx, "Failed to finish passkey authentication", err, nil).Render(rw)
@@ -189,6 +191,7 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 		Token:           token,
 		CredentialID:    embeddedWallet.CredentialID,
 		ContractAddress: embeddedWallet.ContractAddress,
+		BackupEligible:  credential.Flags.BackupEligible,
 	}
 
 	httpjson.Render(rw, resp, httpjson.JSON)

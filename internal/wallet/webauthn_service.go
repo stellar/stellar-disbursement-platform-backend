@@ -20,12 +20,14 @@ import (
 )
 
 var (
-	ErrEmptyToken          = errors.New("token cannot be empty")
-	ErrInvalidToken        = errors.New("token is invalid")
-	ErrWalletAlreadyExists = errors.New("wallet already exists for this token")
-	ErrWalletNotReady      = errors.New("wallet not ready for authentication")
-	ErrSessionNotFound     = errors.New("session not found or expired")
-	ErrSessionTypeMismatch = errors.New("session type mismatch")
+	ErrEmptyToken                       = errors.New("token cannot be empty")
+	ErrInvalidToken                     = errors.New("token is invalid")
+	ErrWalletAlreadyExists              = errors.New("wallet already exists for this token")
+	ErrWalletNotReady                   = errors.New("wallet not ready for authentication")
+	ErrSessionNotFound                  = errors.New("session not found or expired")
+	ErrSessionTypeMismatch              = errors.New("session type mismatch")
+	ErrRegistrationVerificationFailed   = errors.New("passkey registration verification failed")
+	ErrAuthenticationVerificationFailed = errors.New("passkey authentication verification failed")
 )
 
 // WebAuthnServiceInterface defines the interface for WebAuthn passkey operations.
@@ -35,7 +37,7 @@ type WebAuthnServiceInterface interface {
 	StartPasskeyRegistration(ctx context.Context, token string) (*protocol.CredentialCreation, error)
 	FinishPasskeyRegistration(ctx context.Context, token string, request *http.Request) (*webauthn.Credential, error)
 	StartPasskeyAuthentication(ctx context.Context) (*protocol.CredentialAssertion, error)
-	FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, error)
+	FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, *webauthn.Credential, error)
 }
 
 var _ WebAuthnServiceInterface = (*WebAuthnService)(nil)
@@ -248,7 +250,7 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 
 	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(request.Body)
 	if err != nil {
-		return nil, fmt.Errorf("parsing credential creation response: %w", err)
+		return nil, fmt.Errorf("%w: parsing credential creation response: %w", ErrRegistrationVerificationFailed, err)
 	}
 
 	session, err := w.sessionCache.Get(ctx, parsedResponse.Response.CollectedClientData.Challenge, SessionTypeRegistration)
@@ -267,7 +269,7 @@ func (w *WebAuthnService) FinishPasskeyRegistration(ctx context.Context, token s
 	// - Extracts and returns the public key and credential ID to use for wallet creation and authentication
 	credential, err := webAuthn.CreateCredential(user, session, parsedResponse)
 	if err != nil {
-		return nil, fmt.Errorf("creating credential: %w", err)
+		return nil, fmt.Errorf("%w: creating credential: %w", ErrRegistrationVerificationFailed, err)
 	}
 
 	w.sessionCache.Delete(ctx, parsedResponse.Response.CollectedClientData.Challenge)
@@ -280,6 +282,7 @@ type existingUser struct {
 	publicKey    string
 	wallet       *data.EmbeddedWallet
 	displayName  string
+	flags        webauthn.CredentialFlags
 }
 
 func (u *existingUser) WebAuthnID() []byte {
@@ -314,13 +317,7 @@ func (u *existingUser) WebAuthnCredentials() []webauthn.Credential {
 		{
 			ID:        credID,
 			PublicKey: coseKey,
-			// We don't persist the backup state when we create the passkey
-			// and by default the WebAuthn library sets both flags to false,
-			// causing the authentication to fail.
-			Flags: webauthn.CredentialFlags{
-				BackupEligible: true,
-				BackupState:    true,
-			},
+			Flags:     u.flags,
 		},
 	}
 }
@@ -354,26 +351,29 @@ func (w *WebAuthnService) StartPasskeyAuthentication(ctx context.Context) (*prot
 }
 
 // FinishPasskeyAuthentication completes the WebAuthn passkey authentication process, returning the authenticated embedded wallet.
-func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, error) {
+func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, *webauthn.Credential, error) {
 	webAuthn, err := w.createWebAuthn(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("creating WebAuthn instance: %w", err)
+		return nil, nil, fmt.Errorf("creating WebAuthn instance: %w", err)
 	}
 
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(request.Body)
 	if err != nil {
-		return nil, fmt.Errorf("parsing credential request response: %w", err)
+		return nil, nil, fmt.Errorf("%w: parsing credential request response: %w", ErrAuthenticationVerificationFailed, err)
 	}
 
 	session, err := w.sessionCache.Get(ctx, parsedResponse.Response.CollectedClientData.Challenge, SessionTypeAuthentication)
 	if err != nil {
-		return nil, fmt.Errorf("retrieving session: %w", err)
+		return nil, nil, fmt.Errorf("retrieving session: %w", err)
 	}
 
 	getUserForCredential := func(rawID, userHandle []byte) (webauthn.User, error) {
 		credentialID := base64.RawURLEncoding.EncodeToString(rawID)
 		embeddedWallet, getErr := w.sdpModels.EmbeddedWallets.GetByCredentialID(ctx, w.sdpModels.DBConnectionPool, credentialID)
 		if getErr != nil {
+			if errors.Is(getErr, data.ErrRecordNotFound) {
+				return nil, fmt.Errorf("%w: unknown credential ID", ErrAuthenticationVerificationFailed)
+			}
 			return nil, fmt.Errorf("getting embedded wallet by credential ID: %w", getErr)
 		}
 
@@ -391,6 +391,7 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 			publicKey:    embeddedWallet.PublicKey,
 			wallet:       embeddedWallet,
 			displayName:  displayName,
+			flags:        webauthn.NewCredentialFlags(parsedResponse.Response.AuthenticatorData.Flags),
 		}, nil
 	}
 
@@ -398,19 +399,24 @@ func (w *WebAuthnService) FinishPasskeyAuthentication(ctx context.Context, reque
 	// 1. Calls getUserForCredential handler to look up the user and their public key
 	// 2. Validates the cryptographic signature using the stored public key
 	// 3. Returns the authenticated user if signature verification succeeds
-	user, _, err := webAuthn.ValidatePasskeyLogin(getUserForCredential, session, parsedResponse)
+	user, credential, err := webAuthn.ValidatePasskeyLogin(getUserForCredential, session, parsedResponse)
 	if err != nil {
-		return nil, fmt.Errorf("validating WebAuthn passkey login: %w", err)
+		var webauthnErr *protocol.Error
+		// A bare library error is a failed ceremony; one with Err set wraps an error from getUserForCredential.
+		if errors.As(err, &webauthnErr) && webauthnErr.Err == nil {
+			return nil, nil, fmt.Errorf("%w: %w", ErrAuthenticationVerificationFailed, err)
+		}
+		return nil, nil, fmt.Errorf("validating WebAuthn passkey login: %w", err)
 	}
 
 	existingUserObj, ok := user.(*existingUser)
 	if !ok {
-		return nil, fmt.Errorf("unexpected user type: got %T, want *existingUser", user)
+		return nil, nil, fmt.Errorf("unexpected user type: got %T, want *existingUser", user)
 	}
 
 	w.sessionCache.Delete(ctx, parsedResponse.Response.CollectedClientData.Challenge)
 
-	return existingUserObj.wallet, nil
+	return existingUserObj.wallet, credential, nil
 }
 
 const (

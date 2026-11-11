@@ -6,11 +6,9 @@ import (
 	context "context"
 	http "net/http"
 
-	data "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-
-	mock "github.com/stretchr/testify/mock"
-
 	protocol "github.com/go-webauthn/webauthn/protocol"
+	data "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	mock "github.com/stretchr/testify/mock"
 
 	webauthn "github.com/go-webauthn/webauthn/webauthn"
 )
@@ -21,7 +19,7 @@ type MockWebAuthnService struct {
 }
 
 // FinishPasskeyAuthentication provides a mock function with given fields: ctx, request
-func (_m *MockWebAuthnService) FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, error) {
+func (_m *MockWebAuthnService) FinishPasskeyAuthentication(ctx context.Context, request *http.Request) (*data.EmbeddedWallet, *webauthn.Credential, error) {
 	ret := _m.Called(ctx, request)
 
 	if len(ret) == 0 {
@@ -29,8 +27,9 @@ func (_m *MockWebAuthnService) FinishPasskeyAuthentication(ctx context.Context, 
 	}
 
 	var r0 *data.EmbeddedWallet
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *http.Request) (*data.EmbeddedWallet, error)); ok {
+	var r1 *webauthn.Credential
+	var r2 error
+	if rf, ok := ret.Get(0).(func(context.Context, *http.Request) (*data.EmbeddedWallet, *webauthn.Credential, error)); ok {
 		return rf(ctx, request)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, *http.Request) *data.EmbeddedWallet); ok {
@@ -41,13 +40,21 @@ func (_m *MockWebAuthnService) FinishPasskeyAuthentication(ctx context.Context, 
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *http.Request) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, *http.Request) *webauthn.Credential); ok {
 		r1 = rf(ctx, request)
 	} else {
-		r1 = ret.Error(1)
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(*webauthn.Credential)
+		}
 	}
 
-	return r0, r1
+	if rf, ok := ret.Get(2).(func(context.Context, *http.Request) error); ok {
+		r2 = rf(ctx, request)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
 }
 
 // FinishPasskeyRegistration provides a mock function with given fields: ctx, token, request
