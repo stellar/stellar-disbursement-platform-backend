@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -108,6 +109,7 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 		case errors.Is(err, wallet.ErrSessionTypeMismatch):
 			httperror.BadRequest("Invalid session type", err, nil).Render(rw)
 		case errors.Is(err, wallet.ErrRegistrationVerificationFailed):
+			log.Ctx(ctx).Warnf("Passkey registration rejected: %v", err)
 			httperror.BadRequest("Registration verification failed", err, nil).Render(rw)
 		default:
 			httperror.InternalError(ctx, "Failed to finish passkey registration", err, nil).Render(rw)
@@ -168,6 +170,7 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 		} else if errors.Is(err, wallet.ErrSessionTypeMismatch) {
 			httperror.BadRequest("Invalid session type", err, nil).Render(rw)
 		} else if errors.Is(err, wallet.ErrAuthenticationVerificationFailed) {
+			log.Ctx(ctx).Warnf("Passkey authentication rejected: %v", err)
 			httperror.Unauthorized("Authentication verification failed", err, nil).Render(rw)
 		} else {
 			httperror.InternalError(ctx, "Failed to finish passkey authentication", err, nil).Render(rw)
