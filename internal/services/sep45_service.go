@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/go-stellar-sdk/clients/stellartoml"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/network"
 	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
@@ -24,6 +23,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/xdr"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/seputil"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -57,7 +57,7 @@ type SEP45Service interface {
 
 type sep45Service struct {
 	rpcClient         stellar.RPCClient
-	tomlClient        stellartoml.ClientInterface
+	httpClient        httpclient.HTTPClientInterface
 	jwtManager        *sepauth.JWTManager
 	networkPassphrase string
 	contractID        xdr.ContractId
@@ -110,7 +110,7 @@ type SEP45ValidationResponse struct {
 
 type SEP45ServiceOptions struct {
 	RPCClient               stellar.RPCClient
-	TOMLClient              stellartoml.ClientInterface
+	HTTPClient              httpclient.HTTPClientInterface
 	JWTManager              *sepauth.JWTManager
 	NetworkPassphrase       string
 	WebAuthVerifyContractID string
@@ -156,14 +156,14 @@ func NewSEP45Service(opts SEP45ServiceOptions) (SEP45Service, error) {
 	var contractID xdr.ContractId
 	copy(contractID[:], rawContractID)
 
-	tomlClient := opts.TOMLClient
-	if tomlClient == nil {
-		tomlClient = stellartoml.DefaultClient
+	httpClient := opts.HTTPClient
+	if httpClient == nil {
+		httpClient = httpclient.DefaultClient()
 	}
 
 	return &sep45Service{
 		rpcClient:         opts.RPCClient,
-		tomlClient:        tomlClient,
+		httpClient:        httpClient,
 		jwtManager:        opts.JWTManager,
 		networkPassphrase: opts.NetworkPassphrase,
 		contractID:        contractID,
@@ -203,7 +203,7 @@ func (s *sep45Service) CreateChallenge(ctx context.Context, req SEP45ChallengeRe
 
 	var clientDomainAccount string
 	if clientDomain != "" {
-		key, err := s.fetchSigningKeyFromClientDomain(clientDomain)
+		key, err := seputil.FetchClientDomainSigningKey(ctx, s.httpClient, clientDomain, s.allowHTTPRetry)
 		if err != nil {
 			return nil, fmt.Errorf("%w: fetching signing key for client_domain %s: %w", ErrSEP45Internal, clientDomain, err)
 		}
@@ -566,30 +566,6 @@ func (s *sep45Service) signServerAuthEntry(ctx context.Context, result *stellar.
 	}
 
 	return signedEntries, nil
-}
-
-func (s *sep45Service) fetchSigningKeyFromClientDomain(clientDomain string) (string, error) {
-	resp, err := s.tomlClient.GetStellarToml(clientDomain)
-	if err != nil && s.allowHTTPRetry {
-		if client, ok := s.tomlClient.(*stellartoml.Client); ok {
-			fallback := *client
-			fallback.UseHTTP = true
-			resp, err = fallback.GetStellarToml(clientDomain)
-		} else {
-			fallback := &stellartoml.Client{UseHTTP: true}
-			resp, err = fallback.GetStellarToml(clientDomain)
-		}
-	}
-	if err != nil {
-		return "", fmt.Errorf("fetching stellar.toml for %s: %w", clientDomain, err)
-	}
-	if resp == nil || strings.TrimSpace(resp.SigningKey) == "" {
-		return "", fmt.Errorf("stellar.toml at %s missing SIGNING_KEY", clientDomain)
-	}
-	if !strkey.IsValidEd25519PublicKey(resp.SigningKey) {
-		return "", fmt.Errorf("stellar.toml SIGNING_KEY at %s is invalid", clientDomain)
-	}
-	return resp.SigningKey, nil
 }
 
 func generateNonce() (string, error) {

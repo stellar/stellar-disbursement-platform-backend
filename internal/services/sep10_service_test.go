@@ -63,8 +63,8 @@ func createMockHorizonClient(accountID string, thresholds horizon.AccountThresho
 func createMockHTTPClient(t *testing.T, clientDomainKP *keypair.Full) *mocks.HTTPClientMock {
 	mockClient := mocks.NewHTTPClientMock(t)
 	mockClient.
-		On("Get", mock.AnythingOfType("string")).
-		Return(func(_ string) *http.Response {
+		On("Do", mock.AnythingOfType("*http.Request")).
+		Return(func(_ *http.Request) *http.Response {
 			return &http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + clientDomainKP.Address() + "\"\n")),
@@ -1099,7 +1099,7 @@ func TestSEP10Service_SignatureValidation(t *testing.T) {
 
 	t.Run("valid signatures but wrong client domain account", func(t *testing.T) {
 		mockClient := mocks.NewHTTPClientMock(t)
-		mockClient.On("Get", mock.AnythingOfType("string")).Return(&http.Response{
+		mockClient.On("Do", mock.AnythingOfType("*http.Request")).Return(&http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + wrongKP.Address() + "\"\n")),
 		}, nil)
@@ -1449,8 +1449,8 @@ func createRotatingMockHTTPClient(t *testing.T, firstKP, thenKP *keypair.Full) *
 
 	fetches := 0
 	mockClient.
-		On("Get", mock.AnythingOfType("string")).
-		Return(func(_ string) *http.Response {
+		On("Do", mock.AnythingOfType("*http.Request")).
+		Return(func(_ *http.Request) *http.Response {
 			fetches++
 			kp := firstKP
 			if fetches > 1 {
@@ -1502,7 +1502,7 @@ func TestSEP10Service_ClientDomainVerification(t *testing.T) {
 
 		mockClient := mocks.NewHTTPClientMock(t)
 		mockClient.
-			On("Get", mock.AnythingOfType("string")).
+			On("Do", mock.AnythingOfType("*http.Request")).
 			Return(&http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(strings.NewReader("SIGNING_KEY = \"" + kps.clientDomain.Address() + "\"\n")),
@@ -1521,8 +1521,8 @@ func TestSEP10Service_ClientDomainVerification(t *testing.T) {
 
 		mockClient := mocks.NewHTTPClientMock(t)
 		mockClient.
-			On("Get", mock.AnythingOfType("string")).
-			Return(func(_ string) *http.Response {
+			On("Do", mock.AnythingOfType("*http.Request")).
+			Return(func(_ *http.Request) *http.Response {
 				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(""))}
 			}, nil)
 		service.HTTPClient = mockClient

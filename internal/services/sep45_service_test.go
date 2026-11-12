@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
-	"github.com/stellar/go-stellar-sdk/clients/stellartoml"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/network"
 	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
@@ -17,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	stellarMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/stellar/mocks"
@@ -39,6 +42,14 @@ func newTestJWTManager(t *testing.T) *sepauth.JWTManager {
 	mgr, err := sepauth.NewJWTManager(testJWTSecret, 300000)
 	require.NoError(t, err)
 	return mgr
+}
+
+func newStellarTomlResponse(signingKey string) *http.Response {
+	body := ""
+	if signingKey != "" {
+		body = "SIGNING_KEY = \"" + signingKey + "\"\n"
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}
 }
 
 func createMockSEP45NonceStore(t *testing.T) *servicesmocks.MockNonceStore {
@@ -121,7 +132,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				clientContractID := testClientContractID
 
 				rpcMock := stellarMocks.NewMockRPCClient(t)
-				tomlMock := &stellartoml.MockClient{}
+				httpMock := httpclientMocks.NewHTTPClientMock(t)
 
 				clientDomain := "wallet.example.com"
 				homeDomain := "home.example.com"
@@ -168,9 +179,9 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 					Return(uint32(100), nil).
 					Once()
 
-				tomlMock.
-					On("GetStellarToml", clientDomain).
-					Return(&stellartoml.Response{SigningKey: clientDomainKP.Address()}, nil).
+				httpMock.
+					On("Do", mock.AnythingOfType("*http.Request")).
+					Return(newStellarTomlResponse(clientDomainKP.Address()), nil).
 					Once()
 
 				clientDomainCopy := clientDomain
@@ -202,7 +213,7 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 
 				return ctx, SEP45ServiceOptions{
 						RPCClient:               rpcMock,
-						TOMLClient:              tomlMock,
+						HTTPClient:              httpMock,
 						JWTManager:              newTestJWTManager(t),
 						NetworkPassphrase:       network.TestNetworkPassphrase,
 						WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -288,7 +299,6 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 
 				return ctx, SEP45ServiceOptions{
 						RPCClient:               rpcMock,
-						TOMLClient:              nil,
 						JWTManager:              newTestJWTManager(t),
 						NetworkPassphrase:       network.TestNetworkPassphrase,
 						WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -312,7 +322,6 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				ctx := context.Background()
 				opts := SEP45ServiceOptions{
 					RPCClient:               stellarMocks.NewMockRPCClient(t),
-					TOMLClient:              stellartoml.DefaultClient,
 					JWTManager:              newTestJWTManager(t),
 					NetworkPassphrase:       network.TestNetworkPassphrase,
 					WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -337,7 +346,6 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				ctx := context.Background()
 				opts := SEP45ServiceOptions{
 					RPCClient:               stellarMocks.NewMockRPCClient(t),
-					TOMLClient:              stellartoml.DefaultClient,
 					JWTManager:              newTestJWTManager(t),
 					NetworkPassphrase:       network.TestNetworkPassphrase,
 					WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -364,7 +372,6 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				ctx := context.Background()
 				opts := SEP45ServiceOptions{
 					RPCClient:               stellarMocks.NewMockRPCClient(t),
-					TOMLClient:              stellartoml.DefaultClient,
 					JWTManager:              newTestJWTManager(t),
 					NetworkPassphrase:       network.TestNetworkPassphrase,
 					WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -387,19 +394,19 @@ func Test_SEP45Service_CreateChallenge(t *testing.T) {
 				ctx := context.Background()
 				serverKP := keypair.MustRandom()
 				rpcMock := stellarMocks.NewMockRPCClient(t)
-				tomlMock := &stellartoml.MockClient{}
+				httpMock := httpclientMocks.NewHTTPClientMock(t)
 
 				clientDomain := "wallet.example.com"
-				tomlMock.
-					On("GetStellarToml", clientDomain).
-					Return(&stellartoml.Response{SigningKey: ""}, nil).
+				httpMock.
+					On("Do", mock.AnythingOfType("*http.Request")).
+					Return(newStellarTomlResponse(""), nil).
 					Once()
 
 				clientDomainCopy := clientDomain
 
 				opts := SEP45ServiceOptions{
 					RPCClient:               rpcMock,
-					TOMLClient:              tomlMock,
+					HTTPClient:              httpMock,
 					JWTManager:              newTestJWTManager(t),
 					NetworkPassphrase:       network.TestNetworkPassphrase,
 					WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -503,7 +510,6 @@ func Test_SEP45Service_ValidateChallenge(t *testing.T) {
 
 	svcOpts := SEP45ServiceOptions{
 		RPCClient:               rpcMock,
-		TOMLClient:              stellartoml.DefaultClient,
 		JWTManager:              jwtManager,
 		NetworkPassphrase:       network.TestNetworkPassphrase,
 		WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -562,7 +568,6 @@ func Test_SEP45Service_ValidateChallengeNonceReplay(t *testing.T) {
 	nonceStore.On("Consume", mock.Anything, "nonce").Return(false, nil).Once()
 	svc, err := NewSEP45Service(SEP45ServiceOptions{
 		RPCClient:               rpcMock,
-		TOMLClient:              stellartoml.DefaultClient,
 		JWTManager:              newTestJWTManager(t),
 		NetworkPassphrase:       network.TestNetworkPassphrase,
 		WebAuthVerifyContractID: testWebAuthVerifyContractID,
@@ -594,7 +599,6 @@ func Test_SEP45Service_ValidateChallengeErrors(t *testing.T) {
 		nonceStore := createMockSEP45NonceStore(t)
 		svc, err := NewSEP45Service(SEP45ServiceOptions{
 			RPCClient:               rpcClient,
-			TOMLClient:              stellartoml.DefaultClient,
 			JWTManager:              newTestJWTManager(t),
 			NetworkPassphrase:       network.TestNetworkPassphrase,
 			WebAuthVerifyContractID: testWebAuthVerifyContractID,
