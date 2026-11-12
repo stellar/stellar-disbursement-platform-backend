@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
-	"github.com/stellar/go-stellar-sdk/clients/stellartoml"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/strkey"
@@ -182,7 +181,7 @@ func (s *sep10Service) CreateChallenge(ctx context.Context, req ChallengeRequest
 	var clientSigningKey string
 	if req.ClientDomain != "" {
 		var err error
-		clientSigningKey, err = s.fetchSigningKeyFromClientDomain(req.ClientDomain)
+		clientSigningKey, err = seputil.FetchClientDomainSigningKey(ctx, s.HTTPClient, req.ClientDomain, s.AllowHTTPRetry)
 		if err != nil {
 			log.Ctx(ctx).Errorf("resolving client_domain %s signing key: %v", req.ClientDomain, err)
 			return nil, ChallengeValidationError("unable to resolve a valid SIGNING_KEY from the client_domain stellar.toml")
@@ -770,33 +769,6 @@ func (s *sep10Service) generateRandomNonce(n int) ([]byte, error) {
 	}
 
 	return binary, nil
-}
-
-func (s *sep10Service) fetchSigningKeyFromClientDomain(clientDomain string) (string, error) {
-	client := &stellartoml.Client{
-		HTTP: s.HTTPClient,
-	}
-
-	stellarToml, err := client.GetStellarToml(clientDomain)
-	if err != nil && s.AllowHTTPRetry {
-		// Fallback to HTTP if HTTPS fails and retry is allowed.
-		client.UseHTTP = true
-		stellarToml, err = client.GetStellarToml(clientDomain)
-	}
-
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch stellar.toml from %s: %w", clientDomain, err)
-	}
-
-	if stellarToml.SigningKey == "" {
-		return "", fmt.Errorf("SIGNING_KEY not present in client_domain stellar.toml")
-	}
-
-	if _, parseErr := keypair.ParseAddress(stellarToml.SigningKey); parseErr != nil {
-		return "", fmt.Errorf("SIGNING_KEY %s is not a valid Stellar account ID", stellarToml.SigningKey)
-	}
-
-	return stellarToml.SigningKey, nil
 }
 
 func (s *sep10Service) fetchAccountFromHorizon(accountID string) (*horizon.Account, error) {
