@@ -246,6 +246,7 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 	mockCredential := &webauthn.Credential{
 		ID:        []byte("test-credential-id"),
 		PublicKey: generateCOSEPublicKey(t),
+		Flags:     webauthn.CredentialFlags{BackupEligible: true},
 	}
 
 	mockWebAuthnService.
@@ -272,6 +273,7 @@ func Test_PasskeyHandler_FinishPasskeyRegistration(t *testing.T) {
 	assert.NotEmpty(t, respBody.CredentialID)
 	assert.NotEmpty(t, respBody.PublicKey)
 	assert.Equal(t, expectedCredentialID, respBody.CredentialID)
+	assert.True(t, respBody.BackupEligible)
 }
 
 func Test_PasskeyHandler_FinishPasskeyRegistration_MissingTokenQueryParam(t *testing.T) {
@@ -321,13 +323,8 @@ func Test_PasskeyHandler_FinishPasskeyRegistration_ServiceErrors(t *testing.T) {
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
-			name:               "challenge mismatch",
-			serviceError:       protocol.ErrChallengeMismatch,
-			expectedStatusCode: http.StatusBadRequest,
-		},
-		{
-			name:               "verification error",
-			serviceError:       protocol.ErrVerification,
+			name:               "verification failed",
+			serviceError:       wallet.ErrRegistrationVerificationFailed,
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
@@ -449,7 +446,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 
 	mockWebAuthnService.
 		On("FinishPasskeyAuthentication", mock.Anything, mock.AnythingOfType("*http.Request")).
-		Return(mockEmbeddedWallet, nil).
+		Return(mockEmbeddedWallet, &webauthn.Credential{Flags: webauthn.CredentialFlags{BackupEligible: false}}, nil).
 		Once()
 
 	mockJWTManager.
@@ -469,6 +466,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication(t *testing.T) {
 	assert.Equal(t, "jwt-token", respBody.Token)
 	assert.Equal(t, mockEmbeddedWallet.CredentialID, respBody.CredentialID)
 	assert.Equal(t, mockEmbeddedWallet.ContractAddress, respBody.ContractAddress)
+	assert.False(t, respBody.BackupEligible)
 }
 
 func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T) {
@@ -493,13 +491,8 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T)
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
-			name:               "challenge mismatch",
-			serviceError:       protocol.ErrChallengeMismatch,
-			expectedStatusCode: http.StatusUnauthorized,
-		},
-		{
-			name:               "verification error",
-			serviceError:       protocol.ErrVerification,
+			name:               "verification failed",
+			serviceError:       wallet.ErrAuthenticationVerificationFailed,
 			expectedStatusCode: http.StatusUnauthorized,
 		},
 		{
@@ -525,7 +518,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T)
 
 			mockWebAuthnService.
 				On("FinishPasskeyAuthentication", mock.Anything, mock.AnythingOfType("*http.Request")).
-				Return(nil, tc.serviceError).
+				Return(nil, nil, tc.serviceError).
 				Once()
 
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/embedded-wallets/passkey/authentication/finish", nil)
@@ -560,7 +553,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_JWTGenerationError(t *testi
 
 	mockWebAuthnService.
 		On("FinishPasskeyAuthentication", mock.Anything, mock.AnythingOfType("*http.Request")).
-		Return(mockEmbeddedWallet, nil).
+		Return(mockEmbeddedWallet, &webauthn.Credential{Flags: webauthn.CredentialFlags{BackupEligible: false}}, nil).
 		Once()
 
 	mockJWTManager.
@@ -598,7 +591,7 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_TokenExpiration(t *testing.
 
 	mockWebAuthnService.
 		On("FinishPasskeyAuthentication", mock.Anything, mock.AnythingOfType("*http.Request")).
-		Return(mockEmbeddedWallet, nil).
+		Return(mockEmbeddedWallet, &webauthn.Credential{Flags: webauthn.CredentialFlags{BackupEligible: false}}, nil).
 		Once()
 
 	var capturedExpiresAt time.Time

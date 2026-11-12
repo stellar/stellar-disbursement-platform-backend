@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Restore embedded wallet OTP/PII verification on pubnet. [#1259](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1259)
 - Accept API keys on `PATCH /payments/retry` and the `/users` endpoints. [#1260](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1260)
 - Read the SEP-10/SEP-45 client domain signing key without parsing the whole TOML file. [#1265](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1265)
+- Fix embedded wallet passkey login for passkeys that are not backup-eligible. [#1266](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1266)
 
 ### Security and Dependencies
 
