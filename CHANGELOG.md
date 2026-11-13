@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Read the SEP-10/SEP-45 client domain signing key without parsing the whole TOML file. [#1265](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1265)
 - Fix embedded wallet passkey login for passkeys that are not backup-eligible. [#1266](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1266)
 - Bound embedded wallet passkey attestation cost. [#1267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1267)
+- Remove receiver write access from the Approver role. [#1269](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1269)
 
 ### Security and Dependencies
 

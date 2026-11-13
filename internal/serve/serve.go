@@ -580,7 +580,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.RequirePermission(
 				data.WriteReceivers,
-				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.ApproverUserRole, data.InitiatorUserRole),
+				middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole),
 			)).Group(func(r chi.Router) {
 				r.Post("/", receiversHandler.CreateReceiver)
 				r.Patch("/{id}", updateReceiverHandler.UpdateReceiver)
