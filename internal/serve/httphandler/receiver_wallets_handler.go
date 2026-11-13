@@ -52,7 +52,7 @@ func (h ReceiverWalletsHandler) ensureReceiverWalletActionAllowed(ctx context.Co
 	}
 
 	scopeErr := ensureReceiverActionAllowed(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverWallet.Receiver.ID,
-		data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole)
+		data.FinancialControllerUserRole, data.InitiatorUserRole)
 	if scopeErr != nil && scopeErr.StatusCode == http.StatusNotFound {
 		return httperror.NotFound(notFoundMsg, nil, nil)
 	}
@@ -218,7 +218,7 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 	}
 
 	if scopeErr := ensureReceiverActionAllowed(ctx, h.AuthManager, h.Models, h.Models.DBConnectionPool, receiverID,
-		data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole); scopeErr != nil {
+		data.FinancialControllerUserRole, data.InitiatorUserRole); scopeErr != nil {
 		scopeErr.Render(rw)
 		return
 	}
