@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -328,6 +329,11 @@ func Test_PasskeyHandler_FinishPasskeyRegistration_ServiceErrors(t *testing.T) {
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
+			name:               "request body too large",
+			serviceError:       fmt.Errorf("%w: parsing: %w", wallet.ErrRegistrationVerificationFailed, &http.MaxBytesError{Limit: MaxPasskeyRequestBodySize}),
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
 			name:               "unexpected error",
 			serviceError:       errors.New("database error"),
 			expectedStatusCode: http.StatusInternalServerError,
@@ -494,6 +500,11 @@ func Test_PasskeyHandler_FinishPasskeyAuthentication_ServiceErrors(t *testing.T)
 			name:               "verification failed",
 			serviceError:       wallet.ErrAuthenticationVerificationFailed,
 			expectedStatusCode: http.StatusUnauthorized,
+		},
+		{
+			name:               "request body too large",
+			serviceError:       fmt.Errorf("%w: parsing: %w", wallet.ErrAuthenticationVerificationFailed, &http.MaxBytesError{Limit: MaxPasskeyRequestBodySize}),
+			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
 			name:               "unexpected error",

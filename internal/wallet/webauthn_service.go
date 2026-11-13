@@ -12,6 +12,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/veraison/go-cose"
 
@@ -202,6 +203,12 @@ func (w *WebAuthnService) StartPasskeyRegistration(ctx context.Context, token st
 		}),
 		// Request credential properties extension to confirm resident key support
 		webauthn.WithExtensions(webauthn.WithExtensionCredProps()),
+		// Smart wallet only verifies secp256r1 signatures, so offer ES256 alone
+		webauthn.WithCredentialParameters([]protocol.CredentialParameter{
+			{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256},
+		}),
+		// Attestation result is never used, so don't ask the client to convey one
+		webauthn.WithConveyancePreference(protocol.PreferNoAttestation),
 	}
 
 	// BeginRegistration creates the challenge and parameters for the client:

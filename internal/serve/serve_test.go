@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,14 +31,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/wallet"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -859,6 +863,77 @@ func Test_handleHTTP_shortURLRateLimit(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, get("/r/another", "10.0.0.2"))
 	// 4. The throttled IP can still reach other endpoints.
 	require.Equal(t, http.StatusOK, get("/health", "10.0.0.1"))
+}
+
+func Test_handleHTTP_passkeyRequestBodyCap(t *testing.T) {
+	dbConnectionPool := getConnectionPool(t)
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
+
+	// The real WebAuthn service, so the body is read where production reads it. It needs a tenant with a UI URL.
+	uiBaseURL := "https://aid-org.example.org"
+	mTenantManager := &tenant.TenantManagerMock{}
+	mTenantManager.
+		On("GetTenantByName", mock.Anything, "aid-org").
+		Return(&schema.Tenant{ID: "tenant1", Name: "aid-org", SDPUIBaseURL: &uiBaseURL}, nil)
+	serveOptions.tenantManager = mTenantManager
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	sessionCache, err := wallet.NewSessionCache(dbConnectionPool, time.Minute)
+	require.NoError(t, err)
+	serveOptions.WebAuthnService, err = wallet.NewWebAuthnService(models, sessionCache)
+	require.NoError(t, err)
+
+	handlerMux := handleHTTP(serveOptions)
+	token := data.CreateEmbeddedWalletFixture(t, context.Background(), dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus).Token
+
+	post := func(path, body string) (int, string) {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(middleware.TenantHeaderKey, "aid-org")
+		w := httptest.NewRecorder()
+		handlerMux.ServeHTTP(w, req)
+		resp := w.Result()
+		respBody, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, readErr)
+		return resp.StatusCode, string(respBody)
+	}
+
+	// A real challenge, so that an attestation under the cap gets as far as signature verification.
+	status, body := post("/embedded-wallets/passkey/registration/start", `{"token":"`+token+`"}`)
+	require.Equal(t, http.StatusOK, status, body)
+	var creation struct {
+		PublicKey struct {
+			Challenge string `json:"challenge"`
+		} `json:"publicKey"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &creation))
+
+	// An RSA key in an x5c certificate passes the ES256-only check on the credential key, so the body cap is what
+	// bounds its size. Over the cap it is refused before anything is parsed; under the cap it reaches verification.
+	finishPath := "/embedded-wallets/passkey/registration/finish?token=" + token
+	overCap := testutils.RSAPackedAttestationBody(t, "aid-org.example.org", uiBaseURL, creation.PublicKey.Challenge, 6400, true)
+	require.Greater(t, len(overCap), int(httphandler.MaxPasskeyRequestBodySize))
+	status, body = post(finishPath, string(overCap))
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, body, "Request body too large")
+
+	underCap := testutils.RSAPackedAttestationBody(t, "aid-org.example.org", uiBaseURL, creation.PublicKey.Challenge, 256, true)
+	status, body = post(finishPath, string(underCap))
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, body, "Registration verification failed")
+
+	// The other routes that read a body are capped too.
+	tooLong := `{"token":"` + strings.Repeat("a", int(httphandler.MaxPasskeyRequestBodySize)) + `"}`
+
+	status, body = post("/embedded-wallets/passkey/authentication/finish", tooLong)
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, body, "Request body too large")
+
+	status, _ = post("/embedded-wallets/passkey/registration/start", tooLong)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status, _ = post("/embedded-wallets/passkey/authentication/refresh", tooLong)
+	assert.Equal(t, http.StatusBadRequest, status)
 }
 
 func Test_createAuthManager(t *testing.T) {

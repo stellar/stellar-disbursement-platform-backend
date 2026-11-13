@@ -905,6 +905,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					// Passkey registration + authentication routes
 					if passkeyHandler != nil {
 						r.Route("/passkey", func(r chi.Router) {
+							r.Use(middleware.MaxBodySize(httphandler.MaxPasskeyRequestBodySize))
 							r.Route("/registration", func(r chi.Router) {
 								r.Post("/start", passkeyHandler.StartPasskeyRegistration)
 								r.Post("/finish", passkeyHandler.FinishPasskeyRegistration)
