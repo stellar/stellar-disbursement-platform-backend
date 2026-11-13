@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/veraison/go-cose"
@@ -27,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sdpcontext"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -270,6 +272,12 @@ func Test_WebAuthnService_StartPasskeyRegistration(t *testing.T) {
 		assert.Equal(t, protocol.Platform, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
 		assert.Equal(t, protocol.VerificationRequired, creation.Response.AuthenticatorSelection.UserVerification)
 
+		// Only ES256 is offered: the wallet can use nothing else, and the finish step rejects other keys before verifying anything.
+		assert.Equal(t, []protocol.CredentialParameter{
+			{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256},
+		}, creation.Response.Parameters)
+		assert.Equal(t, protocol.PreferNoAttestation, creation.Response.Attestation)
+
 		_, err = sessionCache.Get(ctx, creation.Response.Challenge.String(), SessionTypeRegistration)
 		require.NoError(t, err)
 	})
@@ -375,6 +383,22 @@ func Test_WebAuthnService_FinishPasskeyRegistration(t *testing.T) {
 		credential, err := service.FinishPasskeyRegistration(ctx, wallet.Token, req)
 		assert.Nil(t, credential)
 		assert.ErrorIs(t, err, ErrRegistrationVerificationFailed)
+	})
+
+	t.Run("rejects an RSA credential key at the algorithm check, before verifying its attestation", func(t *testing.T) {
+		defer data.DeleteAllEmbeddedWalletsFixtures(t, ctx, dbConnectionPool)
+
+		wallet := data.CreateEmbeddedWalletFixture(t, ctx, dbConnectionPool, "", "", "", "", "", data.PendingWalletStatus)
+
+		body := testutils.RSAPackedAttestationBody(t, "localhost", "http://localhost:3000", startChallenge(t, wallet.Token), 256, false)
+		req := &http.Request{Body: io.NopCloser(bytes.NewReader(body))}
+		credential, err := service.FinishPasskeyRegistration(ctx, wallet.Token, req)
+		assert.Nil(t, credential)
+		assert.ErrorIs(t, err, ErrRegistrationVerificationFailed)
+		// The library's step-16 error: the key never reached a signature verification.
+		var protocolErr *protocol.Error
+		require.ErrorAs(t, err, &protocolErr)
+		assert.Equal(t, "Credential public key algorithm not supported", protocolErr.DevInfo)
 	})
 }
 

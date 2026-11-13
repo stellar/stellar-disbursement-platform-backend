@@ -3,6 +3,7 @@ package httphandler
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -22,6 +23,8 @@ import (
 const (
 	// WalletTokenExpiration defines how long wallet JWT tokens are valid
 	WalletTokenExpiration = 15 * time.Minute
+	// MaxPasskeyRequestBodySize caps passkey route body size (and therefore verification cost)
+	MaxPasskeyRequestBodySize int64 = 16 * 1024
 )
 
 type PasskeyHandler struct {
@@ -99,7 +102,10 @@ func (h PasskeyHandler) FinishPasskeyRegistration(rw http.ResponseWriter, req *h
 
 	credential, err := h.WebAuthnService.FinishPasskeyRegistration(ctx, token, req)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
 		switch {
+		case errors.As(err, &maxBytesErr):
+			requestBodyTooLarge(err).Render(rw)
 		case errors.Is(err, wallet.ErrInvalidToken):
 			httperror.BadRequest("Invalid token", err, nil).Render(rw)
 		case errors.Is(err, wallet.ErrWalletAlreadyExists):
@@ -163,7 +169,10 @@ func (h PasskeyHandler) FinishPasskeyAuthentication(rw http.ResponseWriter, req 
 
 	embeddedWallet, credential, err := h.WebAuthnService.FinishPasskeyAuthentication(ctx, req)
 	if err != nil {
-		if errors.Is(err, wallet.ErrWalletNotReady) {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			requestBodyTooLarge(err).Render(rw)
+		} else if errors.Is(err, wallet.ErrWalletNotReady) {
 			httperror.BadRequest("Wallet not ready for authentication", err, nil).Render(rw)
 		} else if errors.Is(err, wallet.ErrSessionNotFound) {
 			httperror.BadRequest("Session not found or expired", err, nil).Render(rw)
@@ -285,4 +294,10 @@ func (h PasskeyHandler) RefreshToken(rw http.ResponseWriter, req *http.Request) 
 	}
 
 	httpjson.Render(rw, resp, httpjson.JSON)
+}
+
+func requestBodyTooLarge(err error) *httperror.HTTPError {
+	return httperror.BadRequest("Request body too large", err, map[string]interface{}{
+		"details": fmt.Sprintf("request too large. Max size %d bytes.", MaxPasskeyRequestBodySize),
+	})
 }
