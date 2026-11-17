@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db/mocks"
 )
 
 func Test_AuthManager_Authenticate(t *testing.T) {
@@ -833,39 +831,71 @@ func Test_AuthManager_ForgotPassword(t *testing.T) {
 
 	ctx := context.Background()
 
-	mockDBConnectionPool := mocks.NewMockDBConnectionPool(t)
-
 	t.Run("returns error when user is not found", func(t *testing.T) {
 		authenticatorMock.
-			On("ForgotPassword", ctx, mockDBConnectionPool, "wrongemail@email.com").
-			Return("", ErrUserNotFound).
+			On("ForgotPassword", ctx, "wrongemail@email.com").
+			Return("", "", ErrUserNotFound).
 			Once()
 
-		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "wrongemail@email.com")
+		resetToken, storedEmail, err := authManager.ForgotPassword(ctx, "wrongemail@email.com")
 		assert.EqualError(t, err, "user not found in auth forgot password: user not found")
 		assert.Empty(t, resetToken)
+		assert.Empty(t, storedEmail)
 	})
 
 	t.Run("returns error when authenticator fails", func(t *testing.T) {
 		authenticatorMock.
-			On("ForgotPassword", ctx, mockDBConnectionPool, "wrongemail@email.com").
-			Return("", errUnexpectedError).
+			On("ForgotPassword", ctx, "wrongemail@email.com").
+			Return("", "", errUnexpectedError).
 			Once()
 
-		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "wrongemail@email.com")
+		resetToken, storedEmail, err := authManager.ForgotPassword(ctx, "wrongemail@email.com")
 		assert.EqualError(t, err, "calling authenticator's ForgotPassword: unexpected error")
 		assert.Empty(t, resetToken)
+		assert.Empty(t, storedEmail)
 	})
 
 	t.Run("creates a reset token successfully", func(t *testing.T) {
 		authenticatorMock.
-			On("ForgotPassword", ctx, mockDBConnectionPool, "valid@email.com").
-			Return("resettoken", nil).
+			On("ForgotPassword", ctx, "Valid@Email.com ").
+			Return("resettoken", "valid@email.com", nil).
 			Once()
 
-		resetToken, err := authManager.ForgotPassword(ctx, mockDBConnectionPool, "valid@email.com")
+		resetToken, storedEmail, err := authManager.ForgotPassword(ctx, "Valid@Email.com ")
 		require.NoError(t, err)
 		assert.Equal(t, "resettoken", resetToken)
+		assert.Equal(t, "valid@email.com", storedEmail)
+	})
+
+	authenticatorMock.AssertExpectations(t)
+}
+
+func Test_AuthManager_InvalidateResetToken(t *testing.T) {
+	authenticatorMock := &AuthenticatorMock{}
+	authManager := NewAuthManager(
+		WithCustomAuthenticatorOption(authenticatorMock),
+	)
+
+	ctx := context.Background()
+
+	t.Run("returns error when authenticator fails", func(t *testing.T) {
+		authenticatorMock.
+			On("InvalidateResetToken", ctx, "resettoken").
+			Return(errUnexpectedError).
+			Once()
+
+		err := authManager.InvalidateResetToken(ctx, "resettoken")
+		assert.EqualError(t, err, "calling authenticator's InvalidateResetToken: unexpected error")
+	})
+
+	t.Run("invalidates the token successfully", func(t *testing.T) {
+		authenticatorMock.
+			On("InvalidateResetToken", ctx, "resettoken").
+			Return(nil).
+			Once()
+
+		err := authManager.InvalidateResetToken(ctx, "resettoken")
+		require.NoError(t, err)
 	})
 
 	authenticatorMock.AssertExpectations(t)

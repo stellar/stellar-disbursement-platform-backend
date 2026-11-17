@@ -38,7 +38,10 @@ type Authenticator interface {
 	UpdateUser(ctx context.Context, ID, firstName, lastName, email, password string) error
 	ActivateUser(ctx context.Context, userID string) error
 	DeactivateUser(ctx context.Context, userID string) error
-	ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error)
+	// ForgotPassword issues a reset token and returns it with the user's stored email.
+	ForgotPassword(ctx context.Context, email string) (resetToken, storedEmail string, err error)
+	// InvalidateResetToken marks a reset token as no longer usable.
+	InvalidateResetToken(ctx context.Context, resetToken string) error
 	// ResetPassword sets a new password from a valid reset token and returns the ID of the user whose password was changed.
 	ResetPassword(ctx context.Context, resetToken, password string) (string, error)
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
@@ -270,15 +273,15 @@ func (a *defaultAuthenticator) DeactivateUser(ctx context.Context, userID string
 	return nil
 }
 
-func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
+func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, email string) (string, string, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
-		return "", fmt.Errorf("generating user reset password token: email field is required")
+		return "", "", fmt.Errorf("generating user reset password token: email field is required")
 	}
 
 	resetToken, err := utils.StringWithCharset(resetTokenLength, utils.DefaultCharset)
 	if err != nil {
-		return "", fmt.Errorf("generating random reset token in forgot password: %w", err)
+		return "", "", fmt.Errorf("generating random reset token in forgot password: %w", err)
 	}
 
 	checkValidTokenQuery := `
@@ -291,37 +294,52 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, sqlExec db.SQ
 			AND (ar.created_at + INTERVAL '20 minutes') > now()
 		)
 	`
-	var hasValidToken bool
-	err = sqlExec.GetContext(ctx, &hasValidToken, checkValidTokenQuery, email)
+	// Lock the user row so concurrent requests for one user run the cooldown check one at a time.
+	storedEmail, err := db.RunInTransactionWithResult(ctx, a.dbConnectionPool, nil, func(dbTx db.DBTransaction) (string, error) {
+		var user struct {
+			ID    string `db:"id"`
+			Email string `db:"email"`
+		}
+		if qErr := dbTx.GetContext(ctx, &user, `SELECT id, email FROM auth_users WHERE email = $1 FOR NO KEY UPDATE`, email); qErr != nil {
+			if errors.Is(qErr, sql.ErrNoRows) {
+				return "", ErrUserNotFound
+			}
+			return "", fmt.Errorf("getting user by email: %w", qErr)
+		}
+
+		var hasValidToken bool
+		if qErr := dbTx.GetContext(ctx, &hasValidToken, checkValidTokenQuery, email); qErr != nil {
+			return "", fmt.Errorf("checking if user has valid token: %w", qErr)
+		}
+		if hasValidToken {
+			return "", ErrUserHasValidToken
+		}
+
+		// The BEFORE INSERT trigger invalidates the user's older tokens. unique_user_valid_token backs up the row lock.
+		insertQuery := `INSERT INTO auth_user_password_reset (auth_user_id, token) VALUES ($1, $2)`
+		if _, qErr := dbTx.ExecContext(ctx, insertQuery, user.ID, resetToken); qErr != nil {
+			var pqError *pq.Error
+			if errors.As(qErr, &pqError) && pqError.Constraint == "unique_user_valid_token" {
+				return "", ErrUserHasValidToken
+			}
+			return "", fmt.Errorf("inserting user reset password token in the database: %w", qErr)
+		}
+
+		return user.Email, nil
+	})
 	if err != nil {
-		return "", fmt.Errorf("checking if user has valid token: %w", err)
+		return "", "", err
 	}
 
-	if hasValidToken {
-		return "", ErrUserHasValidToken
-	}
+	return resetToken, storedEmail, nil
+}
 
-	q := `
-		WITH auth_user_reset_token_info AS (
-			SELECT id, $2 as reset_token FROM auth_users WHERE email = $1
-		)
-		INSERT INTO
-			auth_user_password_reset (auth_user_id, token)
-			SELECT id, reset_token FROM auth_user_reset_token_info
-	`
-	result, err := sqlExec.ExecContext(ctx, q, email, resetToken)
-	if err != nil {
-		return "", fmt.Errorf("inserting user reset password token in the database: %w", err)
+func (a *defaultAuthenticator) InvalidateResetToken(ctx context.Context, resetToken string) error {
+	query := `UPDATE auth_user_password_reset SET is_valid = false WHERE token = $1 AND is_valid = true`
+	if _, err := a.dbConnectionPool.ExecContext(ctx, query, resetToken); err != nil {
+		return fmt.Errorf("invalidating reset token: %w", err)
 	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return "", fmt.Errorf("getting rows affected inserting user reset password token in the database: %w", err)
-	}
-	if rowsAffected == 0 {
-		return "", ErrUserNotFound
-	}
-
-	return resetToken, nil
+	return nil
 }
 
 func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, password string) (string, error) {
