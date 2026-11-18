@@ -128,17 +128,17 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	dbTx db.DBTransaction,
 	receiver data.Receiver,
 	receiverRegistrationRequest data.ReceiverRegistrationRequest,
-) error {
+) (*data.ReceiverVerificationUpdate, error) {
 	now := time.Now()
 
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationField)
 	if err != nil {
-		return fmt.Errorf("retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationField, err)
+		return nil, fmt.Errorf("retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationField, err)
 	}
 	if len(receiverVerifications) == 0 {
 		err = fmt.Errorf("verification of type %s not found for receiver id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
-		return &InformationNotFoundError{cause: err}
+		return nil, &InformationNotFoundError{cause: err}
 	}
 	if len(receiverVerifications) > 1 {
 		log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver.ID, receiverRegistrationRequest.VerificationField)
@@ -149,7 +149,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 		// TODO: the application currently can't recover from a max attempts exceeded error.
 		err = fmt.Errorf("the number of attempts to confirm the verification value exceeded the max attempts")
-		return &VerificationAttemptsExceededError{cause: err}
+		return nil, &VerificationAttemptsExceededError{cause: err}
 	}
 
 	// STEP 3: check if the payload verification value matches the one saved in the database
@@ -164,24 +164,15 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 		rvu.VerificationChannel = message.MessageChannelEmail
 	} else {
 		err = fmt.Errorf("no valid verification channel found resolved for receiver")
-		return &InformationNotFoundError{cause: err}
+		return nil, &InformationNotFoundError{cause: err}
 	}
 
 	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
-		baseErrMsg := fmt.Sprintf("%s value does not match for receiver with id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
 		// update the receiver verification with the confirmation that the value was checked
 		rvu.Attempts = utils.IntPtr(receiverVerification.Attempts + 1)
 		rvu.FailedAt = &now
-
-		// this update is done using the DBConnectionPool and not dbTx because we don't want to rollback these changes after returning the error
-		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, v.Models.DBConnectionPool)
-		if updateErr != nil {
-			err = fmt.Errorf("%s: %w", baseErrMsg, updateErr)
-		} else {
-			err = fmt.Errorf("%s", baseErrMsg)
-		}
-
-		return &InformationNotFoundError{cause: err}
+		err = fmt.Errorf("%s value does not match for receiver with id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
+		return &rvu, &InformationNotFoundError{cause: err}
 	}
 
 	// STEP 4: update the receiver verification row with the confirmation that the value was successfully validated
@@ -191,10 +182,10 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 
 	err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, dbTx)
 	if err != nil {
-		return fmt.Errorf("updating successfully verified user: %w", err)
+		return nil, fmt.Errorf("updating successfully verified user: %w", err)
 	}
 
-	return nil
+	return nil, nil
 }
 
 // processReceiverWalletOTP processes the OTP provided by the user and updates the receiver wallet status to "REGISTERED" if the OTP is valid.
@@ -241,7 +232,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	if err = verifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *rw, otp); err != nil {
 		if errors.Is(err, ErrOTPDoesNotMatch) {
 			log.Ctx(ctx).Errorf("receiver wallet OTP does not match for receiver wallet ID %s", rw.ID)
-			return *rw, false, v.incrementOTPAttempts(ctx, rw)
+			return *rw, false, err
 		} else {
 			err = fmt.Errorf("unable to verify receiver wallet OTP for receiver wallet ID %s: %w", rw.ID, err)
 			return receiverWallet, false, fmt.Errorf("verifying receiver wallet OTP: %w", err)
@@ -318,6 +309,10 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 
+	// Failed-attempt counters are written after the transaction, so they survive its rollback without a second pool
+	// connection being held while the receiver wallet row is locked.
+	var receiverWallet data.ReceiverWallet
+	var failedVerification *data.ReceiverVerificationUpdate
 	err := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// STEP 2: find the receivers with the given phone number
 		receivers, err := v.Models.Receiver.GetByContacts(ctx, dbTx, contactInfo)
@@ -331,13 +326,14 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		receiver := receivers[0]
 
 		// STEP 3: process OTP
-		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
+		var wasAlreadyRegistered bool
+		receiverWallet, wasAlreadyRegistered, err = v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP, contactInfo)
 		if err != nil {
 			return fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, err)
 		}
 
 		// STEP 4: process receiverVerification PII info that matches the pair [receiverID, verificationType]
-		err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
+		failedVerification, err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
 		if err != nil {
 			return fmt.Errorf("processing receiver verification entry for receiver with contact info %s: %w", truncatedContactInfo, err)
 		}
@@ -353,6 +349,17 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		return nil
 	})
 	if err != nil {
+		writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), db.DefaultLockTimeout)
+		defer cancel()
+		switch {
+		case errors.Is(err, ErrOTPDoesNotMatch):
+			err = fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, v.incrementOTPAttempts(writeCtx, &receiverWallet))
+		case failedVerification != nil:
+			if updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(writeCtx, *failedVerification, v.Models.DBConnectionPool); updateErr != nil {
+				log.Ctx(ctx).Errorf("updating verification attempts for receiver with contact info %s: %v", truncatedContactInfo, updateErr)
+			}
+		}
+
 		var infoNotFoundErr *InformationNotFoundError
 		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
 		// to the user
