@@ -2059,4 +2059,30 @@ func Test_PaymentModel_Update(t *testing.T) {
 		assert.Equal(t, FailedPaymentStatus, paymentDB.Status)
 		assert.Empty(t, paymentDB.StellarTransactionID)
 	})
+
+	t.Run("🎉 marks a payment FAILED without a stellar transaction id", func(t *testing.T) {
+		payment := newPendingPayment("4")
+
+		err := models.Payment.Update(ctx, dbConnectionPool, payment, &PaymentUpdate{
+			Status:        FailedPaymentStatus,
+			StatusMessage: "rejected before submission",
+		})
+		require.NoError(t, err)
+
+		paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, FailedPaymentStatus, paymentDB.Status)
+		assert.Equal(t, "rejected before submission", paymentDB.StatusHistory[len(paymentDB.StatusHistory)-1].StatusMessage)
+	})
+
+	t.Run("returns an error when a SUCCESS update has no stellar transaction id", func(t *testing.T) {
+		payment := newPendingPayment("5")
+
+		err := models.Payment.Update(ctx, dbConnectionPool, payment, &PaymentUpdate{Status: SuccessPaymentStatus})
+		assert.ErrorContains(t, err, "stellar transaction id is required")
+
+		paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, PendingPaymentStatus, paymentDB.Status)
+	})
 }
