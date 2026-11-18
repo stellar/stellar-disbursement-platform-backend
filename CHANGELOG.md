@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Add embedded wallet verification scenario to e2e tests [#1262](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1262)
+- Add configurable lock timeout to tenant database pools. [#1274](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1274)
 
 ### Changed
 
