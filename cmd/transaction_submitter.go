@@ -171,7 +171,6 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
 				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
 				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
-				LockTimeoutSeconds:     globalOptions.DBPool.DBLockTimeoutSeconds,
 			}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {

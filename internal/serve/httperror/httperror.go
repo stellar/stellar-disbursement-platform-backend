@@ -122,7 +122,7 @@ func Forbidden(msg string, originalErr error, extras map[string]interface{}) *HT
 
 const lockTimeoutMessage = "This record is being updated by another operation. Please try again."
 
-// IsLockTimeout reports whether err comes from a statement that Postgres cancelled on lock_timeout (SQLSTATE 55P03).
+// IsLockTimeout reports whether err is a Postgres "lock not available" error (SQLSTATE 55P03).
 func IsLockTimeout(err error) bool {
 	var pqErr *pq.Error
 	return errors.As(err, &pqErr) && pqErr.Code == "55P03"
