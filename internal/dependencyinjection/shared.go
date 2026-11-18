@@ -16,6 +16,8 @@ type DBConnectionPoolOptions struct {
 	MaxIdleConns           int
 	ConnMaxIdleTimeSeconds int
 	ConnMaxLifetimeSeconds int
+	// Tenant pools only; zero disables it.
+	LockTimeoutSeconds int
 }
 
 // OpenDBConnectionPool opens a connection pool in different ways based on the options

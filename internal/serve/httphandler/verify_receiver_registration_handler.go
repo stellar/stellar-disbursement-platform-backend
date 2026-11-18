@@ -61,6 +61,7 @@ type VerifyReceiverRegistrationHandler struct {
 	NetworkPassphrase           string
 	CrashTrackerClient          crashtracker.CrashTrackerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
+	LockTimeout                 time.Duration
 }
 
 // validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.

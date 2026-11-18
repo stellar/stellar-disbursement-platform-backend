@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/support/db/dbtest"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +54,39 @@ func TestOpen_OpenDBConnectionPoolWithMetrics(t *testing.T) {
 	assert.Equal(t, "postgres", dbConnectionPool.DriverName())
 	err = dbConnectionPool.Ping(context.Background())
 	require.NoError(t, err)
+}
+
+func Test_OpenDBConnectionPoolWithConfig_lockTimeout(t *testing.T) {
+	db := dbtest.Postgres(t)
+	defer db.Close()
+	ctx := context.Background()
+
+	unbounded, err := OpenDBConnectionPool(db.DSN)
+	require.NoError(t, err)
+	defer unbounded.Close()
+	bounded, err := OpenDBConnectionPoolWithConfig(db.DSN, DBPoolConfig{MaxOpenConns: 2, MaxIdleConns: 2, LockTimeout: time.Second})
+	require.NoError(t, err)
+	defer bounded.Close()
+
+	var lockTimeout string
+	require.NoError(t, unbounded.GetContext(ctx, &lockTimeout, "SHOW lock_timeout"))
+	assert.Equal(t, "0", lockTimeout)
+	require.NoError(t, bounded.GetContext(ctx, &lockTimeout, "SHOW lock_timeout"))
+	assert.Equal(t, "1s", lockTimeout)
+
+	// A statement blocked on a row lock fails with 55P03 once the timeout elapses.
+	_, err = unbounded.ExecContext(ctx, "CREATE TABLE lock_timeout_test (id int PRIMARY KEY); INSERT INTO lock_timeout_test VALUES (1)")
+	require.NoError(t, err)
+	holder, err := unbounded.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, holder.Rollback()) }()
+	_, err = holder.ExecContext(ctx, "SELECT id FROM lock_timeout_test WHERE id = 1 FOR UPDATE")
+	require.NoError(t, err)
+
+	_, err = bounded.ExecContext(ctx, "UPDATE lock_timeout_test SET id = 2 WHERE id = 1")
+	var pqErr *pq.Error
+	require.ErrorAs(t, err, &pqErr)
+	assert.Equal(t, "55P03", string(pqErr.Code))
 }
 
 func Test_CloseConnectionPoolIfNeeded(t *testing.T) {

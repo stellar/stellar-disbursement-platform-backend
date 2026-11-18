@@ -407,6 +407,8 @@ DB_MAX_IDLE_CONNS=2
 DB_CONN_MAX_IDLE_TIME_SECONDS=10
 # Recycle connections after N seconds (default: 300 = 5 minutes)
 DB_CONN_MAX_LIFETIME_SECONDS=300
+# Seconds a tenant-pool statement waits for a row lock before failing with a retryable 409 (default: 10, 0 disables)
+DB_LOCK_TIMEOUT_SECONDS=10
 ```
 
 These settings help prevent idle connection buildup across multi-tenant scheduler cycles, especially on constrained databases.

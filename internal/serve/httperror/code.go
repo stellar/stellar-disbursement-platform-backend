@@ -10,6 +10,7 @@ const (
 	Code400_5 = "400_5" // OTP expired.
 	Code400_6 = "400_6" // OTP does not match.
 	Code401_0 = "401_0" // Not authorized.
+	Code409_0 = "409_0" // The record is being updated by another operation.
 	Code500_0 = "500_0" // An internal error occurred while processing this request.
 	Code500_1 = "500_1" // Cannot get organization.
 	Code500_2 = "500_2" // Cannot retrieve the tenant from the context.

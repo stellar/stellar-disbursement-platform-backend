@@ -199,6 +199,7 @@ sdp:
   ## @param sdp.configMap.data.DB_MAX_IDLE_CONNS Maximum idle connections retained in the pool.
   ## @param sdp.configMap.data.DB_CONN_MAX_IDLE_TIME_SECONDS Close idle connections after N seconds.
   ## @param sdp.configMap.data.DB_CONN_MAX_LIFETIME_SECONDS Recycle connections after N seconds.
+  ## @param sdp.configMap.data.DB_LOCK_TIMEOUT_SECONDS Seconds a tenant-pool statement waits for a row lock before failing with a retryable 409. 0 disables the timeout.
   ## @extra sdp.configMap.data.ENABLE_BRIDGE_INTEGRATION Determines if the bridge integration is enabled. If set to true, the bridge integration will be enabled.
   ## @extra sdp.configMap.data.BRIDGE_BASE_URL The base URL of the bridge API. Required if ENABLE_BRIDGE_INTEGRATION is set to true.
   ## @param sdp.configMap.data.ENABLE_EMBEDDED_WALLETS Determines if embedded wallet features are enabled ("true" or "false").
@@ -249,6 +250,7 @@ sdp:
       DB_MAX_IDLE_CONNS: "2"
       DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
       DB_CONN_MAX_LIFETIME_SECONDS: "300"
+      DB_LOCK_TIMEOUT_SECONDS: "10"
 
       ## Embedded wallets configuration
       ENABLE_EMBEDDED_WALLETS: "false"
@@ -471,6 +473,7 @@ tss:
   ## @param tss.configMap.data.DB_MAX_IDLE_CONNS Maximum idle connections retained in the pool.
   ## @param tss.configMap.data.DB_CONN_MAX_IDLE_TIME_SECONDS Close idle connections after N seconds.
   ## @param tss.configMap.data.DB_CONN_MAX_LIFETIME_SECONDS Recycle connections after N seconds.
+  ## @param tss.configMap.data.DB_LOCK_TIMEOUT_SECONDS Seconds a tenant-pool statement waits for a row lock before failing with a retryable 409. 0 disables the timeout.
   ## @extra tss.configMap.data.RPC_URL The URL of the Stellar RPC server for embedded wallets and SEP-45 features. Uses global.rpc.url by default.
   ## @extra tss.configMap.data.RPC_REQUEST_AUTH_HEADER_KEY The name of the HTTP header to include when authenticating requests to a protected RPC server. Uses global.rpc.requestAuthHeaderKey by default.
   configMap:
@@ -499,6 +502,7 @@ tss:
       DB_MAX_IDLE_CONNS: "2"
       DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
       DB_CONN_MAX_LIFETIME_SECONDS: "300"
+      DB_LOCK_TIMEOUT_SECONDS: "10"
 
       ## RPC configuration
 #     RPC_URL: #required when ENABLE_EMBEDDED_WALLETS is "true"

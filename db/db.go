@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -19,6 +20,7 @@ import (
 const (
 	DefaultConnMaxIdleTimeSeconds = 10
 	DefaultConnMaxLifetimeSeconds = 300
+	DefaultLockTimeout            = 10 * time.Second
 )
 
 // DBPoolConfig represents tunables for the sql.DB pool.
@@ -27,6 +29,7 @@ type DBPoolConfig struct {
 	MaxIdleConns    int
 	ConnMaxIdleTime time.Duration
 	ConnMaxLifetime time.Duration
+	LockTimeout     time.Duration
 }
 
 var DefaultDBPoolConfig = DBPoolConfig{
@@ -181,7 +184,12 @@ func DBTxRollback(ctx context.Context, dbTx DBTransaction, err error, logMessage
 
 // OpenDBConnectionPoolWithConfig opens a new database connection pool. It returns an error if it can't connect to the database.
 func OpenDBConnectionPoolWithConfig(dataSourceName string, cfg DBPoolConfig) (DBConnectionPool, error) {
-	sqlxDB, err := sqlx.Open("postgres", dataSourceName)
+	dsn, err := dsnWithLockTimeout(dataSourceName, cfg.LockTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("setting lock_timeout on the DSN: %w", err)
+	}
+
+	sqlxDB, err := sqlx.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("error creating app DB connection pool: %w", err)
 	}
@@ -197,6 +205,21 @@ func OpenDBConnectionPoolWithConfig(dataSourceName string, cfg DBPoolConfig) (DB
 	}
 
 	return &DBConnectionPoolImplementation{DB: sqlxDB, dataSourceName: dataSourceName}, nil
+}
+
+// dsnWithLockTimeout sets `lock_timeout` (milliseconds) on the DSN; a zero timeout leaves the DSN unchanged.
+func dsnWithLockTimeout(dataSourceName string, lockTimeout time.Duration) (string, error) {
+	if lockTimeout <= 0 {
+		return dataSourceName, nil
+	}
+	u, err := url.Parse(dataSourceName)
+	if err != nil {
+		return "", fmt.Errorf("parsing database DSN: %w", err)
+	}
+	q := u.Query()
+	q.Set("lock_timeout", strconv.FormatInt(lockTimeout.Milliseconds(), 10))
+	u.RawQuery = q.Encode()
+	return u.String(), nil
 }
 
 // OpenDBConnectionPool opens a new database connection pool with default settings.

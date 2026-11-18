@@ -48,6 +48,7 @@ func NewMtnDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (
 	if opts.ConnMaxLifetimeSeconds > 0 {
 		cfg.ConnMaxLifetime = time.Duration(opts.ConnMaxLifetimeSeconds) * time.Second
 	}
+	cfg.LockTimeout = time.Duration(opts.LockTimeoutSeconds) * time.Second
 
 	tr := tenant.NewMultiTenantDataSourceRouter(tm).WithMonitoring(opts.MonitorService).WithPoolConfig(cfg)
 	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)

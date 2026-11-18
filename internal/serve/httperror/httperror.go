@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 )
@@ -119,7 +120,23 @@ func Forbidden(msg string, originalErr error, extras map[string]interface{}) *HT
 	return NewHTTPError(http.StatusForbidden, msg, originalErr, extras)
 }
 
+const lockTimeoutMessage = "This record is being updated by another operation. Please try again."
+
+// IsLockTimeout reports whether err comes from a statement that Postgres cancelled on lock_timeout (SQLSTATE 55P03).
+func IsLockTimeout(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "55P03"
+}
+
 func InternalError(ctx context.Context, msg string, originalErr error, extras map[string]interface{}) *HTTPError {
+	if IsLockTimeout(originalErr) {
+		if msg != "" {
+			originalErr = fmt.Errorf("%s: %w", msg, originalErr)
+		}
+		log.Ctx(ctx).Warnf("lock timeout: %v", originalErr)
+		return Conflict(lockTimeoutMessage, originalErr, extras).WithErrorCode(Code409_0)
+	}
+
 	if msg == "" {
 		msg = "An internal error occurred while processing this request."
 	}

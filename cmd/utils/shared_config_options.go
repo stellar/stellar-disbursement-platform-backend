@@ -27,6 +27,7 @@ type DBPoolOptions struct {
 	DBMaxIdleConns           int
 	DBConnMaxIdleTimeSeconds int
 	DBConnMaxLifetimeSeconds int
+	DBLockTimeoutSeconds     int
 }
 
 // DBPoolConfigOptions returns config options for tuning the DB connection pool.
@@ -62,6 +63,14 @@ func DBPoolConfigOptions(opts *DBPoolOptions) []*config.ConfigOption {
 			OptType:     types.Int,
 			ConfigKey:   &opts.DBConnMaxLifetimeSeconds,
 			FlagDefault: db.DefaultConnMaxLifetimeSeconds,
+			Required:    false,
+		},
+		{
+			Name:        "db-lock-timeout-seconds",
+			Usage:       "Maximum time in seconds a tenant-pool statement waits for a row lock before failing with a retryable error. 0 disables the timeout",
+			OptType:     types.Int,
+			ConfigKey:   &opts.DBLockTimeoutSeconds,
+			FlagDefault: int(db.DefaultLockTimeout.Seconds()),
 			Required:    false,
 		},
 	}

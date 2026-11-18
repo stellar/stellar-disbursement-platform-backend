@@ -74,6 +74,7 @@ type ServeOptions struct {
 	MtnDBConnectionPool            db.DBConnectionPool
 	AdminDBConnectionPool          db.DBConnectionPool
 	TSSDBConnectionPool            db.DBConnectionPool
+	DBLockTimeout                  time.Duration
 	EC256PrivateKey                string
 	Models                         *data.Models
 	CorsAllowedOrigins             []string
@@ -1022,6 +1023,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				NetworkPassphrase:           o.NetworkPassphrase,
 				CrashTrackerClient:          o.CrashTrackerClient,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				LockTimeout:                 o.DBLockTimeout,
 			}.VerifyReceiverRegistration)
 		})
 

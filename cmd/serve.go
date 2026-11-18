@@ -557,6 +557,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				MaxIdleConns:           globalOptions.DBPool.DBMaxIdleConns,
 				ConnMaxIdleTimeSeconds: globalOptions.DBPool.DBConnMaxIdleTimeSeconds,
 				ConnMaxLifetimeSeconds: globalOptions.DBPool.DBConnMaxLifetimeSeconds,
+				LockTimeoutSeconds:     globalOptions.DBPool.DBLockTimeoutSeconds,
 			}
 			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
@@ -577,6 +578,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				di.CleanupInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
 			}()
 			serveOpts.MtnDBConnectionPool = mtnDBConnectionPool
+			serveOpts.DBLockTimeout = time.Duration(globalOptions.DBPool.DBLockTimeoutSeconds) * time.Second
 			adminServeOpts.MTNDBConnectionPool = mtnDBConnectionPool
 
 			// Setup the TSSDBConnectionPool
