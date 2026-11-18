@@ -478,7 +478,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			require.NoError(t, err)
 
 			mMonitorClient := monitor.NewMockMonitorClient(t)
-			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
+			// Two bundles are processed before cancel: 2 "processing started" + 2 "successful" events.
+			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(4)
 
 			monitorService := tssMonitor.TSSMonitorService{
 				Client:        mMonitorClient,

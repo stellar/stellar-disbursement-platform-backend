@@ -344,6 +344,15 @@ func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error 
 	return nil
 }
 
+// releaseChannelAccount unlocks the job's channel account after a failure that recorded nothing, so other jobs can use
+// it before the lock's ledger bound. ErrLockLost means another job already holds it.
+func (tw *TransactionWorker) releaseChannelAccount(ctx context.Context, txJob *TxJob) {
+	_, err := tw.chAccModel.UnlockIfLockedUntil(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey, txJob.LockedUntilLedgerNumber)
+	if err != nil && !errors.Is(err, store.ErrLockLost) {
+		log.Ctx(ctx).Warnf("releasing channel account %s after a preparation failure: %v", txJob.ChannelAccount.PublicKey, err)
+	}
+}
+
 // handleSuccessfulTransaction will wrap up the job when the transaction has been successfully submitted to the network.
 // This method will only return an error if something goes wrong when handling the result and marking the transaction as SUCCESS.
 func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction) error {
@@ -474,6 +483,9 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 		if errors.Is(err, ErrTransactionHandled) {
 			return nil
 		}
+		// Nothing was recorded or submitted, so the channel account can be released now instead of at the lock's
+		// ledger bound; the transaction keeps its lock as the retry backoff.
+		tw.releaseChannelAccount(ctx, txJob)
 		return fmt.Errorf("preparing bundle for processing: %w", err)
 	}
 
@@ -537,6 +549,13 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 
 	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, feeBumpTxHash, sentXDR, distributionAccountAddr)
 	if err != nil {
+		// The failed UPDATE recorded nothing and nothing was submitted, so a save that will fail the same way on every
+		// attempt is safe to fail terminally instead of retrying forever.
+		if utils.IsPersistentDBError(err) {
+			validationErr := utils.NewValidationError(fmt.Errorf("saving transaction metadata: %w", err))
+			validationErr.ReportToCrashTracker = true
+			return nil, tw.handlePreparationError(ctx, txJob, validationErr)
+		}
 		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}
 	txJob.Transaction = *updatedTx
@@ -748,6 +767,16 @@ func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *
 		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, rpcErr)
 		if handlerErr != nil {
 			return fmt.Errorf("handling rpc error: %w", handlerErr)
+		}
+		return ErrTransactionHandled
+	}
+
+	// Check if it's a deterministic validation failure (same input, same result on every attempt)
+	var validationErr *utils.ValidationError
+	if errors.As(err, &validationErr) {
+		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, validationErr)
+		if handlerErr != nil {
+			return fmt.Errorf("handling validation error: %w", handlerErr)
 		}
 		return ErrTransactionHandled
 	}
