@@ -142,6 +142,10 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			httpErr.Render(rw)
 			return
 		}
+		if db.IsLockTimeout(err) {
+			httperror.LockTimeout(ctx, err).Render(rw)
+			return
+		}
 
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return

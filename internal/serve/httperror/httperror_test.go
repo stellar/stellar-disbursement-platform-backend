@@ -183,31 +183,19 @@ func TestInternalError(t *testing.T) {
 		// validate logs
 		require.Contains(t, buf.String(), "reported with custom ReportFunc")
 	})
-
-	t.Run("lock timeout is returned as a 409 and not reported", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-		reported := false
-		SetDefaultReportErrorFunc(func(ctx context.Context, err error, msg string) { reported = true })
-		lockTimeoutErr := fmt.Errorf("updating payment: %w", &pq.Error{Code: "55P03", Message: "canceling statement due to lock timeout"})
-
-		err := InternalError(ctx, "Cannot update payment", lockTimeoutErr, nil)
-		assert.Equal(t, http.StatusConflict, err.StatusCode)
-		assert.Equal(t, "This record is being updated by another operation. Please try again.", err.Message)
-		assert.Equal(t, Code409_0, err.ErrorCode)
-		assert.ErrorIs(t, err, lockTimeoutErr)
-		assert.False(t, reported)
-		require.Contains(t, buf.String(), "lock timeout: Cannot update payment: updating payment: pq: canceling statement due to lock timeout")
-	})
 }
 
-func TestIsLockTimeout(t *testing.T) {
-	lockTimeoutErr := &pq.Error{Code: "55P03"}
-	assert.True(t, IsLockTimeout(lockTimeoutErr))
-	assert.True(t, IsLockTimeout(fmt.Errorf("wrapped: %w", lockTimeoutErr)))
-	assert.False(t, IsLockTimeout(&pq.Error{Code: "23505"}))
-	assert.False(t, IsLockTimeout(errors.New("not a database error")))
-	assert.False(t, IsLockTimeout(nil))
+func TestLockTimeout(t *testing.T) {
+	buf := new(strings.Builder)
+	log.DefaultLogger.SetOutput(buf)
+	lockTimeoutErr := fmt.Errorf("updating payment: %w", &pq.Error{Code: "55P03", Message: "canceling statement due to lock timeout"})
+
+	err := LockTimeout(context.Background(), lockTimeoutErr)
+	assert.Equal(t, http.StatusConflict, err.StatusCode)
+	assert.Equal(t, "This record is being updated by another operation. Please try again.", err.Message)
+	assert.Equal(t, Code409_0, err.ErrorCode)
+	assert.ErrorIs(t, err, lockTimeoutErr)
+	require.Contains(t, buf.String(), "lock timeout: updating payment: pq: canceling statement due to lock timeout")
 }
 
 func TestUnprocessableEntity(t *testing.T) {

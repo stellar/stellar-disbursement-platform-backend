@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -291,6 +291,12 @@ func (t *TransactionExecutionError) Unwrap() error {
 func IsTransactionExecutionError(err error) bool {
 	var eErr *TransactionExecutionError
 	return errors.As(err, &eErr)
+}
+
+// IsLockTimeout reports whether err is a Postgres "lock not available" error (SQLSTATE 55P03).
+func IsLockTimeout(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "55P03"
 }
 
 const (

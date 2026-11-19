@@ -489,6 +489,8 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrDuplicateWalletAddress):
 			return httperror.Conflict(err.Error(), err, nil)
+		case db.IsLockTimeout(err):
+			return httperror.LockTimeout(ctx, err)
 		default:
 			return httperror.InternalError(ctx, fmt.Sprintf("Cannot process instructions for disbursement with ID %s", disbursement.ID), err, nil)
 		}
@@ -729,6 +731,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		case errors.As(err, &insufficientBalanceErr):
 			log.Ctx(ctx).Error(insufficientBalanceErr)
 			httperror.Conflict(insufficientBalanceErr.Error(), err, nil).Render(w)
+		case db.IsLockTimeout(err):
+			httperror.LockTimeout(ctx, err).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursementID=%s with status=%s: %v", disbursementID, toStatus, err)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)

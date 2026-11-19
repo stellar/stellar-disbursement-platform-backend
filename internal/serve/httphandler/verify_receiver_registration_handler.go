@@ -383,6 +383,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			log.Ctx(ctx).Error(verficationAttemptsExceededErr.cause)
 			httperror.BadRequest(verficationAttemptsExceededErr.Error(), err, nil).WithErrorCode(httperror.Code400_3).Render(w)
 			return
+		case db.IsLockTimeout(err):
+			httperror.LockTimeout(ctx, err).Render(w)
+			return
 		default:
 			httperror.InternalError(ctx, "", err, nil).WithErrorCode(httperror.Code500_0).Render(w)
 			return

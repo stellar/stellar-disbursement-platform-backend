@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -185,4 +187,13 @@ func Test_detectSchemaFromDBCP(t *testing.T) {
 			assert.Equal(t, tc.expectedSchema, result)
 		})
 	}
+}
+
+func TestIsLockTimeout(t *testing.T) {
+	lockTimeoutErr := &pq.Error{Code: "55P03"}
+	assert.True(t, IsLockTimeout(lockTimeoutErr))
+	assert.True(t, IsLockTimeout(fmt.Errorf("wrapped: %w", lockTimeoutErr)))
+	assert.False(t, IsLockTimeout(&pq.Error{Code: "23505"}))
+	assert.False(t, IsLockTimeout(errors.New("not a database error")))
+	assert.False(t, IsLockTimeout(nil))
 }

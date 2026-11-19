@@ -295,6 +295,8 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 			httperror.BadRequest(services.ErrPaymentNotReadyToCancel.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrPaymentStatusCantBeChanged):
 			httperror.BadRequest(services.ErrPaymentStatusCantBeChanged.Error(), err, nil).Render(w)
+		case db.IsLockTimeout(err):
+			httperror.LockTimeout(ctx, err).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update payment ID %s with status: %s", paymentID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)

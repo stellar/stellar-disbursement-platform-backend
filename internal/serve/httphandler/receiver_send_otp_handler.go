@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/sepauth"
@@ -197,6 +198,9 @@ func (h ReceiverSendOTPHandler) handleOTPForReceiver(
 	} else {
 		matchedBy = fmt.Sprintf("client domain (%s)", sep24Claims.ClientDomain())
 		numberOfUpdatedRows, err = h.Models.ReceiverWallet.UpdateOTPByReceiverContactInfoAndWalletDomain(ctx, contactInfo, sep24Claims.ClientDomain(), newOTP)
+	}
+	if db.IsLockTimeout(err) {
+		return placeholderVerificationField, httperror.LockTimeout(ctx, err)
 	}
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		return placeholderVerificationField, httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil).WithErrorCode(httperror.Code500_8)

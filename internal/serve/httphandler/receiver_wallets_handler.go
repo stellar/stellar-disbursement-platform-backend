@@ -84,6 +84,11 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			return
 		}
 
+		if db.IsLockTimeout(err) {
+			httperror.LockTimeout(ctx, err).Render(rw)
+			return
+		}
+
 		err = fmt.Errorf("retrying invitation: %w", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
@@ -305,6 +310,11 @@ func (h ReceiverWalletsHandler) PatchReceiverWallet(rw http.ResponseWriter, req 
 			httperror.Conflict("The provided wallet address is already associated with another user.", err, map[string]interface{}{
 				"wallet_address": "wallet address must be unique",
 			}).Render(rw)
+			return
+		}
+
+		if db.IsLockTimeout(err) {
+			httperror.LockTimeout(ctx, err).Render(rw)
 			return
 		}
 
