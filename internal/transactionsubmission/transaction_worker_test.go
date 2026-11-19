@@ -1960,9 +1960,6 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 	const lockedToLedger = 2
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
 
-	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
-	require.NotEmpty(t, transactionWorker)
-
 	testCases := []struct {
 		name                       string
 		horizonTxResponse          horizon.Transaction
@@ -1998,6 +1995,10 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
+			require.NotEmpty(t, transactionWorker)
+
 			const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 			const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 
@@ -3647,5 +3648,83 @@ func Test_TransactionWorker_processTransactionSubmission_releasesChannelAccountO
 		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
 		require.NoError(t, err)
 		assert.Equal(t, int32(newerLock), refreshedChAcc.LockedUntilLedgerNumber.Int32, "newer job's lock untouched")
+	})
+
+	// runWithHandledBuildError fails the build with a recognized error, so the failure handler runs before the early release.
+	runWithHandledBuildError := func(t *testing.T, txJob *TxJob, txStore store.TransactionStore, chAccStore store.ChannelAccountStore) error {
+		mockHorizon := &horizonclient.MockClient{}
+		mockHorizon.On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).Return(horizon.Account{Sequence: accountSequence}, nil).Once()
+		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+		mLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedger, nil).Once()
+		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.Anything).Return().Once()
+
+		handler := NewMockTransactionHandler(t)
+		handler.On("MonitorTransactionProcessingStarted", ctx, txJob, mock.Anything).Return().Once()
+		handler.On("BuildInnerTransaction", ctx, txJob, int64(accountSequence), distAccount.Address).Return(nil, utils.NewValidationError(errors.New("invalid destination account"))).Once()
+		handler.On("MonitorTransactionProcessingFailed", ctx, txJob, mock.Anything, false, mock.Anything).Return().Once()
+
+		tw := &TransactionWorker{
+			dbConnectionPool: dbConnectionPool,
+			engine: &engine.SubmitterEngine{
+				HorizonClient:       mockHorizon,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				SignatureService:    sigService,
+				MaxBaseFee:          100,
+			},
+			txModel:             txStore,
+			chAccModel:          chAccStore,
+			txHandler:           handler,
+			txProcessingLimiter: mockTxProcessingLimiter,
+			crashTrackerClient:  crashtracker.NewMockCrashTrackerClient(t),
+		}
+		return tw.processTransactionSubmission(ctx, txJob)
+	}
+
+	t.Run("handler freed the channel account, then failed: not released again", func(t *testing.T) {
+		store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
+		erroredTx := txJob.Transaction
+		erroredTx.Status = store.TransactionStatusError
+		txStore := storeMocks.NewMockTransactionStore(t)
+		txStore.On("UpdateStatusToError", ctx, mock.AnythingOfType("store.Transaction"), mock.Anything).Return(&erroredTx, nil).Once()
+		txStore.On("Unlock", ctx, dbConnectionPool, txJob.Transaction.ID, lockedToLedger).
+			Run(func(mock.Arguments) {
+				// A newer job locks the freed channel account with the same ledger bound.
+				_, lockErr := chAccModel.Lock(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, currentLedger, lockedToLedger)
+				require.NoError(t, lockErr)
+			}).
+			Return(nil, errors.New("connection reset")).Once()
+
+		err := runWithHandledBuildError(t, &txJob, txStore, chAccModel)
+		assert.ErrorContains(t, err, "unlocking transaction: connection reset")
+
+		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+		require.NoError(t, err)
+		assert.Equal(t, int32(lockedToLedger), refreshedChAcc.LockedUntilLedgerNumber.Int32, "newer job's lock untouched")
+	})
+
+	t.Run("handler's channel release failed: not attempted again", func(t *testing.T) {
+		store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
+		chAccStore := storeMocks.NewMockChannelAccountStore(t)
+		chAccStore.On("UnlockIfLockedUntil", ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, lockedToLedger).Return(nil, errors.New("connection reset")).Once()
+
+		err := runWithHandledBuildError(t, &txJob, txModel, chAccStore)
+		assert.ErrorContains(t, err, "unlocking channel account: connection reset")
+	})
+
+	t.Run("handler failed before freeing the channel account: released at once", func(t *testing.T) {
+		store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
+		txStore := storeMocks.NewMockTransactionStore(t)
+		txStore.On("UpdateStatusToError", ctx, mock.AnythingOfType("store.Transaction"), mock.Anything).Return(nil, errors.New("connection reset")).Once()
+
+		err := runWithHandledBuildError(t, &txJob, txStore, chAccModel)
+		assert.ErrorContains(t, err, "connection reset")
+
+		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
+		require.NoError(t, err)
+		assert.False(t, refreshedChAcc.LockedUntilLedgerNumber.Valid, "channel account released")
 	})
 }

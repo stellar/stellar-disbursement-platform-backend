@@ -49,6 +49,8 @@ type TransactionWorker struct {
 	monitorSvc          tssMonitor.TSSMonitorService
 	jobUUID             string
 	txHandler           TransactionHandlerInterface
+
+	chAccReleased bool
 }
 
 func NewTransactionWorker(
@@ -172,6 +174,8 @@ func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
 
 // TODO: add unit tests and godoc to this function
 func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
+	tw.chAccReleased = false
+
 	err := tw.validateJob(txJob)
 	if err != nil {
 		return fmt.Errorf("validating job: %w", err)
@@ -330,13 +334,11 @@ func (tw *TransactionWorker) markTransactionAsError(ctx context.Context, txJob *
 // this method is not called, the algorithm will fall back to get these resources automatically unlocked when their
 // `locked-to-ledger` expire, which is required when the submission outcome is unknown (the envelope may still land).
 func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error {
-	// ErrLockLost here means another job already holds the channel account: nothing of ours to release.
-	_, err := tw.chAccModel.UnlockIfLockedUntil(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey, txJob.LockedUntilLedgerNumber)
-	if err != nil && !errors.Is(err, store.ErrLockLost) {
-		return fmt.Errorf("unlocking channel account: %w", err)
+	if err := tw.releaseChannelAccount(ctx, txJob); err != nil {
+		return err
 	}
 
-	_, err = tw.txModel.Unlock(ctx, tw.dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber)
+	_, err := tw.txModel.Unlock(ctx, tw.dbConnectionPool, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber)
 	if err != nil {
 		return fmt.Errorf("unlocking transaction: %w", err)
 	}
@@ -344,13 +346,19 @@ func (tw *TransactionWorker) unlockJob(ctx context.Context, txJob *TxJob) error 
 	return nil
 }
 
-// releaseChannelAccount unlocks the job's channel account after a failure that recorded nothing, so other jobs can use
-// it before the lock's ledger bound. ErrLockLost means another job already holds it.
-func (tw *TransactionWorker) releaseChannelAccount(ctx context.Context, txJob *TxJob) {
+func (tw *TransactionWorker) releaseChannelAccount(ctx context.Context, txJob *TxJob) error {
+	if tw.chAccReleased {
+		return nil
+	}
+	tw.chAccReleased = true
+
+	// ErrLockLost here means another job already holds the channel account: nothing of ours to release.
 	_, err := tw.chAccModel.UnlockIfLockedUntil(ctx, tw.dbConnectionPool, txJob.ChannelAccount.PublicKey, txJob.LockedUntilLedgerNumber)
 	if err != nil && !errors.Is(err, store.ErrLockLost) {
-		log.Ctx(ctx).Warnf("releasing channel account %s after a preparation failure: %v", txJob.ChannelAccount.PublicKey, err)
+		return fmt.Errorf("unlocking channel account: %w", err)
 	}
+
+	return nil
 }
 
 // handleSuccessfulTransaction will wrap up the job when the transaction has been successfully submitted to the network.
@@ -485,7 +493,9 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 		}
 		// Nothing was recorded or submitted, so the channel account can be released now instead of at the lock's
 		// ledger bound; the transaction keeps its lock as the retry backoff.
-		tw.releaseChannelAccount(ctx, txJob)
+		if releaseErr := tw.releaseChannelAccount(ctx, txJob); releaseErr != nil {
+			log.Ctx(ctx).Warnf("releasing channel account %s after a preparation failure: %v", txJob.ChannelAccount.PublicKey, releaseErr)
+		}
 		return fmt.Errorf("preparing bundle for processing: %w", err)
 	}
 

@@ -9,6 +9,7 @@ ALTER TABLE submitter_transactions
 
 -- +migrate Down
 
+-- Fails once an envelope over 2,704 bytes or a duplicate xdr_received has been stored.
 ALTER TABLE submitter_transactions
     ADD CONSTRAINT submitter_transactions_xdr_sent_key UNIQUE (xdr_sent),
     ADD CONSTRAINT submitter_transactions_xdr_received_key UNIQUE (xdr_received);
