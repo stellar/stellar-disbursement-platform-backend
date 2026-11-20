@@ -168,8 +168,6 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	}
 
 	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
-		// update the receiver verification with the confirmation that the value was checked
-		rvu.Attempts = utils.IntPtr(receiverVerification.Attempts + 1)
 		rvu.FailedAt = &now
 		err = fmt.Errorf("%s value does not match for receiver with id %s", receiverRegistrationRequest.VerificationField, receiver.ID)
 		return &rvu, &InformationNotFoundError{cause: err}
@@ -353,9 +351,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		defer cancel()
 		switch {
 		case errors.Is(err, ErrOTPDoesNotMatch):
-			err = fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, v.incrementOTPAttempts(writeCtx, &receiverWallet))
+			err = fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, v.incrementOTPAttempts(writeCtx, receiverWallet.ID))
 		case failedVerification != nil:
-			if updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(writeCtx, *failedVerification, v.Models.DBConnectionPool); updateErr != nil {
+			if updateErr := v.Models.ReceiverVerification.IncrementAttempts(writeCtx, *failedVerification, v.Models.DBConnectionPool); updateErr != nil {
 				log.Ctx(ctx).Errorf("updating verification attempts for receiver with contact info %s: %v", truncatedContactInfo, updateErr)
 			}
 		}
@@ -399,18 +397,14 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 }
 
 // incrementOTPAttempts increments the OTP attempts counter and returns the appropriate error.
-func (v VerifyReceiverRegistrationHandler) incrementOTPAttempts(ctx context.Context, receiverWallet *data.ReceiverWallet) error {
-	receiverWallet.OTPAttempts++
-
-	err := v.Models.ReceiverWallet.Update(ctx, receiverWallet.ID, data.ReceiverWalletUpdate{
-		OTPAttempts: &receiverWallet.OTPAttempts,
-	}, v.Models.DBConnectionPool)
+func (v VerifyReceiverRegistrationHandler) incrementOTPAttempts(ctx context.Context, receiverWalletID string) error {
+	attempts, err := v.Models.ReceiverWallet.IncrementOTPAttempts(ctx, receiverWalletID, v.Models.DBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("updating receiver wallet OTP attempts: %w", err)
 	}
 
 	// Check if max attempts reached after increment
-	if receiverWallet.OTPAttempts >= OTPMaxAttempts {
+	if attempts >= OTPMaxAttempts {
 		return ErrOTPMaxAttemptsExceeded
 	}
 

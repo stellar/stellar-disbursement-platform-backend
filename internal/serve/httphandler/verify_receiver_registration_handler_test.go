@@ -351,7 +351,6 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				} else {
 					require.NotNil(t, failedAttempt)
 					assert.Equal(t, tc.receiver.ID, failedAttempt.ReceiverID)
-					assert.Equal(t, receiverVerificationInitial.Attempts+1, *failedAttempt.Attempts)
 					assert.NotNil(t, failedAttempt.FailedAt)
 					assert.Equal(t, message.MessageChannelSMS, failedAttempt.VerificationChannel)
 

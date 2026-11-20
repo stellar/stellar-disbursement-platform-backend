@@ -832,6 +832,20 @@ func (rw *ReceiverWalletModel) Update(ctx context.Context, id string, update Rec
 	return nil
 }
 
+// IncrementOTPAttempts adds one to otp_attempts in SQL, so concurrent failed attempts are all counted, and returns the new value.
+func (rw *ReceiverWalletModel) IncrementOTPAttempts(ctx context.Context, id string, sqlExec db.SQLExecuter) (int, error) {
+	var attempts int
+	err := sqlExec.GetContext(ctx, &attempts, `UPDATE receiver_wallets SET otp_attempts = otp_attempts + 1 WHERE id = $1 RETURNING otp_attempts`, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("no receiver wallet could be found in IncrementOTPAttempts: %w", ErrRecordNotFound)
+		}
+		return 0, fmt.Errorf("incrementing receiver wallet OTP attempts: %w", err)
+	}
+
+	return attempts, nil
+}
+
 var (
 	ErrWalletNotRegistered                   = errors.New("receiver wallet not registered")
 	ErrPaymentsInProgressForWallet           = errors.New("receiver wallet has payments in progress")
