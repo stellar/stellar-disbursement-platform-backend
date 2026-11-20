@@ -441,6 +441,40 @@ func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 	assert.Equal(t, message.MessageChannelSMS, *receiverVerificationUpdated.VerificationChannel)
 }
 
+func Test_ReceiverVerificationModel_IncrementAttempts(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		ReceiverID:        receiver.ID,
+		VerificationField: VerificationTypeDateOfBirth,
+		VerificationValue: "1990-01-01",
+	})
+
+	date := time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC)
+	update := ReceiverVerificationUpdate{
+		ReceiverID:          receiver.ID,
+		VerificationField:   VerificationTypeDateOfBirth,
+		FailedAt:            &date,
+		VerificationChannel: message.MessageChannelSMS,
+	}
+	model := ReceiverVerificationModel{}
+	require.NoError(t, model.IncrementAttempts(ctx, update, dbConnectionPool))
+	require.NoError(t, model.IncrementAttempts(ctx, update, dbConnectionPool))
+
+	var got ReceiverVerification
+	err = dbConnectionPool.GetContext(ctx, &got, "SELECT attempts, failed_at, verification_channel FROM receiver_verifications WHERE receiver_id = $1 AND verification_field = $2", receiver.ID, VerificationTypeDateOfBirth)
+	require.NoError(t, err)
+	assert.Equal(t, 2, got.Attempts)
+	assert.Equal(t, &date, got.FailedAt)
+	assert.Equal(t, message.MessageChannelSMS, *got.VerificationChannel)
+}
+
 func Test_ReceiverVerificationUpdate_Validate(t *testing.T) {
 	tests := []struct {
 		name    string

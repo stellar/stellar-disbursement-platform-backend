@@ -333,9 +333,11 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				receiverVerificationInitial = receiverVerifications[0]
 			}
 
-			err = handler.processReceiverVerificationPII(ctx, dbTx, tc.receiver, tc.registrationRequest)
+			failedAttempt, err := handler.processReceiverVerificationPII(ctx, dbTx, tc.receiver, tc.registrationRequest)
 
 			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+				assert.Nil(t, failedAttempt)
 				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationField)
 				require.NoError(t, err)
 				require.Len(t, receiverVerifications, 1)
@@ -344,12 +346,19 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				assert.Equal(t, receiverVerificationInitial.Attempts, receiverVerification.Attempts, "attempts should not have been incremented")
 			} else {
 				require.ErrorContains(t, err, tc.wantErrContains)
-				if tc.shouldAssertAttemptsCount {
+				if !tc.shouldAssertAttemptsCount {
+					assert.Nil(t, failedAttempt)
+				} else {
+					require.NotNil(t, failedAttempt)
+					assert.Equal(t, tc.receiver.ID, failedAttempt.ReceiverID)
+					assert.NotNil(t, failedAttempt.FailedAt)
+					assert.Equal(t, message.MessageChannelSMS, failedAttempt.VerificationChannel)
+
 					receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationField)
 					require.NoError(t, err)
 					require.Len(t, receiverVerifications, 1)
 					receiverVerification := receiverVerifications[0]
-					assert.Equal(t, receiverVerificationInitial.Attempts+1, receiverVerification.Attempts, "attempts should have been incremented")
+					assert.Equal(t, receiverVerificationInitial.Attempts, receiverVerification.Attempts, "the helper must not write the attempts itself")
 				}
 			}
 		})
@@ -534,6 +543,11 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 					assert.ErrorContains(t, err, wantErrContain)
 				}
 				require.False(t, wasAlreadyRegistered)
+				if receiverWallet != nil {
+					var otpAttempts int
+					require.NoError(t, dbTx.GetContext(ctx, &otpAttempts, "SELECT otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID))
+					assert.Equal(t, 0, otpAttempts, "the helper must not write the OTP attempts itself")
+				}
 			}
 		})
 	}
@@ -1185,6 +1199,62 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.Equal(t, 1, otpAttempts)
 	})
 
+	t.Run("returns OTP max attempts exceeded error when the wrong OTP uses the last attempt", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "token").
+			Return(true, nil).
+			Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			NetworkPassphrase:  network.TestNetworkPassphrase,
+		}
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationTypeDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		// Set OTP to a different value than in request, with one attempt left
+		_, err := dbConnectionPool.ExecContext(ctx,
+			"UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = $2 WHERE id = $3",
+			"622141", OTPMaxAttempts-1, receiverWallet.ID) // Different from "123456" in reqBody
+		require.NoError(t, err)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := `{"error": "Maximum OTP verification attempts exceeded. Please request a new OTP.", "error_code": "400_4"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// Verify the last attempt was counted
+		var otpAttempts int
+		err = dbConnectionPool.GetContext(ctx, &otpAttempts, "SELECT otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Equal(t, OTPMaxAttempts, otpAttempts)
+	})
+
 	t.Run("🎉 successfully register receiver's stellar address", func(t *testing.T) {
 		_, ctx = tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 		// update database with the entries needed
@@ -1283,6 +1353,89 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
 		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
 	})
+}
+
+// With a single-connection pool, a failed-attempt counter written while the transaction is open can never get a
+// connection. The counters must be written after the transaction.
+func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_recordsFailedAttemptsWithoutASecondConnection(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPoolWithConfig(dbt.DSN, db.DBPoolConfig{MaxOpenConns: 1, MaxIdleConns: 1})
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	claims := &sepauth.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+	handler := VerifyReceiverRegistrationHandler{
+		Models:            models,
+		ReCAPTCHADisabled: true,
+		NetworkPassphrase: network.PublicNetworkPassphrase,
+	}
+
+	testCases := []struct {
+		name            string
+		storedOTP       string
+		wantErrorCode   string
+		wantAttempts    int
+		wantOTPAttempts int
+	}{
+		{name: "wrong verification value", storedOTP: "123456", wantErrorCode: "400_2", wantAttempts: 1},
+		{name: "wrong OTP", storedOTP: "622141", wantErrorCode: "400_6", wantOTPAttempts: 1},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() {
+				data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+				data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			})
+			receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
+			_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+				ReceiverID:        receiver.ID,
+				VerificationField: data.VerificationTypeDateOfBirth,
+				VerificationValue: "1990-01-01",
+			})
+			receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+			_, err := dbConnectionPool.ExecContext(ctx, "UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = 0 WHERE id = $2", tc.storedOTP, receiverWallet.ID)
+			require.NoError(t, err)
+
+			reqBody, err := json.Marshal(data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiver.PhoneNumber,
+				OTP:               "123456",
+				VerificationValue: "1990-11-11", // Different from the stored 1990-01-01
+				VerificationField: data.VerificationTypeDateOfBirth,
+			})
+			require.NoError(t, err)
+			reqCtx, cancel := context.WithTimeout(context.WithValue(ctx, sepauth.SEP24ClaimsContextKey, claims), 10*time.Second)
+			defer cancel()
+			req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			handler.VerifyReceiverRegistration(rr, req)
+
+			assert.Equal(t, http.StatusBadRequest, rr.Code)
+			assert.Contains(t, rr.Body.String(), `"`+tc.wantErrorCode+`"`)
+
+			var rv data.ReceiverVerification
+			require.NoError(t, dbConnectionPool.GetContext(ctx, &rv, "SELECT attempts, failed_at FROM receiver_verifications WHERE receiver_id = $1", receiver.ID))
+			var rw data.ReceiverWallet
+			require.NoError(t, dbConnectionPool.GetContext(ctx, &rw, "SELECT status, otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID))
+			assert.Equal(t, tc.wantAttempts, rv.Attempts)
+			assert.Equal(t, tc.wantAttempts > 0, rv.FailedAt != nil)
+			assert.Equal(t, tc.wantOTPAttempts, rw.OTPAttempts)
+			assert.Equal(t, data.ReadyReceiversWalletStatus, rw.Status, "the registration was rolled back")
+		})
+	}
 }
 
 func Test_verifyReceiverWalletOTP(t *testing.T) {
