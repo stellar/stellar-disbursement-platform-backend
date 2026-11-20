@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func (m *mockTwilioSendGridClient) Send(email *mail.SGMailV3) (*rest.Response, error) {
-	args := m.Called(email)
+func (m *mockTwilioSendGridClient) SendWithContext(ctx context.Context, email *mail.SGMailV3) (*rest.Response, error) {
+	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -68,7 +68,7 @@ func Test_TwilioSendGridClient_SendMessage_errorIsHandledCorrectly(t *testing.T)
 	mSendGrid := newMockTwilioSendGridClient(t)
 
 	// MatchBy is used to match the email that is being sent
-	mSendGrid.On("Send", mock.MatchedBy(func(email *mail.SGMailV3) bool {
+	mSendGrid.On("SendWithContext", mock.Anything, mock.MatchedBy(func(email *mail.SGMailV3) bool {
 		// Verify the email content matches what we expect
 		return email.From.Address == "sender@stellar.org" &&
 			email.Subject == message.Title &&
@@ -91,7 +91,7 @@ func Test_TwilioSendGridClient_SendMessage_handlesAPIError(t *testing.T) {
 
 	mSendGrid := newMockTwilioSendGridClient(t)
 
-	mSendGrid.On("Send", mock.MatchedBy(func(email *mail.SGMailV3) bool {
+	mSendGrid.On("SendWithContext", mock.Anything, mock.MatchedBy(func(email *mail.SGMailV3) bool {
 		return email.From.Address == "sender@stellar.org" &&
 			email.Subject == message.Title
 	})).Return(&rest.Response{
@@ -110,6 +110,8 @@ func Test_TwilioSendGridClient_SendMessage_handlesAPIError(t *testing.T) {
 
 func Test_TwilioSendGrid_SendMessage_success(t *testing.T) {
 	message := Message{ToEmail: "foo@stellar.org", Title: "test title", Body: "foo bar"}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	mSendGrid := newMockTwilioSendGridClient(t)
 
@@ -118,7 +120,7 @@ func Test_TwilioSendGrid_SendMessage_success(t *testing.T) {
 		Body:       "Accepted",
 	}
 
-	mSendGrid.On("Send", mock.MatchedBy(func(email *mail.SGMailV3) bool {
+	mSendGrid.On("SendWithContext", mock.MatchedBy(func(c context.Context) bool { return c == ctx }), mock.MatchedBy(func(email *mail.SGMailV3) bool {
 		// Verify plain text was converted to HTML
 		expectedHTML := `
 <!DOCTYPE html>
@@ -151,7 +153,7 @@ foo bar
 		senderAddress: "sender@stellar.org",
 	}
 
-	err := client.SendMessage(context.Background(), message)
+	err := client.SendMessage(ctx, message)
 	assert.NoError(t, err)
 }
 
@@ -167,7 +169,7 @@ func Test_TwilioSendGrid_SendMessage_withHTMLContent(t *testing.T) {
 		Body:       "Accepted",
 	}
 
-	mSendGrid.On("Send", mock.MatchedBy(func(email *mail.SGMailV3) bool {
+	mSendGrid.On("SendWithContext", mock.Anything, mock.MatchedBy(func(email *mail.SGMailV3) bool {
 		gotContent := email.Content[0].Value
 		gotContent = strings.TrimSpace(gotContent)
 
