@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"time"
 
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
@@ -114,10 +115,14 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		httperror.InternalError(ctx, "Failed to reset password", fmt.Errorf("resetting password: %w", err), nil).Render(w)
 		return
 	default:
-		sendErr := h.SendForgotPasswordMessage(ctx, *tnt.SDPUIBaseURL, storedEmail, resetToken)
+		sendCtx, cancelSend := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+		defer cancelSend()
+		sendErr := h.SendForgotPasswordMessage(sendCtx, *tnt.SDPUIBaseURL, storedEmail, resetToken)
 		if sendErr != nil {
+			cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancelCleanup()
 			// Revoke the undelivered token so the user is not locked out by the cooldown on retry.
-			if invErr := h.AuthManager.InvalidateResetToken(ctx, resetToken); invErr != nil {
+			if invErr := h.AuthManager.InvalidateResetToken(cleanupCtx, resetToken); invErr != nil {
 				log.Ctx(ctx).Errorf("invalidating reset token after a failed send: %v", invErr)
 			}
 			httperror.InternalError(ctx, "Failed to reset password", fmt.Errorf("sending forgot password message: %w", sendErr), nil).Render(w)

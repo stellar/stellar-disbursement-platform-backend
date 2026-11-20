@@ -398,7 +398,14 @@ func Test_ForgotPasswordHandler_ServeHTTP_concurrentRequestsDoNotExhaustThePool(
 	user := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypter, false)
 
 	messengerClientMock := message.NewMessengerClientMock(t)
-	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).Return(nil)
+	sending := make(chan struct{}, 30)
+	releaseSend := make(chan struct{})
+	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).
+		Run(func(mock.Arguments) {
+			sending <- struct{}{}
+			<-releaseSend
+		}).
+		Return(nil)
 
 	uiBaseURL := "https://sdp.com"
 	tnt := schema.Tenant{SDPUIBaseURL: &uiBaseURL}
@@ -427,11 +434,17 @@ func Test_ForgotPasswordHandler_ServeHTTP_concurrentRequestsDoNotExhaustThePool(
 	}
 	close(start)
 
-	// An unrelated query through the same pool must get a connection while the burst runs.
+	// An unrelated query through the same pool must get a connection while the email is being sent.
+	select {
+	case <-sending:
+	case <-time.After(20 * time.Second):
+		t.Fatal("no forgot-password request reached the email send")
+	}
 	victimCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var one int
 	require.NoError(t, dbConnectionPool.GetContext(victimCtx, &one, "SELECT 1"))
+	close(releaseSend)
 
 	done := make(chan struct{})
 	go func() {
@@ -448,9 +461,9 @@ func Test_ForgotPasswordHandler_ServeHTTP_concurrentRequestsDoNotExhaustThePool(
 		assert.Equalf(t, http.StatusOK, code, "request %d", i)
 	}
 
-	var validTokens int
-	require.NoError(t, dbConnectionPool.GetContext(ctx, &validTokens, "SELECT count(*) FROM auth_user_password_reset WHERE auth_user_id = $1 AND is_valid = true", user.ID))
-	assert.Equal(t, 1, validTokens)
+	var tokens int
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &tokens, "SELECT count(*) FROM auth_user_password_reset WHERE auth_user_id = $1", user.ID))
+	assert.Equal(t, 1, tokens)
 	messengerClientMock.AssertNumberOfCalls(t, "SendMessage", 1)
 
 	sqlDB, err := dbConnectionPool.SqlDB(ctx)
