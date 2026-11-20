@@ -28,6 +28,7 @@ import (
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -246,6 +247,8 @@ func Test_PaymentHandler_BuildInnerTransaction(t *testing.T) {
 			if tc.wantErrorContains != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.wantErrorContains)
+				var validationErr *utils.ValidationError
+				assert.ErrorAs(t, err, &validationErr, "deterministic rejection must be terminal")
 				assert.Nil(t, gotInnerTx)
 			} else {
 				require.NoError(t, err)

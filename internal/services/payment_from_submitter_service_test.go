@@ -205,6 +205,20 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		require.ErrorContainsf(t, err, "stellar transaction id is required", "error: %s", err.Error())
 	})
 
+	t.Run("syncs an ERROR transaction without a hash as FAILED", func(t *testing.T) {
+		prepareTxsForSync(t, testCtx, transactions)
+		q := `UPDATE submitter_transactions SET stellar_transaction_hash = NULL, status = 'ERROR', status_message = 'rejected before submission' WHERE id = $1`
+		_, err := dbConnectionPool.ExecContext(ctx, q, transactions[0].ID)
+		require.NoError(t, err)
+
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID)
+		require.NoError(t, err)
+
+		payment, err := testCtx.sdpModel.Payment.Get(ctx, transactions[0].ExternalID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, data.FailedPaymentStatus, payment.Status)
+	})
+
 	t.Run("payment is not pending", func(t *testing.T) {
 		prepareTxsForSync(t, testCtx, transactions)
 		updatePaymentStatus(t, testCtx, payment1.ID, data.SuccessPaymentStatus)

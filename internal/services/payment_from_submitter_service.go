@@ -65,8 +65,8 @@ func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDB
 
 	// 1. Validate all transactions
 	for _, transaction := range transactions {
-		if !transaction.StellarTransactionHash.Valid {
-			return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
+		if transaction.Status == txSubStore.TransactionStatusSuccess && !transaction.StellarTransactionHash.Valid {
+			return fmt.Errorf("expected successful transaction %s to have a stellar transaction hash", transaction.ID)
 		}
 		if transaction.Status != txSubStore.TransactionStatusSuccess && transaction.Status != txSubStore.TransactionStatusError {
 			return fmt.Errorf("transaction id %s is in an unexpected status %s", transaction.ID, transaction.Status)
