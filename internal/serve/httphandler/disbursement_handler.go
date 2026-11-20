@@ -213,6 +213,8 @@ func (d DisbursementHandler) createNewDisbursement(ctx context.Context, httpReq 
 	if err != nil {
 		if errors.Is(err, data.ErrRecordAlreadyExists) {
 			return nil, httperror.Conflict("disbursement already exists", err, nil)
+		} else if db.IsLockTimeout(err) {
+			return nil, httperror.LockTimeout(ctx, err)
 		} else {
 			return nil, httperror.BadRequest("could not create disbursement", err, nil)
 		}

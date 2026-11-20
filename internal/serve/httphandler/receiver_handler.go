@@ -311,6 +311,11 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 			return
 		}
 
+		if db.IsLockTimeout(err) {
+			httperror.LockTimeout(ctx, err).Render(rw)
+			return
+		}
+
 		httperror.InternalError(ctx, "Error creating receiver", err, nil).Render(rw)
 		return
 	}

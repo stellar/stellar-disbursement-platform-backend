@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go-stellar-sdk/support/http/httpdecode"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -198,6 +199,10 @@ func (h *WalletsHandler) DeleteWallet(rw http.ResponseWriter, req *http.Request)
 			httperror.BadRequest("wallet has pending registrations and cannot be deleted", err, nil).Render(rw)
 			return
 		}
+		if db.IsLockTimeout(err) {
+			httperror.LockTimeout(ctx, err).Render(rw)
+			return
+		}
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
@@ -275,6 +280,8 @@ func (h *WalletsHandler) handleWalletError(ctx context.Context, rw http.Response
 		httperror.Conflict(data.ErrWalletHomepageAlreadyExists.Error(), err, nil).Render(rw)
 	case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
 		httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
+	case db.IsLockTimeout(err):
+		httperror.LockTimeout(ctx, err).Render(rw)
 	default:
 		httperror.InternalError(ctx, defaultMsg, err, nil).Render(rw)
 	}

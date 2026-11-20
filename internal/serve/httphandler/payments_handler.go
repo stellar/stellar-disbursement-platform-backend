@@ -412,6 +412,8 @@ func (p PaymentsHandler) PostDirectPayment(w http.ResponseWriter, r *http.Reques
 		case errors.As(err, &accErr):
 			errorMsg := fmt.Sprintf("%s. Please ensure your distribution account exists and is funded on the Stellar network.", accErr.Error())
 			httperror.BadRequest(errorMsg, err, nil).Render(w)
+		case db.IsLockTimeout(err):
+			httperror.LockTimeout(ctx, err).Render(w)
 		default:
 			httperror.InternalError(ctx, "creating payment", err, nil).Render(w)
 		}
