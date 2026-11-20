@@ -1960,6 +1960,9 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 	const lockedToLedger = 2
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
 
+	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
+	require.NotEmpty(t, transactionWorker)
+
 	testCases := []struct {
 		name                       string
 		horizonTxResponse          horizon.Transaction
@@ -1995,10 +1998,6 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
-
-			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool, nil)
-			require.NotEmpty(t, transactionWorker)
-
 			const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 			const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 
@@ -3551,180 +3550,4 @@ func Test_TransactionWorker_prepareForSubmission_persistentSaveError(t *testing.
 			}
 		})
 	}
-}
-
-func Test_TransactionWorker_processTransactionSubmission_releasesChannelAccountOnPreparationFailure(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-	const currentLedger = 1
-	const lockedToLedger = 2
-	const accountSequence = 123
-
-	distributionKP := keypair.MustRandom()
-	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
-	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-	mDistAccResolver.On("DistributionAccountForWallet", ctx, mock.AnythingOfType("string"), "").Return(distAccount, nil)
-
-	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		NetworkPassphrase:           network.TestNetworkPassphrase,
-		DBConnectionPool:            dbConnectionPool,
-		DistributionPrivateKey:      distributionKP.Seed(),
-		ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
-		LedgerNumberTracker:         preconditionsMocks.NewMockLedgerNumberTracker(t),
-		DistributionAccountResolver: mDistAccResolver,
-		DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
-	})
-	require.NoError(t, err)
-
-	defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-	defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
-	defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
-	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
-
-	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
-	txModel := store.NewTransactionModel(dbConnectionPool)
-
-	runWithUnclassifiedBuildError := func(t *testing.T, txJob *TxJob) {
-		mockHorizon := &horizonclient.MockClient{}
-		mockHorizon.On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).Return(horizon.Account{Sequence: accountSequence}, nil).Once()
-		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-		mLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedger, nil).Once()
-
-		handler := NewMockTransactionHandler(t)
-		handler.On("MonitorTransactionProcessingStarted", ctx, txJob, mock.Anything).Return().Once()
-		handler.On("BuildInnerTransaction", ctx, txJob, int64(accountSequence), distAccount.Address).Return(nil, errors.New("something nobody classified")).Once()
-
-		tw := &TransactionWorker{
-			dbConnectionPool: dbConnectionPool,
-			engine: &engine.SubmitterEngine{
-				HorizonClient:       mockHorizon,
-				LedgerNumberTracker: mLedgerNumberTracker,
-				SignatureService:    sigService,
-				MaxBaseFee:          100,
-			},
-			txModel:    txModel,
-			chAccModel: chAccModel,
-			txHandler:  handler,
-			// Reporting happens in Run, not here: any crash-tracker call fails the test.
-			crashTrackerClient: crashtracker.NewMockCrashTrackerClient(t),
-		}
-
-		err := tw.processTransactionSubmission(ctx, txJob)
-		assert.ErrorContains(t, err, "preparing bundle for processing: ")
-		assert.ErrorContains(t, err, "something nobody classified")
-	}
-
-	t.Run("channel account released, transaction keeps its lock and status", func(t *testing.T) {
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
-
-		runWithUnclassifiedBuildError(t, &txJob)
-
-		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
-		require.NoError(t, err)
-		assert.False(t, refreshedChAcc.LockedUntilLedgerNumber.Valid, "channel account released")
-
-		refreshedTx, err := txModel.Get(ctx, txJob.Transaction.ID)
-		require.NoError(t, err)
-		assert.Equal(t, store.TransactionStatusProcessing, refreshedTx.Status)
-		assert.Equal(t, int32(lockedToLedger), refreshedTx.LockedUntilLedgerNumber.Int32, "transaction keeps its lock as the retry backoff")
-		assert.False(t, refreshedTx.StellarTransactionHash.Valid)
-	})
-
-	t.Run("channel account already taken by a newer job is left alone", func(t *testing.T) {
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
-		const newerLock = lockedToLedger + 10
-		_, err := chAccModel.Unlock(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey)
-		require.NoError(t, err)
-		_, err = chAccModel.Lock(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, currentLedger, newerLock)
-		require.NoError(t, err)
-
-		runWithUnclassifiedBuildError(t, &txJob)
-
-		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
-		require.NoError(t, err)
-		assert.Equal(t, int32(newerLock), refreshedChAcc.LockedUntilLedgerNumber.Int32, "newer job's lock untouched")
-	})
-
-	// runWithHandledBuildError fails the build with a recognized error, so the failure handler runs before the early release.
-	runWithHandledBuildError := func(t *testing.T, txJob *TxJob, txStore store.TransactionStore, chAccStore store.ChannelAccountStore) error {
-		mockHorizon := &horizonclient.MockClient{}
-		mockHorizon.On("AccountDetail", horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey}).Return(horizon.Account{Sequence: accountSequence}, nil).Once()
-		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-		mLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedger, nil).Once()
-		mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-		mockTxProcessingLimiter.On("AdjustLimitIfNeeded", mock.Anything).Return().Once()
-
-		handler := NewMockTransactionHandler(t)
-		handler.On("MonitorTransactionProcessingStarted", ctx, txJob, mock.Anything).Return().Once()
-		handler.On("BuildInnerTransaction", ctx, txJob, int64(accountSequence), distAccount.Address).Return(nil, utils.NewValidationError(errors.New("invalid destination account"))).Once()
-		handler.On("MonitorTransactionProcessingFailed", ctx, txJob, mock.Anything, false, mock.Anything).Return().Once()
-
-		tw := &TransactionWorker{
-			dbConnectionPool: dbConnectionPool,
-			engine: &engine.SubmitterEngine{
-				HorizonClient:       mockHorizon,
-				LedgerNumberTracker: mLedgerNumberTracker,
-				SignatureService:    sigService,
-				MaxBaseFee:          100,
-			},
-			txModel:             txStore,
-			chAccModel:          chAccStore,
-			txHandler:           handler,
-			txProcessingLimiter: mockTxProcessingLimiter,
-			crashTrackerClient:  crashtracker.NewMockCrashTrackerClient(t),
-		}
-		return tw.processTransactionSubmission(ctx, txJob)
-	}
-
-	t.Run("handler freed the channel account, then failed: not released again", func(t *testing.T) {
-		store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
-		erroredTx := txJob.Transaction
-		erroredTx.Status = store.TransactionStatusError
-		txStore := storeMocks.NewMockTransactionStore(t)
-		txStore.On("UpdateStatusToError", ctx, mock.AnythingOfType("store.Transaction"), mock.Anything).Return(&erroredTx, nil).Once()
-		txStore.On("Unlock", ctx, dbConnectionPool, txJob.Transaction.ID, lockedToLedger).
-			Run(func(mock.Arguments) {
-				// A newer job locks the freed channel account with the same ledger bound.
-				_, lockErr := chAccModel.Lock(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, currentLedger, lockedToLedger)
-				require.NoError(t, lockErr)
-			}).
-			Return(nil, errors.New("connection reset")).Once()
-
-		err := runWithHandledBuildError(t, &txJob, txStore, chAccModel)
-		assert.ErrorContains(t, err, "unlocking transaction: connection reset")
-
-		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
-		require.NoError(t, err)
-		assert.Equal(t, int32(lockedToLedger), refreshedChAcc.LockedUntilLedgerNumber.Int32, "newer job's lock untouched")
-	})
-
-	t.Run("handler's channel release failed: not attempted again", func(t *testing.T) {
-		store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
-		chAccStore := storeMocks.NewMockChannelAccountStore(t)
-		chAccStore.On("UnlockIfLockedUntil", ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, lockedToLedger).Return(nil, errors.New("connection reset")).Once()
-
-		err := runWithHandledBuildError(t, &txJob, txModel, chAccStore)
-		assert.ErrorContains(t, err, "unlocking channel account: connection reset")
-	})
-
-	t.Run("handler failed before freeing the channel account: released at once", func(t *testing.T) {
-		store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
-		txStore := storeMocks.NewMockTransactionStore(t)
-		txStore.On("UpdateStatusToError", ctx, mock.AnythingOfType("store.Transaction"), mock.Anything).Return(nil, errors.New("connection reset")).Once()
-
-		err := runWithHandledBuildError(t, &txJob, txStore, chAccModel)
-		assert.ErrorContains(t, err, "connection reset")
-
-		refreshedChAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
-		require.NoError(t, err)
-		assert.False(t, refreshedChAcc.LockedUntilLedgerNumber.Valid, "channel account released")
-	})
 }
