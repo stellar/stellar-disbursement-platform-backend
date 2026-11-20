@@ -308,7 +308,8 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	truncatedContactInfo := utils.TruncateString(contactInfo, 3)
 
 	// Failed-attempt counters are written after the transaction, so they survive its rollback without a second pool
-	// connection being held while the receiver wallet row is locked.
+	// connection being held while the receiver wallet row is locked, and without cancellation, so a client that
+	// disconnects can't skip them.
 	var receiverWallet data.ReceiverWallet
 	var failedVerification *data.ReceiverVerificationUpdate
 	err := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
@@ -347,13 +348,11 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		return nil
 	})
 	if err != nil {
-		writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), db.DefaultLockTimeout)
-		defer cancel()
 		switch {
 		case errors.Is(err, ErrOTPDoesNotMatch):
-			err = fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, v.incrementOTPAttempts(writeCtx, receiverWallet.ID))
+			err = fmt.Errorf("processing OTP for receiver with contact info %s: %w", truncatedContactInfo, v.incrementOTPAttempts(context.WithoutCancel(ctx), receiverWallet.ID))
 		case failedVerification != nil:
-			if updateErr := v.Models.ReceiverVerification.IncrementAttempts(writeCtx, *failedVerification, v.Models.DBConnectionPool); updateErr != nil {
+			if updateErr := v.Models.ReceiverVerification.IncrementAttempts(context.WithoutCancel(ctx), *failedVerification, v.Models.DBConnectionPool); updateErr != nil {
 				log.Ctx(ctx).Errorf("updating verification attempts for receiver with contact info %s: %v", truncatedContactInfo, updateErr)
 			}
 		}

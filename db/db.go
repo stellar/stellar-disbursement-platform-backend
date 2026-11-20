@@ -19,7 +19,6 @@ import (
 const (
 	DefaultConnMaxIdleTimeSeconds = 10
 	DefaultConnMaxLifetimeSeconds = 300
-	DefaultLockTimeout            = 10 * time.Second
 )
 
 // DBPoolConfig represents tunables for the sql.DB pool.
