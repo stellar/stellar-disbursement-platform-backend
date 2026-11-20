@@ -1255,69 +1255,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		assert.Equal(t, OTPMaxAttempts, otpAttempts)
 	})
 
-	t.Run("returns an error when the verification value does not match and records the attempt", func(t *testing.T) {
-		// mocks
-		reCAPTCHAValidator := validators.NewReCAPTCHAValidatorMock(t)
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "token").
-			Return(true, nil).
-			Once()
-
-		// create handler
-		handler := &VerifyReceiverRegistrationHandler{
-			Models:             models,
-			ReCAPTCHAValidator: reCAPTCHAValidator,
-			NetworkPassphrase:  network.TestNetworkPassphrase,
-		}
-
-		// update database with the entries needed
-		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
-		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationTypeDateOfBirth,
-			VerificationValue: "1990-12-12", // Different from "1990-01-01" in reqBody
-		})
-		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-		_, err := dbConnectionPool.ExecContext(ctx,
-			"UPDATE receiver_wallets SET otp = $1, otp_created_at = NOW(), otp_attempts = 0 WHERE id = $2",
-			"123456", receiverWallet.ID) // Same as in reqBody
-		require.NoError(t, err)
-
-		// setup router and execute request
-		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), sepauth.SEP24ClaimsContextKey, validClaims))
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		// execute and validate response
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s", "error_code": "400_2"}`, InformationNotFoundOnServer)
-		assert.JSONEq(t, wantBody, string(respBody))
-
-		// the failed attempt was recorded after the transaction rolled back
-		var attempts int
-		var failedAt *time.Time
-		err = dbConnectionPool.QueryRowxContext(ctx, "SELECT attempts, failed_at FROM receiver_verifications WHERE receiver_id = $1", receiver.ID).Scan(&attempts, &failedAt)
-		require.NoError(t, err)
-		assert.Equal(t, 1, attempts)
-		assert.NotNil(t, failedAt)
-
-		// the registration itself was rolled back
-		var rw data.ReceiverWallet
-		err = dbConnectionPool.GetContext(ctx, &rw, "SELECT status, otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
-		require.NoError(t, err)
-		assert.Equal(t, data.ReadyReceiversWalletStatus, rw.Status)
-		assert.Equal(t, 0, rw.OTPAttempts)
-	})
-
 	t.Run("🎉 successfully register receiver's stellar address", func(t *testing.T) {
 		_, ctx = tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 		// update database with the entries needed
@@ -1489,11 +1426,14 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration_recordsFa
 			assert.Equal(t, http.StatusBadRequest, rr.Code)
 			assert.Contains(t, rr.Body.String(), `"`+tc.wantErrorCode+`"`)
 
-			var attempts, otpAttempts int
-			require.NoError(t, dbConnectionPool.GetContext(ctx, &attempts, "SELECT attempts FROM receiver_verifications WHERE receiver_id = $1", receiver.ID))
-			require.NoError(t, dbConnectionPool.GetContext(ctx, &otpAttempts, "SELECT otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID))
-			assert.Equal(t, tc.wantAttempts, attempts)
-			assert.Equal(t, tc.wantOTPAttempts, otpAttempts)
+			var rv data.ReceiverVerification
+			require.NoError(t, dbConnectionPool.GetContext(ctx, &rv, "SELECT attempts, failed_at FROM receiver_verifications WHERE receiver_id = $1", receiver.ID))
+			var rw data.ReceiverWallet
+			require.NoError(t, dbConnectionPool.GetContext(ctx, &rw, "SELECT status, otp_attempts FROM receiver_wallets WHERE id = $1", receiverWallet.ID))
+			assert.Equal(t, tc.wantAttempts, rv.Attempts)
+			assert.Equal(t, tc.wantAttempts > 0, rv.FailedAt != nil)
+			assert.Equal(t, tc.wantOTPAttempts, rw.OTPAttempts)
+			assert.Equal(t, data.ReadyReceiversWalletStatus, rw.Status, "the registration was rolled back")
 		})
 	}
 }

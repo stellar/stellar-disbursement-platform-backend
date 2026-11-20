@@ -123,6 +123,7 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 // - there is no receiver verification entry for the given receiverID and verificationType
 // - the number of attempts to confirm the verification value has already exceeded the max value
 // - the payload verification value does not match the one saved in the database
+// On a mismatch it also returns the failed attempt, for the caller to record after the transaction.
 func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	ctx context.Context,
 	dbTx db.DBTransaction,
