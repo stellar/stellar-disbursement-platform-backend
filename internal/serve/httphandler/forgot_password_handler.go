@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"time"
 
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -102,29 +102,28 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// Step 4: Find the user by email and send the forgot password message
-	err = db.RunInTransaction(ctx, h.Models.DBConnectionPool, nil, func(tx db.DBTransaction) error {
-		resetToken, txErr := h.AuthManager.ForgotPassword(ctx, tx, forgotPasswordRequest.Email)
-		if txErr != nil {
-			return fmt.Errorf("resetting password: %w", txErr)
-		}
-
-		sendErr := h.SendForgotPasswordMessage(ctx, *tnt.SDPUIBaseURL, forgotPasswordRequest.Email, resetToken)
-		if sendErr != nil {
-			return fmt.Errorf("sending forgot password message: %w", sendErr)
-		}
-
-		return nil
-	})
-	if err != nil {
+	// Step 4: Find the user by email and send the forgot password message with no DB connection held
+	resetToken, storedEmail, err := h.AuthManager.ForgotPassword(ctx, forgotPasswordRequest.Email)
+	switch {
+	case errors.Is(err, auth.ErrUserNotFound):
 		// if we don't find the user by email, we just return an ok response
 		// to prevent malicious client from searching accounts in the system
-		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("in forgot password handler, email not found: %s", truncatedEmail)
-		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("in forgot password handler, a valid reset token already exists")
-		} else {
-			httperror.InternalError(ctx, "Failed to reset password", err, nil).Render(w)
+		log.Ctx(ctx).Errorf("in forgot password handler, email not found: %s", truncatedEmail)
+	case errors.Is(err, auth.ErrUserHasValidToken):
+		log.Ctx(ctx).Errorf("in forgot password handler, a valid reset token already exists")
+	case err != nil:
+		httperror.InternalError(ctx, "Failed to reset password", fmt.Errorf("resetting password: %w", err), nil).Render(w)
+		return
+	default:
+		sendCtx, cancelSend := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+		defer cancelSend()
+		sendErr := h.SendForgotPasswordMessage(sendCtx, *tnt.SDPUIBaseURL, storedEmail, resetToken)
+		if sendErr != nil {
+			// Revoke the undelivered token so the user is not locked out by the cooldown on retry.
+			if invErr := h.AuthManager.InvalidateResetToken(context.WithoutCancel(ctx), resetToken); invErr != nil {
+				log.Ctx(ctx).Errorf("invalidating reset token after a failed send: %v", invErr)
+			}
+			httperror.InternalError(ctx, "Failed to reset password", fmt.Errorf("sending forgot password message: %w", sendErr), nil).Render(w)
 			return
 		}
 	}
