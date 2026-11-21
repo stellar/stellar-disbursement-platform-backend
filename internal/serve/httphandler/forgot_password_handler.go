@@ -119,10 +119,8 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		defer cancelSend()
 		sendErr := h.SendForgotPasswordMessage(sendCtx, *tnt.SDPUIBaseURL, storedEmail, resetToken)
 		if sendErr != nil {
-			cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancelCleanup()
 			// Revoke the undelivered token so the user is not locked out by the cooldown on retry.
-			if invErr := h.AuthManager.InvalidateResetToken(cleanupCtx, resetToken); invErr != nil {
+			if invErr := h.AuthManager.InvalidateResetToken(context.WithoutCancel(ctx), resetToken); invErr != nil {
 				log.Ctx(ctx).Errorf("invalidating reset token after a failed send: %v", invErr)
 			}
 			httperror.InternalError(ctx, "Failed to reset password", fmt.Errorf("sending forgot password message: %w", sendErr), nil).Render(w)
