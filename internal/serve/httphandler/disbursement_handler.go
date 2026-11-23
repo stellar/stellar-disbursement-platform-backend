@@ -15,9 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dimchansky/utfbom"
 	"github.com/go-chi/chi/v5"
-	"github.com/gocarina/gocsv"
 	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
@@ -456,16 +454,21 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 	if err := validateCSVDimensions(buf.Bytes()); err != nil {
 		return httperror.BadRequest(err.Error(), err, nil)
 	}
+	if err := validateCSVEncoding(buf.Bytes()); err != nil {
+		return httperror.BadRequest(err.Error(), err, nil)
+	}
+	// One UTF-8 BOM (Excel's "CSV UTF-8") is stripped; the stored file keeps it.
+	content := bytes.TrimPrefix(buf.Bytes(), []byte("\xEF\xBB\xBF"))
 
 	skipVerification := disbursement.Wallet != nil && disbursement.Wallet.Embedded && disbursement.VerificationField == ""
-	if err := validateCSVHeaders(bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, skipVerification); err != nil {
+	if err := validateCSVHeaders(bytes.NewReader(content), disbursement.RegistrationContactType, skipVerification); err != nil {
 		errMsg := fmt.Sprintf("CSV columns are not valid for registration contact type %s: %s",
 			disbursement.RegistrationContactType,
 			err)
 		return httperror.BadRequest(errMsg, err, nil)
 	}
 
-	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.RegistrationContactType, disbursement.VerificationField)
+	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(content), disbursement.RegistrationContactType, disbursement.VerificationField)
 	if v != nil && v.HasErrors() {
 		return httperror.BadRequest("could not parse csv file", nil, v.Errors)
 	}
@@ -823,8 +826,8 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 	validator := validators.NewDisbursementInstructionsValidator(contactType, verificationField)
 	validator.MaxErrors = maxReportedCSVErrors
 
-	instructions := []*data.DisbursementInstruction{}
-	if err := gocsv.Unmarshal(reader, &instructions); err != nil {
+	instructions, err := readCSVInstructions(reader)
+	if err != nil {
 		log.Ctx(ctx).Errorf("error parsing csv file: %s", err.Error())
 		validator.Errors["file"] = "could not parse file"
 		return nil, validator
@@ -853,6 +856,43 @@ func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, contactType
 	return sanitizedInstructions, nil
 }
 
+// readCSVInstructions reads each row's known columns at the positions found by mapCSVColumns.
+func readCSVInstructions(reader io.Reader) ([]*data.DisbursementInstruction, error) {
+	records, err := csv.NewReader(reader).ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("reading csv: %w", err)
+	}
+	if len(records) == 0 {
+		return nil, errors.New("csv file is empty")
+	}
+
+	columns, err := mapCSVColumns(records[0])
+	if err != nil {
+		return nil, err
+	}
+	field := func(record []string, name string) string {
+		if i, ok := columns[name]; ok {
+			return record[i]
+		}
+		return ""
+	}
+
+	instructions := make([]*data.DisbursementInstruction, 0, len(records)-1)
+	for _, record := range records[1:] {
+		instructions = append(instructions, &data.DisbursementInstruction{
+			Phone:             field(record, phoneHeader),
+			Email:             field(record, emailHeader),
+			ID:                field(record, idHeader),
+			Amount:            field(record, amountHeader),
+			VerificationValue: field(record, verificationHeader),
+			ExternalPaymentID: field(record, paymentIDHeader),
+			WalletAddress:     field(record, walletAddressHeader),
+			WalletAddressMemo: field(record, walletAddressMemoHeader),
+		})
+	}
+	return instructions, nil
+}
+
 // validateCSVDimensions rejects CSVs with too many rows or columns before parsing, since parsing and validating
 // each field costs far more memory than its bytes in the file.
 func validateCSVDimensions(content []byte) error {
@@ -872,34 +912,58 @@ func validateCSVDimensions(content []byte) error {
 	return nil
 }
 
+// validateCSVEncoding rejects UTF-16/UTF-32 files and NUL bytes, which browsers read differently than this parser.
+func validateCSVEncoding(content []byte) error {
+	for _, bom := range [][]byte{{0xFF, 0xFE}, {0xFE, 0xFF}, {0x00, 0x00, 0xFE, 0xFF}} {
+		if bytes.HasPrefix(content, bom) {
+			return errors.New("the file must be UTF-8 encoded; UTF-16 and UTF-32 files are not supported")
+		}
+	}
+	if bytes.IndexByte(content, 0) >= 0 {
+		return errors.New("the file contains NUL bytes and is not a text CSV")
+	}
+	return nil
+}
+
+// Disbursement CSV column names, matched exactly after trimming spaces and tabs.
+const (
+	phoneHeader             = "phone"
+	emailHeader             = "email"
+	idHeader                = "id"
+	amountHeader            = "amount"
+	verificationHeader      = "verification"
+	paymentIDHeader         = "paymentID"
+	walletAddressHeader     = "walletAddress"
+	walletAddressMemoHeader = "walletAddressMemo"
+)
+
+// mapCSVColumns returns the index of each known column; a known column may appear only once.
+func mapCSVColumns(headers []string) (map[string]int, error) {
+	columns := make(map[string]int)
+	for i, header := range headers {
+		name := strings.Trim(header, " \t")
+		switch name {
+		case phoneHeader, emailHeader, idHeader, amountHeader, verificationHeader, paymentIDHeader,
+			walletAddressHeader, walletAddressMemoHeader:
+			if _, exists := columns[name]; exists {
+				return nil, fmt.Errorf("%s column appears more than once", name)
+			}
+			columns[name] = i
+		}
+	}
+	return columns, nil
+}
+
 // validateCSVHeaders validates the headers of the CSV file to make sure we're passing the correct columns.
 func validateCSVHeaders(file io.Reader, registrationContactType data.RegistrationContactType, skipVerification bool) error {
-	const (
-		phoneHeader             = "phone"
-		emailHeader             = "email"
-		walletAddressHeader     = "walletAddress"
-		walletAddressMemoHeader = "walletAddressMemo"
-		verificationHeader      = "verification"
-	)
-
-	headers, err := csv.NewReader(utfbom.SkipOnly(file)).Read()
+	headers, err := csv.NewReader(file).Read()
 	if err != nil {
 		return fmt.Errorf("reading csv headers: %w", err)
 	}
 
-	hasHeaders := map[string]bool{
-		phoneHeader:             false,
-		emailHeader:             false,
-		walletAddressHeader:     false,
-		walletAddressMemoHeader: false,
-		verificationHeader:      false,
-	}
-
-	// Populate header presence map
-	for _, header := range headers {
-		if _, exists := hasHeaders[header]; exists {
-			hasHeaders[header] = true
-		}
+	columns, err := mapCSVColumns(headers)
+	if err != nil {
+		return err
 	}
 
 	// establish the header rules. Each registration contact type has its own rules.
@@ -943,12 +1007,12 @@ func validateCSVHeaders(file io.Reader, registrationContactType data.Registratio
 
 	// Validate headers according to the rules
 	for _, req := range rule.required {
-		if !hasHeaders[req] {
+		if _, ok := columns[req]; !ok {
 			return fmt.Errorf("%s column is required", req)
 		}
 	}
 	for _, dis := range rule.disallowed {
-		if hasHeaders[dis] {
+		if _, ok := columns[dis]; ok {
 			return fmt.Errorf("%s column is not allowed for this registration contact type", dis)
 		}
 	}
