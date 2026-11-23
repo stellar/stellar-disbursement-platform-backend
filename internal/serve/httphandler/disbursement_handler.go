@@ -457,8 +457,11 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 	if err := validateCSVEncoding(buf.Bytes()); err != nil {
 		return httperror.BadRequest(err.Error(), err, nil)
 	}
-	// One UTF-8 BOM (Excel's "CSV UTF-8") is stripped; the stored file keeps it.
-	content := bytes.TrimPrefix(buf.Bytes(), []byte("\xEF\xBB\xBF"))
+	// Leading UTF-8 BOMs (Excel's "CSV UTF-8") are stripped; the stored file keeps them.
+	content := buf.Bytes()
+	for bytes.HasPrefix(content, []byte("\xEF\xBB\xBF")) {
+		content = content[3:]
+	}
 
 	skipVerification := disbursement.Wallet != nil && disbursement.Wallet.Embedded && disbursement.VerificationField == ""
 	if err := validateCSVHeaders(bytes.NewReader(content), disbursement.RegistrationContactType, skipVerification); err != nil {
