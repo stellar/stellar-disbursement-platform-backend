@@ -12,7 +12,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ses v1.42.7
 	github.com/aws/aws-sdk-go-v2/service/sns v1.47.8
 	github.com/dgraph-io/ristretto v0.2.0
-	github.com/dimchansky/utfbom v1.2.0
 	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/getsentry/sentry-go v0.50.0
 	github.com/go-chi/chi/v5 v5.5.0
