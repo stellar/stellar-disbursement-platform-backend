@@ -300,7 +300,7 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 	})
 
 	t.Run("every write role can change a receiver", func(t *testing.T) {
-		for _, role := range []data.UserRole{data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole} {
+		for _, role := range []data.UserRole{data.FinancialControllerUserRole, data.InitiatorUserRole} {
 			t.Run(string(role), func(t *testing.T) {
 				user := &auth.User{ID: "write-" + string(role), Email: string(role) + "@write.test", Roles: []string{string(role)}}
 				_, err := models.WalletMemberships.Insert(ctx, dbConnectionPool, user.ID, walletA.ID, role, nil)
@@ -330,34 +330,47 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 		}
 	})
 
-	t.Run("a business membership shows a receiver but cannot change it", func(t *testing.T) {
-		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "view-wallet", "https://v.com", "v.com", "v://")
-		rwA := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverA.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-		_, execErr := dbConnectionPool.ExecContext(ctx,
-			`UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1`, rwA.ID)
-		require.NoError(t, execErr)
-		before, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverA.ID)
-		require.NoError(t, getErr)
+	// Business is view-only; Approver approves disbursements but does not shape their targets. Either
+	// membership shows the account's receivers and changes none of them, whatever the global role.
+	for _, role := range []data.UserRole{data.BusinessUserRole, data.ApproverUserRole} {
+		t.Run(string(role)+" membership shows a receiver but cannot change it", func(t *testing.T) {
+			viewer := &auth.User{ID: "view-" + string(role), Email: string(role) + "@view.test", Roles: []string{string(data.FinancialControllerUserRole)}}
+			_, err := models.WalletMemberships.Insert(ctx, dbConnectionPool, viewer.ID, walletA.ID, role, nil)
+			require.NoError(t, err)
+			authManagerMock.On("GetUserByID", mock.Anything, viewer.ID).Return(viewer, nil).Maybe()
 
-		writes := map[string]struct{ path, body string }{
-			"contact":          {fmt.Sprintf("/receivers/%s", receiverA.ID), `{"email":"viewer@write.test"}`},
-			"stellar address":  {fmt.Sprintf("/receivers/%s/wallets/%s", receiverA.ID, rwA.ID), `{"stellar_address":"GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"}`},
-			"retry invitation": {fmt.Sprintf("/receivers/wallets/%s", rwA.ID), ""},
-			"wallet status":    {fmt.Sprintf("/receivers/wallets/%s/status", rwA.ID), `{"status":"READY"}`},
-		}
-		for name, write := range writes {
-			rr := patchAs(viewerA.ID, write.path, write.body)
-			assert.Equalf(t, http.StatusForbidden, rr.Code, "%s: %s", name, rr.Body.String())
-		}
+			wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, string(role)+"-view-wallet",
+				"https://"+string(role)+".view.test", string(role)+".view.test", string(role)+"-view://")
+			rwA := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverA.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+			_, execErr := dbConnectionPool.ExecContext(ctx,
+				`UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1`, rwA.ID)
+			require.NoError(t, execErr)
+			before, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverA.ID)
+			require.NoError(t, getErr)
 
-		after, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverA.ID)
-		require.NoError(t, getErr)
-		assert.Equal(t, before.Email, after.Email)
-		var invitationSentAt *time.Time
-		require.NoError(t, dbConnectionPool.GetContext(ctx, &invitationSentAt,
-			`SELECT invitation_sent_at FROM receiver_wallets WHERE id = $1`, rwA.ID))
-		assert.NotNil(t, invitationSentAt, "the invitation must not have been reset")
-	})
+			rr := createAs(viewer.ID, walletA.ID)
+			assert.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
+
+			writes := map[string]struct{ path, body string }{
+				"contact":          {fmt.Sprintf("/receivers/%s", receiverA.ID), `{"email":"viewer@write.test"}`},
+				"stellar address":  {fmt.Sprintf("/receivers/%s/wallets/%s", receiverA.ID, rwA.ID), `{"stellar_address":"GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37"}`},
+				"retry invitation": {fmt.Sprintf("/receivers/wallets/%s", rwA.ID), ""},
+				"wallet status":    {fmt.Sprintf("/receivers/wallets/%s/status", rwA.ID), `{"status":"READY"}`},
+			}
+			for name, write := range writes {
+				rr = patchAs(viewer.ID, write.path, write.body)
+				assert.Equalf(t, http.StatusForbidden, rr.Code, "%s: %s", name, rr.Body.String())
+			}
+
+			after, getErr := models.Receiver.Get(ctx, dbConnectionPool, receiverA.ID)
+			require.NoError(t, getErr)
+			assert.Equal(t, before.Email, after.Email)
+			var invitationSentAt *time.Time
+			require.NoError(t, dbConnectionPool.GetContext(ctx, &invitationSentAt,
+				`SELECT invitation_sent_at FROM receiver_wallets WHERE id = $1`, rwA.ID))
+			assert.NotNil(t, invitationSentAt, "the invitation must not have been reset")
+		})
+	}
 
 	// A receiver can belong to several accounts; any one where the caller holds a write role is enough,
 	// and one they can only see through a business membership answers 403, not 404.
@@ -384,6 +397,20 @@ func Test_ReceiverScoping_Writes(t *testing.T) {
 		rr = patchAs(shared.ID, fmt.Sprintf("/receivers/%s", receiverB.ID), `{"email":"shared@write.test"}`)
 		assert.Equal(t, http.StatusForbidden, rr.Code, rr.Body.String())
 	})
+}
+
+// Test_ReceiverWrites_RoleDeclarations pins the two role lists that together decide who may change
+// receivers: the route group in serve.go (global role) and the account check in each handler
+// (membership role). Approver is on neither; it keeps read access through GetBusinessOperationRoles.
+func Test_ReceiverWrites_RoleDeclarations(t *testing.T) {
+	routeRoles := parseRouteRoles(t, "../serve.go")
+	for _, handler := range []string{"CreateReceiver", "UpdateReceiver", "PatchReceiverWallet", "RetryInvitation", "PatchReceiverWalletStatus"} {
+		assert.ElementsMatchf(t, []data.UserRole{data.OwnerUserRole, data.FinancialControllerUserRole, data.InitiatorUserRole},
+			routeRoles[handler], "route roles for %s", handler)
+	}
+
+	gateRoles := parseWalletGateRoles(t, "receiver_handler.go")
+	assert.ElementsMatch(t, []data.UserRole{data.FinancialControllerUserRole, data.InitiatorUserRole}, gateRoles["CreateReceiver"])
 }
 
 // Test_ReceiverScoping_Stats pins the payment counters to the caller's accounts. The counters and
