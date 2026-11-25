@@ -26,12 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Fix embedded wallet passkey login for passkeys that are not backup-eligible. [#1266](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1266)
 - Bound embedded wallet passkey attestation cost. [#1267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1267)
 - Remove receiver write access from the Approver role. [#1269](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1269)
+- Disable keep-alive for webhook deliveries. [#1280](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1280)
 
 ### Security and Dependencies
 
 - Fence TSS job writes with the job's lock. [#1258](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1258)
 - Bind the SEP-24 interactive deposit token to the authenticated SEP-10/SEP-45 subject. [#1259](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1259)
-- Open a new connection for every webhook delivery. [#NNNN](https://github.com/stellar/stellar-disbursement-platform-backend/pull/NNNN)
 
 ## [7.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/7.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/7.0.0...7.1.0))
 
