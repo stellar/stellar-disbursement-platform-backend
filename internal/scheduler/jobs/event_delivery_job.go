@@ -90,8 +90,13 @@ func newWebhookHTTPClient(timeout time.Duration) *http.Client {
 	}
 
 	return &http.Client{
-		Timeout:   timeout,
-		Transport: &http.Transport{DialContext: safeDialContext},
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: safeDialContext,
+			// Open a new connection for every delivery instead of reusing pooled ones.
+			// If webhook volume grows, change to use one client per batch and close its idle connections afterwards.
+			DisableKeepAlives: true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return fmt.Errorf("webhook deliveries do not follow redirects (target: %s)", req.URL)
 		},

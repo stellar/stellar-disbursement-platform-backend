@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -321,6 +322,40 @@ func Test_EventDeliveryJob_SSRFGuard(t *testing.T) {
 	var attempts int
 	require.NoError(t, dbConnectionPool.GetContext(ctx, &attempts, `SELECT delivery_attempts FROM events ORDER BY created_at DESC LIMIT 1`))
 	assert.Equal(t, 1, attempts, "the blocked attempt must still count toward the poison cap")
+}
+
+// Test_EventDeliveryJob_deliverOpensNewConnection delivers through the production client using a test dialer.
+func Test_EventDeliveryJob_deliverOpensNewConnection(t *testing.T) {
+	newServer := func(received *atomic.Int32) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			received.Add(1)
+			// Reply with no body, so the connection is back in the pool before deliver returns.
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		t.Cleanup(server.Close)
+		return server
+	}
+	var receivedA, receivedB, dials atomic.Int32
+	var target atomic.Pointer[httptest.Server]
+	target.Store(newServer(&receivedA))
+
+	client := newWebhookHTTPClient(eventDeliveryHTTPTimeout)
+	client.Transport.(*http.Transport).DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		dials.Add(1)
+		return (&net.Dialer{}).DialContext(ctx, network, target.Load().Listener.Addr().String())
+	}
+	job := eventDeliveryJob{httpClient: client}
+	deliverEvent := func() {
+		require.NoError(t, job.deliver(context.Background(), "http://webhook.example.com/events", "secret", []byte(`{}`)))
+	}
+
+	deliverEvent()
+	target.Store(newServer(&receivedB))
+	deliverEvent()
+
+	assert.Equal(t, int32(2), dials.Load(), "every delivery must open a new connection")
+	assert.Equal(t, int32(1), receivedA.Load(), "the former server must not get deliveries after the move")
+	assert.Equal(t, int32(1), receivedB.Load())
 }
 
 // Test_EventDeliveryJob_retention proves the outbox stays bounded: delivered events past the

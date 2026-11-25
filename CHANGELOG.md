@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bound embedded wallet passkey attestation cost. [#1267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1267)
 - Remove receiver write access from the Approver role. [#1269](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1269)
 - Reject UTF-16/32 encoding and repeated columns in disbursement CSVs. [#1278](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1278)
+- Disable keep-alive for webhook deliveries. [#1280](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1280)
 
 ### Security and Dependencies
 
