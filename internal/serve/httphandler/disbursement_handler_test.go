@@ -1245,6 +1245,58 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
+			name:           "🟢 valid input with two BOMs",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"\xef\xbb\xbf\xef\xbb\xbf" + "phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           "🟢 valid input with repeated empty headers",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification", "", ""},
+				{"+380445555555", "123456789", "100.5", "1990-01-01", "", ""},
+			},
+			expectedStatus:  http.StatusOK,
+			expectedMessage: "File uploaded successfully",
+		},
+		{
+			name:           "🔴 UTF-16 file is rejected",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"\xff\xfe" + "phone", "id", "amount", "verification"},
+				{"+380445555555", "123456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file must be UTF-8 encoded; UTF-16 and UTF-32 files are not supported",
+		},
+		{
+			name:           "🔴 file with a NUL byte is rejected",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification"},
+				{"+380445555555", "123\x00456789", "100.5", "1990-01-01"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "the file contains NUL bytes and is not a text CSV",
+		},
+		{
+			name:           "🔴 columns invalid - amount column appears twice",
+			disbursementID: phoneDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "id", "amount", "verification", "amount "},
+				{"+380445555555", "123456789", "10", "1990-01-01", "4000"},
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedMessage: fmt.Sprintf(
+				"CSV columns are not valid for registration contact type %s: amount column appears more than once",
+				data.RegistrationContactTypePhone),
+		},
+		{
 			name:           "🔴 csv upload too large",
 			disbursementID: phoneDraftDisbursement.ID,
 			csvRecords: [][]string{
@@ -1510,6 +1562,44 @@ func Test_parseInstructionsFromCSV_capsReportedErrors(t *testing.T) {
 	assert.Contains(t, v.Errors["info"], fmt.Sprintf("showing first %d errors", maxReportedCSVErrors))
 }
 
+func Test_readCSVInstructions(t *testing.T) {
+	t.Run("reads known columns by name and ignores the rest", func(t *testing.T) {
+		content := "Notes,amount,id,email,walletAddress\nhello,100.5,r1,a@example.com,GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH\n"
+		instructions, err := readCSVInstructions(strings.NewReader(content))
+		require.NoError(t, err)
+		assert.Equal(t, []*data.DisbursementInstruction{{
+			Amount:        "100.5",
+			ID:            "r1",
+			Email:         "a@example.com",
+			WalletAddress: "GB3SAK22KSTIFQAV5GCDNPW7RTQCWGFDKALBY5KJ3JRF2DLSED3E7PVH",
+		}}, instructions)
+	})
+
+	t.Run("a zero-width copy of a known column is not read", func(t *testing.T) {
+		content := "phone,id,amount,\u200bamount,verification\n+14155550000,r1,10,4000,1990-01-01\n"
+		instructions, err := readCSVInstructions(strings.NewReader(content))
+		require.NoError(t, err)
+		require.Len(t, instructions, 1)
+		assert.Equal(t, "10", instructions[0].Amount)
+	})
+
+	testCases := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{name: "empty file", content: "", wantErr: "csv file is empty"},
+		{name: "known column twice", content: "amount,id,amount\n10,r1,4000\n", wantErr: "amount column appears more than once"},
+		{name: "row wider than the header", content: "amount,id\n10,r1,extra\n", wantErr: "wrong number of fields"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readCSVInstructions(strings.NewReader(tc.content))
+			assert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
 func Test_validateCSVDimensions(t *testing.T) {
 	const header = "phone,verification\n"
 	row := "+14155550000,1990-01-01\n"
@@ -1535,6 +1625,64 @@ func Test_validateCSVDimensions(t *testing.T) {
 			} else {
 				assert.EqualError(t, err, tc.wantErr)
 			}
+		})
+	}
+}
+
+func Test_validateCSVEncoding(t *testing.T) {
+	const notUTF8 = "the file must be UTF-8 encoded; UTF-16 and UTF-32 files are not supported"
+	testCases := []struct {
+		name    string
+		content string
+		wantErr string
+	}{
+		{name: "UTF-8", content: "phone,id\n+14155550000,1\n"},
+		{name: "UTF-8 with BOM", content: "\xEF\xBB\xBFphone,id\n+14155550000,1\n"},
+		{name: "empty", content: ""},
+		{name: "UTF-16LE BOM", content: "\xFF\xFEp\x00h\x00", wantErr: notUTF8},
+		{name: "UTF-16BE BOM", content: "\xFE\xFF\x00p\x00h", wantErr: notUTF8},
+		{name: "UTF-32LE BOM", content: "\xFF\xFE\x00\x00p\x00\x00\x00", wantErr: notUTF8},
+		{name: "UTF-32BE BOM", content: "\x00\x00\xFE\xFF\x00\x00\x00p", wantErr: notUTF8},
+		{name: "NUL byte", content: "phone,id\n+14155550000,1\x00\n", wantErr: "the file contains NUL bytes and is not a text CSV"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCSVEncoding([]byte(tc.content))
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func Test_mapCSVColumns(t *testing.T) {
+	testCases := []struct {
+		name    string
+		headers []string
+		want    map[string]int
+		wantErr string
+	}{
+		{name: "known columns by position, unknown ignored", headers: []string{"email", "Notes", "amount", "id"}, want: map[string]int{"email": 0, "amount": 2, "id": 3}},
+		{name: "spaces and tabs around a name are trimmed", headers: []string{" email ", "\tamount"}, want: map[string]int{"email": 0, "amount": 1}},
+		{name: "names are case-sensitive", headers: []string{"Amount", "EMAIL"}, want: map[string]int{}},
+		{name: "invisible characters are not trimmed", headers: []string{"amount\u00a0", "\u200bamount", "\ufeffemail"}, want: map[string]int{}},
+		{name: "unknown and empty headers may repeat", headers: []string{"Notes", "Notes", "", ""}, want: map[string]int{}},
+		{name: "known column twice", headers: []string{"amount", "id", "amount"}, wantErr: "amount column appears more than once"},
+		{name: "known column twice after trimming", headers: []string{"amount", "amount "}, wantErr: "amount column appears more than once"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			columns, err := mapCSVColumns(tc.headers)
+			if tc.wantErr != "" {
+				assert.EqualError(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, columns)
 		})
 	}
 }
@@ -1581,6 +1729,23 @@ func Test_validateCSVHeaders(t *testing.T) {
 			rct:                    data.RegistrationContactTypePhoneAndWalletAddress,
 			skipVerification:       false,
 			expectedErrorSubstring: "verification column is not allowed",
+		},
+		{
+			name:                   "email contact rejects a repeated email column",
+			headers:                []string{"email", "verification", "email"},
+			rct:                    data.RegistrationContactTypeEmail,
+			expectedErrorSubstring: "email column appears more than once",
+		},
+		{
+			name:    "required columns with surrounding spaces are accepted",
+			headers: []string{" email ", "\tverification"},
+			rct:     data.RegistrationContactTypeEmail,
+		},
+		{
+			name:                   "required column with a non-breaking space is not recognised",
+			headers:                []string{"email\u00a0", "verification"},
+			rct:                    data.RegistrationContactTypeEmail,
+			expectedErrorSubstring: "email column is required",
 		},
 	}
 
