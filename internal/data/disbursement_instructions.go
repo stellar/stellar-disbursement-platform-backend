@@ -63,6 +63,7 @@ func NewDisbursementInstructionModel(dbConnectionPool db.DBConnectionPool) *Disb
 var (
 	ErrReceiverVerificationMismatch  = errors.New("receiver verification mismatch")
 	ErrReceiverWalletAddressMismatch = errors.New("receiver wallet address mismatch")
+	ErrReceiverWalletMemoMismatch    = errors.New("receiver wallet memo mismatch")
 )
 
 type DisbursementInstructionsOpts struct {
@@ -167,7 +168,16 @@ func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Conte
 			return fmt.Errorf("%w: receiver wallet address mismatch for receiver with ID %s", ErrReceiverWalletAddressMismatch, receiver.ID)
 		}
 
+		_, memoType, err := schema.ParseMemo(instruction.WalletAddressMemo)
+		if err != nil {
+			return fmt.Errorf("parsing memo %s: %w", instruction.WalletAddressMemo, err)
+		}
+
 		if slices.Contains([]ReceiversWalletStatus{RegisteredReceiversWalletStatus, FlaggedReceiversWalletStatus}, receiverWallet.Status) {
+			// Type only counts with a memo
+			if receiverWallet.StellarMemo != instruction.WalletAddressMemo || (instruction.WalletAddressMemo != "" && receiverWallet.StellarMemoType != memoType) {
+				return fmt.Errorf("%w: receiver wallet memo mismatch for receiver with ID %s", ErrReceiverWalletMemoMismatch, receiver.ID)
+			}
 			log.Ctx(ctx).Infof("receiver wallet with ID %s is %s, skipping registration", receiverWallet.ID, receiverWallet.Status)
 			continue
 		}
@@ -177,10 +187,6 @@ func (di DisbursementInstructionModel) registerSuppliedWallets(ctx context.Conte
 			StellarAddress: instruction.WalletAddress,
 		}
 		if instruction.WalletAddressMemo != "" {
-			_, memoType, err := schema.ParseMemo(instruction.WalletAddressMemo)
-			if err != nil {
-				return fmt.Errorf("parsing memo %s: %w", instruction.WalletAddressMemo, err)
-			}
 			receiverWalletUpdate.StellarMemo = &instruction.WalletAddressMemo
 			receiverWalletUpdate.StellarMemoType = &memoType
 		}
