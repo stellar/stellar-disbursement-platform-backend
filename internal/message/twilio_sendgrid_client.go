@@ -15,10 +15,24 @@ import (
 )
 
 type twilioSendGridInterface interface {
-	Send(email *mail.SGMailV3) (*rest.Response, error)
+	SendWithContext(ctx context.Context, email *mail.SGMailV3) (*rest.Response, error)
 }
 
-var _ twilioSendGridInterface = (*sendgrid.Client)(nil)
+// sendGridSender creates a sendgrid.Client per email: the library stores each request body on the client, so a shared
+// client lets concurrent sends overwrite each other.
+type sendGridSender struct {
+	apiKey string
+}
+
+func (s sendGridSender) SendWithContext(ctx context.Context, email *mail.SGMailV3) (*rest.Response, error) {
+	response, err := sendgrid.NewSendClient(s.apiKey).SendWithContext(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("calling the SendGrid API: %w", err)
+	}
+	return response, nil
+}
+
+var _ twilioSendGridInterface = sendGridSender{}
 
 type twilioSendGridClient struct {
 	client        twilioSendGridInterface
@@ -29,7 +43,7 @@ func (t *twilioSendGridClient) MessengerType() MessengerType {
 	return MessengerTypeTwilioEmail
 }
 
-func (t *twilioSendGridClient) SendMessage(_ context.Context, message Message) error {
+func (t *twilioSendGridClient) SendMessage(ctx context.Context, message Message) error {
 	err := message.ValidateFor(t.MessengerType())
 	if err != nil {
 		return fmt.Errorf("validating message to send an email through SendGrid: %w", err)
@@ -51,7 +65,7 @@ func (t *twilioSendGridClient) SendMessage(_ context.Context, message Message) e
 
 	email := mail.NewSingleEmail(from, message.Title, to, "", emailBody)
 
-	response, err := t.client.Send(email)
+	response, err := t.client.SendWithContext(ctx, email)
 	if err != nil {
 		return fmt.Errorf("sending SendGrid email: %w", err)
 	}
@@ -78,7 +92,7 @@ func NewTwilioSendGridClient(apiKey string, senderAddress string) (MessengerClie
 	}
 
 	return &twilioSendGridClient{
-		client:        sendgrid.NewSendClient(apiKey),
+		client:        sendGridSender{apiKey: apiKey},
 		senderAddress: senderAddress,
 	}, nil
 }

@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -206,8 +208,8 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return(true, nil).
 					Once()
 				authManagerMock.
-					On("ForgotPassword", mock.Anything, mock.Anything, "foobar@test.com").
-					Return("", auth.ErrUserNotFound).
+					On("ForgotPassword", mock.Anything, "foobar@test.com").
+					Return("", "", auth.ErrUserNotFound).
 					Once()
 			},
 			wantStatusCode:   http.StatusOK,
@@ -223,8 +225,8 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return(true, nil).
 					Once()
 				authManagerMock.
-					On("ForgotPassword", mock.Anything, mock.Anything, "foobar@test.com").
-					Return("", auth.ErrUserHasValidToken).
+					On("ForgotPassword", mock.Anything, "foobar@test.com").
+					Return("", "", auth.ErrUserHasValidToken).
 					Once()
 			},
 			wantStatusCode:   http.StatusOK,
@@ -240,16 +242,68 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return(true, nil).
 					Once()
 				authManagerMock.
-					On("ForgotPassword", mock.Anything, mock.Anything, "foobar@test.com").
-					Return("resetToken", nil).
+					On("ForgotPassword", mock.Anything, "foobar@test.com").
+					Return("resetToken", "foobar@test.com", nil).
 					Once()
 				messengerClientMock.
 					On("SendMessage", mock.Anything, mock.Anything).
 					Return(errors.New("unexpected error")).
 					Once()
+				authManagerMock.
+					On("InvalidateResetToken", mock.Anything, "resetToken").
+					Return(nil).
+					Once()
 			},
 			wantStatusCode:   http.StatusInternalServerError,
 			wantResponseBody: `{"error": "Failed to reset password"}`,
+		},
+		{
+			name:      "🔴[500] when the SendMessage method fails and the token cannot be invalidated",
+			hasTenant: true,
+			reqBody:   `{"email": "foobar@test.com","recaptcha_token":"token"}`,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Once()
+				authManagerMock.
+					On("ForgotPassword", mock.Anything, "foobar@test.com").
+					Return("resetToken", "foobar@test.com", nil).
+					Once()
+				messengerClientMock.
+					On("SendMessage", mock.Anything, mock.Anything).
+					Return(errors.New("unexpected error")).
+					Once()
+				authManagerMock.
+					On("InvalidateResetToken", mock.Anything, "resetToken").
+					Return(errors.New("db is gone")).
+					Once()
+			},
+			wantStatusCode:   http.StatusInternalServerError,
+			wantResponseBody: `{"error": "Failed to reset password"}`,
+		},
+		{
+			name:      "🟢[200] sends the message to the stored email, not the submitted one",
+			hasTenant: true,
+			reqBody:   `{"email": " Foobar@Test.com ","recaptcha_token":"token"}`,
+			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(true, nil).
+					Once()
+				authManagerMock.
+					On("ForgotPassword", mock.Anything, " Foobar@Test.com ").
+					Return("resetToken", "foobar@test.com", nil).
+					Once()
+				messengerClientMock.
+					On("SendMessage", mock.Anything, mock.MatchedBy(func(msg message.Message) bool {
+						return msg.ToEmail == "foobar@test.com"
+					})).
+					Return(nil).
+					Once()
+			},
+			wantStatusCode:   http.StatusOK,
+			wantResponseBody: defaultSuccessishBody,
 		},
 		{
 			name:              "🟢[200](ReCAPTCHADisabled=false) successfully handle forgot password",
@@ -262,8 +316,8 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 					Return(true, nil).
 					Once()
 				authManagerMock.
-					On("ForgotPassword", mock.Anything, mock.Anything, "foobar@test.com").
-					Return("resetToken", nil).
+					On("ForgotPassword", mock.Anything, "foobar@test.com").
+					Return("resetToken", "foobar@test.com", nil).
 					Once()
 				messengerClientMock.
 					On("SendMessage", mock.Anything, mock.Anything).
@@ -280,8 +334,8 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 			reqBody:           `{"email": "foobar@test.com","recaptcha_token":"token"}`,
 			prepareMocks: func(t *testing.T, reCAPTCHAValidatorMock *validators.ReCAPTCHAValidatorMock, authManagerMock *auth.AuthManagerMock, messengerClientMock *message.MessengerClientMock) {
 				authManagerMock.
-					On("ForgotPassword", mock.Anything, mock.Anything, "foobar@test.com").
-					Return("resetToken", nil).
+					On("ForgotPassword", mock.Anything, "foobar@test.com").
+					Return("resetToken", "foobar@test.com", nil).
 					Once()
 				messengerClientMock.
 					On("SendMessage", mock.Anything, mock.Anything).
@@ -324,4 +378,95 @@ func Test_ForgotPasswordHandler_ServeHTTP(t *testing.T) {
 			assert.JSONEq(t, tc.wantResponseBody, rw.Body.String())
 		})
 	}
+}
+
+// Concurrent requests for one email used to hold a pool connection each while the leader waited for a second one,
+// and without the per-user row lock several of them issued a token and sent an email.
+func Test_ForgotPasswordHandler_ServeHTTP_concurrentRequestsDoNotExhaustThePool(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN) // default pool: 20 connections
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
+	authManager := auth.NewAuthManager(auth.WithDefaultAuthenticatorOption(dbConnectionPool, passwordEncrypter, time.Hour))
+	user := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypter, false)
+
+	messengerClientMock := message.NewMessengerClientMock(t)
+	sending := make(chan struct{}, 30)
+	releaseSend := make(chan struct{})
+	messengerClientMock.On("SendMessage", mock.Anything, mock.Anything).
+		Run(func(mock.Arguments) {
+			sending <- struct{}{}
+			<-releaseSend
+		}).
+		Return(nil)
+
+	uiBaseURL := "https://sdp.com"
+	tnt := schema.Tenant{SDPUIBaseURL: &uiBaseURL}
+	h := ForgotPasswordHandler{
+		Models:            models,
+		ReCAPTCHADisabled: true,
+		AuthManager:       authManager,
+		MessengerClient:   messengerClientMock,
+	}
+
+	const requests = 30 // more than the pool holds
+	statuses := make([]int, requests)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range requests {
+		req, reqErr := http.NewRequestWithContext(sdpcontext.SetTenantInContext(ctx, &tnt), http.MethodPost, "/forgot-password", strings.NewReader(`{"email": "`+user.Email+`"}`))
+		require.NoError(t, reqErr)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			rw := httptest.NewRecorder()
+			h.ServeHTTP(rw, req)
+			statuses[i] = rw.Code
+		}()
+	}
+	close(start)
+
+	// An unrelated query through the same pool must get a connection while the email is being sent.
+	select {
+	case <-sending:
+	case <-time.After(20 * time.Second):
+		t.Fatal("no forgot-password request reached the email send")
+	}
+	victimCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var one int
+	require.NoError(t, dbConnectionPool.GetContext(victimCtx, &one, "SELECT 1"))
+	close(releaseSend)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("concurrent forgot-password requests did not drain: pool deadlock")
+	}
+
+	for i, code := range statuses {
+		assert.Equalf(t, http.StatusOK, code, "request %d", i)
+	}
+
+	var tokens int
+	require.NoError(t, dbConnectionPool.GetContext(ctx, &tokens, "SELECT count(*) FROM auth_user_password_reset WHERE auth_user_id = $1", user.ID))
+	assert.Equal(t, 1, tokens)
+	messengerClientMock.AssertNumberOfCalls(t, "SendMessage", 1)
+
+	sqlDB, err := dbConnectionPool.SqlDB(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, sqlDB.Stats().InUse)
 }

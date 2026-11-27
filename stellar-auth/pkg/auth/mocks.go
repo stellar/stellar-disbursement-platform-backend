@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/mock"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 // PasswordEncrypter
@@ -97,9 +95,14 @@ func (am *AuthenticatorMock) DeactivateUser(ctx context.Context, userID string) 
 	return args.Error(0)
 }
 
-func (am *AuthenticatorMock) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
-	args := am.Called(ctx, sqlExec, email)
-	return args.String(0), args.Error(1)
+func (am *AuthenticatorMock) ForgotPassword(ctx context.Context, email string) (string, string, error) {
+	args := am.Called(ctx, email)
+	return args.String(0), args.String(1), args.Error(2)
+}
+
+func (am *AuthenticatorMock) InvalidateResetToken(ctx context.Context, resetToken string) error {
+	args := am.Called(ctx, resetToken)
+	return args.Error(0)
 }
 
 func (am *AuthenticatorMock) ResetPassword(ctx context.Context, resetToken, password string) (string, error) {
@@ -247,9 +250,14 @@ func (am *AuthManagerMock) UpdateUser(ctx context.Context, tokenString, firstNam
 	return args.Error(0)
 }
 
-func (am *AuthManagerMock) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
-	args := am.Called(ctx, sqlExec, email)
-	return args.Get(0).(string), args.Error(1)
+func (am *AuthManagerMock) ForgotPassword(ctx context.Context, email string) (string, string, error) {
+	args := am.Called(ctx, email)
+	return args.String(0), args.String(1), args.Error(2)
+}
+
+func (am *AuthManagerMock) InvalidateResetToken(ctx context.Context, resetToken string) error {
+	args := am.Called(ctx, resetToken)
+	return args.Error(0)
 }
 
 func (am *AuthManagerMock) ResetPassword(ctx context.Context, tokenString, password string) error {
