@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	protocol "github.com/stellar/go-stellar-sdk/protocols/rpc"
@@ -1982,6 +1983,51 @@ func Test_RPCErrorWrapper_ShouldMarkAsError(t *testing.T) {
 			wrapper := NewRPCErrorWrapper(simErr)
 
 			assert.Equal(t, tc.wantMarkError, wrapper.ShouldMarkAsError())
+		})
+	}
+}
+
+func Test_ValidationError(t *testing.T) {
+	cause := errors.New("sponsored account cannot be empty")
+	wrapped := fmt.Errorf("building inner transaction: %w", NewValidationError(cause))
+
+	var vErr *ValidationError
+	require.ErrorAs(t, wrapped, &vErr)
+	assert.Equal(t, cause.Error(), vErr.Error(), "message is passed through unchanged")
+	assert.ErrorIs(t, wrapped, cause, "Unwrap keeps the cause reachable")
+
+	assert.False(t, vErr.IsRetryable())
+	assert.True(t, vErr.ShouldMarkAsError())
+	assert.False(t, vErr.IsOutcomeUnknown())
+	assert.Equal(t, "Validation", vErr.GetErrorType())
+
+	assert.False(t, vErr.ShouldReportToCrashTracker(), "not reported by default")
+	vErr.ReportToCrashTracker = true
+	assert.True(t, vErr.ShouldReportToCrashTracker())
+}
+
+func Test_IsPersistentDBError(t *testing.T) {
+	testCases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "plain error", err: errors.New("connection refused"), want: false},
+		{name: "54000 program_limit_exceeded (index row size)", err: &pq.Error{Code: "54000"}, want: true},
+		{name: "22001 string_data_right_truncation", err: &pq.Error{Code: "22001"}, want: true},
+		{name: "22P02 invalid_text_representation", err: &pq.Error{Code: "22P02"}, want: true},
+		{name: "23505 unique_violation (depends on other rows)", err: &pq.Error{Code: "23505"}, want: false},
+		{name: "08006 connection_failure", err: &pq.Error{Code: "08006"}, want: false},
+		{name: "40P01 deadlock_detected", err: &pq.Error{Code: "40P01"}, want: false},
+		{name: "42703 undefined_column (schema bug, not this row)", err: &pq.Error{Code: "42703"}, want: false},
+		{name: "57014 query_canceled", err: &pq.Error{Code: "57014"}, want: false},
+		{name: "wrapped 54000", err: fmt.Errorf("error updating transaction hash: %w", &pq.Error{Code: "54000"}), want: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, IsPersistentDBError(tc.err))
 		})
 	}
 }
