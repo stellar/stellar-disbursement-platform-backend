@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInvalidToken = errors.New("invalid token")
@@ -21,7 +19,8 @@ type AuthManager interface {
 	AnyRolesInTokenUser(ctx context.Context, tokenString string, roleNames []string) (bool, error)
 	CreateUser(ctx context.Context, user *User, password string) (*User, error)
 	UpdateUser(ctx context.Context, tokenString, firstName, lastName, email, password string) error
-	ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error)
+	ForgotPassword(ctx context.Context, email string) (resetToken, storedEmail string, err error)
+	InvalidateResetToken(ctx context.Context, resetToken string) error
 	ResetPassword(ctx context.Context, tokenString, password string) error
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
@@ -185,16 +184,24 @@ func (am *defaultAuthManager) UpdateUser(ctx context.Context, tokenString, first
 }
 
 // ForgotPassword handles the generation of a new password reset token for the user to set a new password.
-func (am *defaultAuthManager) ForgotPassword(ctx context.Context, sqlExec db.SQLExecuter, email string) (string, error) {
-	resetToken, err := am.authenticator.ForgotPassword(ctx, sqlExec, email)
+func (am *defaultAuthManager) ForgotPassword(ctx context.Context, email string) (string, string, error) {
+	resetToken, storedEmail, err := am.authenticator.ForgotPassword(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			return "", fmt.Errorf("user not found in auth forgot password: %w", err)
+			return "", "", fmt.Errorf("user not found in auth forgot password: %w", err)
 		}
-		return "", fmt.Errorf("calling authenticator's ForgotPassword: %w", err)
+		return "", "", fmt.Errorf("calling authenticator's ForgotPassword: %w", err)
 	}
 
-	return resetToken, nil
+	return resetToken, storedEmail, nil
+}
+
+// InvalidateResetToken revokes a reset token that could not be delivered.
+func (am *defaultAuthManager) InvalidateResetToken(ctx context.Context, resetToken string) error {
+	if err := am.authenticator.InvalidateResetToken(ctx, resetToken); err != nil {
+		return fmt.Errorf("calling authenticator's InvalidateResetToken: %w", err)
+	}
+	return nil
 }
 
 // ResetPassword sets the user's new password using a valid reset token generated in the ForgotPassword flow.

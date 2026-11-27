@@ -571,14 +571,14 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Should return an error if the email is empty", func(t *testing.T) {
-		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "")
+		resetToken, _, err := authenticator.ForgotPassword(ctx, "")
 		assert.EqualError(t, err, "generating user reset password token: email field is required")
 		assert.Empty(t, resetToken)
 	})
 
 	t.Run("Should return an error if the user is not found", func(t *testing.T) {
-		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, "notfounduser@email.com")
-		assert.EqualError(t, err, ErrUserNotFound.Error())
+		resetToken, _, err := authenticator.ForgotPassword(ctx, "notfounduser@email.com")
+		assert.ErrorIs(t, err, ErrUserNotFound)
 		assert.Empty(t, resetToken)
 	})
 
@@ -592,12 +592,12 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
-		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
+		resetToken, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, resetToken)
 
-		resetTokenFail1, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
-		require.EqualError(t, err, "user has a valid token")
+		resetTokenFail1, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		require.ErrorIs(t, err, ErrUserHasValidToken)
 		assert.Empty(t, resetTokenFail1)
 
 		updateTokenQuery := `
@@ -608,8 +608,8 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 		_, err = dbConnectionPool.ExecContext(ctx, updateTokenQuery, resetToken)
 		require.NoError(t, err)
 
-		resetTokenFail2, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
-		require.EqualError(t, err, "user has a valid token")
+		resetTokenFail2, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		require.ErrorIs(t, err, ErrUserHasValidToken)
 		assert.Empty(t, resetTokenFail2)
 	})
 
@@ -623,7 +623,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
-		oldResetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
+		oldResetToken, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, oldResetToken)
 
@@ -636,7 +636,7 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 		_, err = dbConnectionPool.ExecContext(ctx, updateTokenQuery, oldResetToken)
 		require.NoError(t, err)
 
-		newResetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
+		newResetToken, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
 		require.NoError(t, err)
 		assert.NotEmpty(t, newResetToken)
 		assert.NotEqual(t, oldResetToken, newResetToken)
@@ -652,10 +652,10 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
-		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, randUser.Email)
+		resetToken, storedEmail, err := authenticator.ForgotPassword(ctx, randUser.Email)
 		require.NoError(t, err)
-
 		assert.NotEmpty(t, resetToken)
+		assert.Equal(t, randUser.Email, storedEmail)
 	})
 
 	t.Run("Should return reset token with a valid user - case-insensitive", func(t *testing.T) {
@@ -669,10 +669,93 @@ func Test_DefaultAuthenticator_ForgotPassword(t *testing.T) {
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 
 		uppercaseEmail := strings.ToUpper(randUser.Email)
-		resetToken, err := authenticator.ForgotPassword(ctx, dbConnectionPool, uppercaseEmail)
+		resetToken, storedEmail, err := authenticator.ForgotPassword(ctx, uppercaseEmail)
+		require.NoError(t, err)
+		assert.NotEmpty(t, resetToken)
+		assert.Equal(t, randUser.Email, storedEmail)
+	})
+
+	t.Run("returns the stored email for a padded, mixed-case input", func(t *testing.T) {
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return("encryptedpassword", nil).
+			Once()
+
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+
+		resetToken, storedEmail, err := authenticator.ForgotPassword(ctx, "  "+strings.ToUpper(randUser.Email)+" ")
+		require.NoError(t, err)
+		assert.NotEmpty(t, resetToken)
+		assert.Equal(t, randUser.Email, storedEmail)
+	})
+
+	t.Run("returns ErrUserHasValidToken when a concurrent request already inserted a token", func(t *testing.T) {
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return("encryptedpassword", nil).
+			Once()
+
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+
+		// A second request holds an uncommitted token for the same user, then commits while we wait on the index.
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		_, err = dbTx.ExecContext(ctx, `INSERT INTO auth_user_password_reset (auth_user_id, token) VALUES ($1, $2)`, randUser.ID, "concurrenttoken")
+		require.NoError(t, err)
+		commitErr := make(chan error, 1)
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			commitErr <- dbTx.Commit()
+		}()
+
+		resetToken, storedEmail, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		require.ErrorIs(t, err, ErrUserHasValidToken)
+		assert.Empty(t, resetToken)
+		assert.Empty(t, storedEmail)
+		require.NoError(t, <-commitErr)
+	})
+
+	passwordEncrypterMock.AssertExpectations(t)
+}
+
+func Test_DefaultAuthenticator_InvalidateResetToken(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	passwordEncrypterMock := &PasswordEncrypterMock{}
+	authenticator := newDefaultAuthenticator(withAuthenticatorDatabaseConnectionPool(dbConnectionPool), withPasswordEncrypter(passwordEncrypterMock))
+
+	ctx := context.Background()
+
+	passwordEncrypterMock.
+		On("Encrypt", ctx, mock.AnythingOfType("string")).
+		Return("encryptedpassword", nil).
+		Once()
+	randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+
+	resetToken, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
+	require.NoError(t, err)
+
+	t.Run("invalidates the token and lifts the cooldown", func(t *testing.T) {
+		err := authenticator.InvalidateResetToken(ctx, resetToken)
 		require.NoError(t, err)
 
-		assert.NotEmpty(t, resetToken)
+		var isValid bool
+		err = dbConnectionPool.GetContext(ctx, &isValid, `SELECT is_valid FROM auth_user_password_reset WHERE token = $1`, resetToken)
+		require.NoError(t, err)
+		assert.False(t, isValid)
+
+		newResetToken, _, err := authenticator.ForgotPassword(ctx, randUser.Email)
+		require.NoError(t, err)
+		assert.NotEqual(t, resetToken, newResetToken)
+	})
+
+	t.Run("is a no-op for an already invalid or unknown token", func(t *testing.T) {
+		require.NoError(t, authenticator.InvalidateResetToken(ctx, resetToken))
+		require.NoError(t, authenticator.InvalidateResetToken(ctx, "unknowntoken"))
 	})
 
 	passwordEncrypterMock.AssertExpectations(t)

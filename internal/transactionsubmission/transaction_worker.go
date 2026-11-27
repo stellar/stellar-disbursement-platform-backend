@@ -537,6 +537,13 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 
 	updatedTx, err := tw.txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, txJob.Transaction.ID, txJob.LockedUntilLedgerNumber, feeBumpTxHash, sentXDR, distributionAccountAddr)
 	if err != nil {
+		// The failed UPDATE recorded nothing and nothing was submitted, so a save that will fail the same way on every
+		// attempt is safe to fail terminally instead of retrying forever.
+		if utils.IsPersistentDBError(err) {
+			validationErr := utils.NewValidationError(fmt.Errorf("saving transaction metadata: %w", err))
+			validationErr.ReportToCrashTracker = true
+			return nil, tw.handlePreparationError(ctx, txJob, validationErr)
+		}
 		return nil, fmt.Errorf("saving transaction metadata for job %v: %w", txJob, err)
 	}
 	txJob.Transaction = *updatedTx
@@ -748,6 +755,16 @@ func (tw *TransactionWorker) handlePreparationError(ctx context.Context, txJob *
 		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, rpcErr)
 		if handlerErr != nil {
 			return fmt.Errorf("handling rpc error: %w", handlerErr)
+		}
+		return ErrTransactionHandled
+	}
+
+	// Check if it's a deterministic validation failure (same input, same result on every attempt)
+	var validationErr *utils.ValidationError
+	if errors.As(err, &validationErr) {
+		handlerErr := tw.handleFailedTransaction(ctx, txJob, horizon.Transaction{}, validationErr)
+		if handlerErr != nil {
+			return fmt.Errorf("handling validation error: %w", handlerErr)
 		}
 		return ErrTransactionHandled
 	}
