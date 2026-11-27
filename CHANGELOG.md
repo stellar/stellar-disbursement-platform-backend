@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - Stop accepting API keys on the `/api-keys`, `/profile` and `/refresh-token` endpoints. [#1261](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1261)
+- Accept named API key permissions on `/assets`, `/balances` and `/registration-contact-types`. [#1263](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1263)
 
 ### Fixed
 
@@ -24,7 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Read the SEP-10/SEP-45 client domain signing key without parsing the whole TOML file. [#1265](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1265)
 - Fix embedded wallet passkey login for passkeys that are not backup-eligible. [#1266](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1266)
 - Bound embedded wallet passkey attestation cost. [#1267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1267)
+- Remove receiver write access from the Approver role. [#1269](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1269)
 - Make unbuildable and unstorable TSS transaction failures terminal. [#1275](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1275)
+- Reject UTF-16/32 encoding and repeated columns in disbursement CSVs. [#1278](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1278)
+- Disable keep-alive for webhook deliveries. [#1280](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1280)
 
 ### Security and Dependencies
 

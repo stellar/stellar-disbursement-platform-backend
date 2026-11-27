@@ -190,7 +190,7 @@ func (rh ReceiverHandler) CreateReceiver(rw http.ResponseWriter, r *http.Request
 	}
 
 	sourceWallet, walletErr := resolveSourceWalletForWrite(ctx, r, rh.AuthManager, rh.Models,
-		data.FinancialControllerUserRole, data.InitiatorUserRole, data.ApproverUserRole)
+		data.FinancialControllerUserRole, data.InitiatorUserRole)
 	if walletErr != nil {
 		walletErr.Render(rw)
 		return

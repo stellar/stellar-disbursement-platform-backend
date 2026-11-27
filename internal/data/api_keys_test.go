@@ -90,6 +90,7 @@ func Test_ValidatePermissions(t *testing.T) {
 		err   bool
 	}{
 		{"all good", []APIKeyPermission{ReadStatistics, ReadExports}, false},
+		{"assets", []APIKeyPermission{"read:assets", "write:assets"}, false},
 		{"one bad", []APIKeyPermission{ReadStatistics, "bad"}, true},
 		{"empty", []APIKeyPermission{}, false},
 	}

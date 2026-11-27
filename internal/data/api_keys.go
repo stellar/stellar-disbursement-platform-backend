@@ -65,6 +65,10 @@ const (
 	ReadDistributionWallets  APIKeyPermission = "read:distribution_wallets"
 	WriteDistributionWallets APIKeyPermission = "write:distribution_wallets"
 
+	// Assets
+	ReadAssets  APIKeyPermission = "read:assets"
+	WriteAssets APIKeyPermission = "write:assets"
+
 	// Statistics
 	ReadStatistics APIKeyPermission = "read:statistics"
 
@@ -93,6 +97,8 @@ var validPermissionsMap = map[APIKeyPermission]struct{}{
 	WriteWallets:             {},
 	ReadDistributionWallets:  {},
 	WriteDistributionWallets: {},
+	ReadAssets:               {},
+	WriteAssets:              {},
 	ReadStatistics:           {},
 	ReadExports:              {},
 	ReadReports:              {},
