@@ -1887,6 +1887,36 @@ func Test_ReceiverWalletModel_Update(t *testing.T) {
 	})
 }
 
+func Test_ReceiverWalletModel_IncrementOTPAttempts(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
+		_, err := receiverWalletModel.IncrementOTPAttempts(ctx, "invalid_id", dbConnectionPool)
+		require.ErrorIs(t, err, ErrRecordNotFound)
+	})
+
+	t.Run("adds one per call and returns the new value", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		attempts, err := receiverWalletModel.IncrementOTPAttempts(ctx, receiverWallet.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, 1, attempts)
+
+		attempts, err = receiverWalletModel.IncrementOTPAttempts(ctx, receiverWallet.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, 2, attempts)
+	})
+}
+
 func Test_ReceiverWalletModel_GetByIDs(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

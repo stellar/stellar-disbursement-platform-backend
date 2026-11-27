@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Bound embedded wallet passkey attestation cost. [#1267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1267)
 - Remove receiver write access from the Approver role. [#1269](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1269)
 - Prevent concurrent forgot-password requests from exhausting database pool. [#1271](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1271)
+- Prevent concurrent registration verification requests from exhausting database pool. [#1273](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1273)
 - Make unbuildable and unstorable TSS transaction failures terminal. [#1275](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1275)
 - Reject UTF-16/32 encoding and repeated columns in disbursement CSVs. [#1278](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1278)
 - Disable keep-alive for webhook deliveries. [#1280](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1280)

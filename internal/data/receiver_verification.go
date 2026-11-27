@@ -301,6 +301,24 @@ func (m *ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Conte
 	return nil
 }
 
+// IncrementAttempts adds one to attempts in SQL, so concurrent failed attempts are all counted.
+func (m *ReceiverVerificationModel) IncrementAttempts(ctx context.Context, update ReceiverVerificationUpdate, sqlExec db.SQLExecuter) error {
+	if err := update.Validate(); err != nil {
+		return fmt.Errorf("validating receiver verification update: %w", err)
+	}
+
+	query := `
+		UPDATE receiver_verifications
+		SET attempts = attempts + 1, failed_at = $1, verification_channel = $2
+		WHERE receiver_id = $3 AND verification_field = $4
+	`
+	if _, err := sqlExec.ExecContext(ctx, query, update.FailedAt, update.VerificationChannel, update.ReceiverID, update.VerificationField); err != nil {
+		return fmt.Errorf("incrementing receiver verification attempts: %w", err)
+	}
+
+	return nil
+}
+
 // ExceededAttempts check if the number of attempts exceeded the max value.
 func (*ReceiverVerificationModel) ExceededAttempts(attempts int) bool {
 	return attempts >= MaxAttemptsAllowed
