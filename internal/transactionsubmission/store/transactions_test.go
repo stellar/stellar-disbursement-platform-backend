@@ -816,6 +816,40 @@ func Test_TransactionModel_UpdateStellarTransactionHashXDRSentAndDistributionAcc
 		assert.False(t, refreshedTx.XDRSent.Valid)
 		assert.Equal(t, tx.AttemptsCount, refreshedTx.AttemptsCount)
 	})
+
+	t.Run("🎉 saves an envelope larger than one B-tree index entry (2,704 bytes)", func(t *testing.T) {
+		ops := make([]txnbuild.Operation, 0, 60)
+		for i := 0; i < 60; i++ {
+			ops = append(ops, &txnbuild.Payment{Destination: keypair.MustRandom().Address(), Amount: "1", Asset: txnbuild.NativeAsset{}})
+		}
+		largeTx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
+			SourceAccount: &txnbuild.SimpleAccount{AccountID: keypair.MustRandom().Address(), Sequence: 1},
+			Operations:    ops,
+			BaseFee:       txnbuild.MinBaseFee,
+			Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewInfiniteTimeout()},
+		})
+		require.NoError(t, err)
+		largeEnvelopeXDR, err := largeTx.Base64()
+		require.NoError(t, err)
+		require.Greater(t, len(largeEnvelopeXDR), 2704, "fixture must exceed the former index limit")
+
+		tx := CreateTransactionFixture(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:         uuid.NewString(),
+			TransactionType:    TransactionTypePayment,
+			AssetCode:          "USDC",
+			AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+			DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+			Status:             TransactionStatusProcessing,
+			Amount:             decimal.NewFromInt(1),
+			TenantID:           uuid.NewString(),
+		})
+		lockTransactionUntil(t, ctx, dbConnectionPool, tx.ID, lockedUntil)
+
+		const largeTxHash = "9f1c2b3a4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8"
+		updatedTx, err := txModel.UpdateStellarTransactionHashXDRSentAndDistributionAccount(ctx, tx.ID, lockedUntil, largeTxHash, largeEnvelopeXDR, "GCLWGQPMKXQSPF776IU33AH4PZNOOWNAWGGKVTBQMIC5IMKUNP3E6NVU")
+		require.NoError(t, err)
+		assert.Equal(t, largeEnvelopeXDR, updatedTx.XDRSent.String)
+	})
 }
 
 func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {

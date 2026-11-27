@@ -175,7 +175,7 @@ func (p *PaymentUpdate) Validate() error {
 	if err := p.Status.Validate(); err != nil {
 		return fmt.Errorf("status is invalid: %w", err)
 	}
-	if strings.TrimSpace(p.StellarTransactionID) == "" {
+	if p.Status == SuccessPaymentStatus && strings.TrimSpace(p.StellarTransactionID) == "" {
 		return fmt.Errorf("stellar transaction id is required")
 	}
 

@@ -219,6 +219,8 @@ func Test_SponsoredTransactionHandler_BuildInnerTransaction(t *testing.T) {
 				tx, err := sponsoredHandler.BuildInnerTransaction(ctx, tc.txJob, 100, distributionAccount)
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError)
+				var validationErr *utils.ValidationError
+				assert.ErrorAs(t, err, &validationErr, "deterministic rejection must be terminal")
 				assert.Nil(t, tx)
 			})
 		}

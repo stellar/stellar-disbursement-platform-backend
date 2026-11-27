@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/lib/pq"
+	"github.com/lib/pq/pqerror"
 	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
 	"github.com/stellar/go-stellar-sdk/protocols/horizon"
 	"github.com/stellar/go-stellar-sdk/support/log"
@@ -570,3 +572,62 @@ var (
 	_ TransactionError = &RPCErrorWrapper{}
 	_ StructuredError  = &RPCErrorWrapper{}
 )
+
+// ValidationError is a deterministic rejection raised while preparing a transaction: the same input fails the same
+// way on every attempt, so the transaction is marked as ERROR instead of being retried.
+type ValidationError struct {
+	Err error
+	// ReportToCrashTracker is set for rejections an operator should know about (e.g. a storage limit), as opposed to
+	// expected rejections of bad input.
+	ReportToCrashTracker bool
+}
+
+func NewValidationError(err error) *ValidationError {
+	return &ValidationError{Err: err}
+}
+
+func (e *ValidationError) Unwrap() error {
+	return e.Err
+}
+
+func (e *ValidationError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *ValidationError) IsRetryable() bool {
+	return false
+}
+
+func (e *ValidationError) ShouldMarkAsError() bool {
+	return true
+}
+
+func (e *ValidationError) ShouldReportToCrashTracker() bool {
+	return e.ReportToCrashTracker
+}
+
+func (e *ValidationError) IsOutcomeUnknown() bool {
+	return false
+}
+
+func (e *ValidationError) GetErrorType() string {
+	return "Validation"
+}
+
+var (
+	_ error            = &ValidationError{}
+	_ TransactionError = &ValidationError{}
+)
+
+// IsPersistentDBError reports whether err is a Postgres error that the same statement will raise on every attempt:
+// class 22 (data exception, e.g. a value that does not fit its column) or class 54 (program limit exceeded, e.g. an
+// index entry larger than the B-tree maximum). Connection, timeout and lock errors are not persistent.
+func IsPersistentDBError(err error) bool {
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) {
+		return false
+	}
+
+	class := pqErr.Code.Class()
+	return class == pqerror.ClassDataException || class == pqerror.ClassProgramLimitExceeded
+}
