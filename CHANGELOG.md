@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Make unbuildable and unstorable TSS transaction failures terminal. [#1275](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1275)
 - Reject UTF-16/32 encoding and repeated columns in disbursement CSVs. [#1278](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1278)
 - Disable keep-alive for webhook deliveries. [#1280](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1280)
+- Reject a changed wallet memo when uploading disbursement instructions. [#1281](https://github.com/stellar/stellar-disbursement-platform-backend/pull/1281)
 
 ### Security and Dependencies
 

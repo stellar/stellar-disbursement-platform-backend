@@ -493,6 +493,8 @@ func (d DisbursementHandler) validateAndProcessInstructions(ctx context.Context,
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrReceiverWalletAddressMismatch):
 			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
+		case errors.Is(err, data.ErrReceiverWalletMemoMismatch):
+			return httperror.BadRequest(errors.Unwrap(err).Error(), err, nil)
 		case errors.Is(err, data.ErrDuplicateWalletAddress):
 			return httperror.Conflict(err.Error(), err, nil)
 		default:

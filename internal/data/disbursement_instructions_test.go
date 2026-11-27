@@ -182,6 +182,74 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.ErrorIs(t, err, ErrReceiverWalletAddressMismatch)
 	})
 
+	textMemoType := schema.MemoTypeText
+	memoReuploadTestCases := []struct {
+		name         string
+		firstMemo    string
+		seedMemoType *schema.MemoType
+		reuploadMemo string
+		wantErr      error
+	}{
+		{name: "failure - known wallet memo changed", firstMemo: "123456789", reuploadMemo: "987654321", wantErr: ErrReceiverWalletMemoMismatch},
+		{name: "failure - known wallet memo dropped", firstMemo: "123456789", reuploadMemo: "", wantErr: ErrReceiverWalletMemoMismatch},
+		{name: "failure - known wallet memo added", firstMemo: "", reuploadMemo: "123456789", wantErr: ErrReceiverWalletMemoMismatch},
+		{name: "failure - known wallet memo type differs", firstMemo: "123456789", seedMemoType: &textMemoType, reuploadMemo: "123456789", wantErr: ErrReceiverWalletMemoMismatch},
+		{name: "success - known wallet memo unchanged", firstMemo: "123456789", reuploadMemo: "123456789"},
+		{name: "success - known wallet without memo", firstMemo: "", reuploadMemo: ""},
+		{name: "success - known wallet without memo but with a leftover memo type", firstMemo: "", seedMemoType: &textMemoType, reuploadMemo: ""},
+	}
+
+	for _, tc := range memoReuploadTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer cleanup()
+			dbTx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
+
+			upload := func(memo string) error {
+				instructions := []*DisbursementInstruction{
+					{
+						WalletAddress:     "GCVL44LFV3BFI627ABY3YRITFBRJVXUQVPLXQ3LISMI5UVKS5LHWTPT7",
+						WalletAddressMemo: memo,
+						Amount:            "100.01",
+						ID:                "1",
+						Phone:             "+380-12-345-671",
+					},
+				}
+				return di.ProcessAll(ctx, dbTx, DisbursementInstructionsOpts{
+					UserID:             "user-id",
+					Instructions:       instructions,
+					Disbursement:       knownWalletDisbursement,
+					DisbursementUpdate: knownWalletDisbursementUpdate(instructions),
+				})
+			}
+			require.NoError(t, upload(tc.firstMemo))
+
+			receivers, err := di.receiverModel.GetByContacts(ctx, dbTx, "+380-12-345-671")
+			require.NoError(t, err)
+			receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbTx, []string{receivers[0].ID}, wallet.ID)
+			require.NoError(t, err)
+			receiverWalletID := receiverWallets[0].ID
+			if tc.seedMemoType != nil {
+				err = di.receiverWalletModel.Update(ctx, receiverWalletID, ReceiverWalletUpdate{StellarMemoType: tc.seedMemoType}, dbTx)
+				require.NoError(t, err)
+			}
+			before, err := di.receiverWalletModel.GetByID(ctx, dbTx, receiverWalletID)
+			require.NoError(t, err)
+
+			err = upload(tc.reuploadMemo)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+
+			after, err := di.receiverWalletModel.GetByID(ctx, dbTx, receiverWalletID)
+			require.NoError(t, err)
+			assert.Equal(t, RegisteredReceiversWalletStatus, after.Status)
+			assert.Equal(t, before.StellarMemo, after.StellarMemo)
+			assert.Equal(t, before.StellarMemoType, after.StellarMemoType)
+		})
+	}
+
 	memos := []schema.Memo{
 		{},
 		{Value: "123456789", Type: schema.MemoTypeID},

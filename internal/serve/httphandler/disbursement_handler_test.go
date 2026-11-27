@@ -1174,6 +1174,9 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		CreatedAt: testutils.TimePtr(time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC)),
 	})
 
+	registeredReceiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555556"})
+	registeredReceiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, registeredReceiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
 	maxCSVRecords := [][]string{
 		{"email", "id", "amount", "verification"},
 	}
@@ -1523,6 +1526,16 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			},
 			expectedStatus:  http.StatusConflict,
 			expectedMessage: "wallet address GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 is already registered to another receiver: wallet address already in use",
+		},
+		{
+			name:           "🔴 wallet memo differs from the registered wallet",
+			disbursementID: phoneWalletDraftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "walletAddress", "walletAddressMemo", "id", "amount"},
+				{registeredReceiver.PhoneNumber, registeredReceiverWallet.StellarAddress, "another-memo", "123456789", "100.5"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "receiver wallet memo mismatch",
 		},
 	}
 
